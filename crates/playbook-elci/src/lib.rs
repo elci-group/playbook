@@ -161,6 +161,12 @@ impl FixturePlane {
         }
     }
 
+    /// Align a recovered plane with the drive's capability generation. The
+    /// script queue restarts; only the staleness check is resumed.
+    pub fn resume_generation(&mut self, generation: u64) {
+        self.generation = generation;
+    }
+
     pub fn push_failure(&mut self, operation: &str, kind: ToolFailureKind) {
         self.push(
             operation,

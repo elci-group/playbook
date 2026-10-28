@@ -31,6 +31,7 @@ cargo run -p playbook-cli -- mvp
 cargo run -p playbook-cli -- mvp --journal /tmp/mvp_drive.jsonl
 cargo run -p playbook-cli -- recover /tmp/mvp_drive.jsonl
 cargo run -p playbook-cli -- otlp http://127.0.0.1:4318/v1/traces
+cargo run -p playbook-server -- --port 8088
 cargo run -p playbook-cli -- sim --trace mvp --policy playbook-policy-pass-heavy
 cargo run -p playbook-cli -- explain
 cargo run -p playbook-cli -- status
@@ -69,8 +70,11 @@ across restarts. The efficiency ratio shares this limitation.
 Playbook is a deterministic control-plane prototype. The acceptance drive and
 failure-injection suite exercise fixture capabilities; they do not demonstrate
 a live Lucid/ELCI integration. The CLI's `status` and `explain` commands describe
-the acceptance drive, and `playbook-server` serves one fixed demo snapshot and
-then exits. There is no continuously running drive service or OTLP exporter.
+the acceptance drive. `playbook-server` is a continuous drive service: it hosts
+drives over HTTP, journals every event before a response is sent, recovers
+journals on boot, and optionally exports terminal drive traces through
+`playbook-otlp`. Its contract of record is `docs/server-directive.md`. The
+capability plane is still the fixture; there is no live ELCI integration.
 
 The event log supports audit replay, but serialization alone is not durable
 execution recovery. A host must persist an invocation before dispatching a
@@ -126,4 +130,4 @@ The capability plane in tests is `FixturePlane`. A live ELCI daemon is not requi
 
 ## Invariants the tests hold
 
-Evidence-free claims leave yards-to-go unchanged. Budget remaining does not grow inside a possession. A mandatory failed gate cannot complete the drive. The same measurement and policy classify as the same down. Fourth down records a Lastdown disposition. A tool failure cannot be stored as a tool success. Replay reproduces the state. A tampered witness is a replay divergence. An identical failed play is rejected until the field changes. A waiver needs an authority and a reason. Budget pressure does not authorize deployment. The continuation package omits the athletic-amnesia keys. Priors learn only from measured outcomes, and a personnel's self-report stops moving its routing score once its measured record reaches the policy threshold. A loaded prior table is part of the log, routes by measured record over identical self-reports, and never carries model identity or rankings. A journaled drive recovers its event log exactly; recovery truncates at the first torn, tampered, or out-of-sequence record instead of skipping it.
+Evidence-free claims leave yards-to-go unchanged. Budget remaining does not grow inside a possession. A mandatory failed gate cannot complete the drive. The same measurement and policy classify as the same down. Fourth down records a Lastdown disposition. A tool failure cannot be stored as a tool success. Replay reproduces the state. A tampered witness is a replay divergence. An identical failed play is rejected until the field changes. A waiver needs an authority and a reason. Budget pressure does not authorize deployment. The continuation package omits the athletic-amnesia keys. Priors learn only from measured outcomes, and a personnel's self-report stops moving its routing score once its measured record reaches the policy threshold. A loaded prior table is part of the log, routes by measured record over identical self-reports, and never carries model identity or rankings. A journaled drive recovers its event log exactly; recovery truncates at the first torn, tampered, or out-of-sequence record instead of skipping it. A key reconciled as not occurred may be invoked again; a key reconciled as occurred is consumed.

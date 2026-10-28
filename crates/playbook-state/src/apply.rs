@@ -599,8 +599,12 @@ fn apply_open(
             }
             next.unresolved_effects
                 .retain(|effect| effect.idempotency_key != *key || !effect.resolved);
-            next.idempotency
-                .insert(key.clone(), IdempotencyState::Committed);
+            if *occurred {
+                next.idempotency
+                    .insert(key.clone(), IdempotencyState::Committed);
+            } else {
+                next.idempotency.remove(key);
+            }
             if next
                 .open_execution
                 .as_ref()

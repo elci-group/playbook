@@ -37,8 +37,9 @@ use serde_json::{json, Value};
 /// The authority records an event with its sink before committing it to the
 /// in-memory state, so a crash between dispatch and outcome leaves the
 /// invocation recoverable from storage. A sink must make `record` durable
-/// before returning.
-pub trait EventSink {
+/// before returning. Hosted services share authorities across threads, so a
+/// sink must be `Send`.
+pub trait EventSink: Send {
     fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError>;
     fn mark(&self) -> u64;
     fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError>;
@@ -167,6 +168,10 @@ impl DriveState {
 
     pub fn drive_id(&self) -> &DriveId {
         &self.drive_id
+    }
+    /// The capability snapshot generation the drive currently trusts.
+    pub fn capability_generation(&self) -> u64 {
+        self.capability_generation
     }
     pub fn down(&self) -> Down {
         self.down

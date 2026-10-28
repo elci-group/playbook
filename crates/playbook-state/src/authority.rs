@@ -542,32 +542,34 @@ mod tests {
     };
     use playbook_elci::{CapabilitySnapshot, FixturePlane};
     use serde_json::json;
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default)]
     struct MemorySink {
-        events: Rc<RefCell<Vec<DriveEvent>>>,
+        events: Arc<Mutex<Vec<DriveEvent>>>,
     }
 
     impl MemorySink {
         fn recorded(&self) -> Vec<DriveEvent> {
-            self.events.borrow().clone()
+            self.events.lock().expect("sink lock").clone()
         }
     }
 
     impl EventSink for MemorySink {
         fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
-            self.events.borrow_mut().push(event.clone());
+            self.events.lock().expect("sink lock").push(event.clone());
             Ok(())
         }
 
         fn mark(&self) -> u64 {
-            self.events.borrow().len() as u64
+            self.events.lock().expect("sink lock").len() as u64
         }
 
         fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
-            self.events.borrow_mut().truncate(mark as usize);
+            self.events
+                .lock()
+                .expect("sink lock")
+                .truncate(mark as usize);
             Ok(())
         }
     }
@@ -1020,6 +1022,37 @@ mod tests {
         ));
         resumed.reconcile(&key, false).unwrap();
         assert!(resumed.state.open_execution.is_none());
+    }
+
+    #[test]
+    fn a_reconciled_not_occurred_key_is_reinvocable() {
+        let (mut authority, mut plane) = ready_authority();
+        assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
+        let invoke_end = authority
+            .log()
+            .iter()
+            .rposition(|event| matches!(event, DriveEvent::ToolInvoked { .. }))
+            .unwrap()
+            + 1;
+        let key = match &authority.log()[invoke_end - 1] {
+            DriveEvent::ToolInvoked { execution } => execution.idempotency_key.clone().unwrap(),
+            _ => unreachable!(),
+        };
+        let mut resumed = Authority::resume(
+            authority.log()[..invoke_end].to_vec(),
+            authority.policy.clone(),
+            authority.roster.clone(),
+        )
+        .unwrap();
+        resumed.reconcile(&key, false).unwrap();
+        plane
+            .inner
+            .resume_generation(resumed.state.capability_generation());
+        let dispatched = resumed.try_operation("compile", &mut plane, 300);
+        if !dispatched.is_ok() && dispatched != Err(PlaybookError::NoPlay) {
+            panic!("dispatch returned {dispatched:?}");
+        }
+        assert_eq!(plane.mutations, 2);
     }
 
     #[test]
