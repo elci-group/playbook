@@ -208,8 +208,13 @@ name = "playbook-server"
 version = "0.1.0"
 dependencies = [
  "playbook-core",
+ "playbook-elci",
+ "playbook-events",
+ "playbook-journal",
  "playbook-observability",
+ "playbook-otlp",
  "playbook-policy",
+ "playbook-sim",
  "playbook-state",
  "serde_json",
 ]
