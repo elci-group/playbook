@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/evidence.json",
+  "title": "Content-addressed evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "class", "body", "observed_at_ms"],
+  "properties": {
+    "id": { "type": "string" },
+    "class": { "type": "string" },
+    "body": { "type": "object" },
+    "observed_at_ms": { "type": "integer" }
+  }
+}

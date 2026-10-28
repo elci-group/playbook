@@ -1,0 +1,32 @@
+export type Probe = {
+  required: string
+  available: bool
+}
+
+export function missingCapabilities(probes: Probe[]): string[] {
+  const missing: string[] = []
+  for (const probe of probes) {
+    if (!probe.available) {
+      missing.push(probe.required)
+    }
+  }
+  return missing
+}
+
+function main(): int {
+  const missing = missingCapabilities([
+    { required: "compiler", available: true },
+    { required: "browser", available: false },
+  ])
+  console.log(missing.length)
+  return 0
+}
+
+test("unavailable probes are listed", () => {
+  const missing = missingCapabilities([
+    { required: "compiler", available: true },
+    { required: "browser", available: false },
+  ])
+  expect(missing.length).toBe(1)
+  expect(missing[0]).toBe("browser")
+})

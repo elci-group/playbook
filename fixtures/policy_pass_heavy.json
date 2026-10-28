@@ -1,0 +1,184 @@
+{
+  "version": "playbook-policy-pass-heavy",
+  "schema_version": 1,
+  "first_down_attempt_threshold": 1,
+  "rush_budget_fraction_ppm": 100000,
+  "conversion_threshold_ppm": 450000,
+  "workload_thresholds": {
+    "engineering": 450000
+  },
+  "min_attempt_ppm": 550000,
+  "punt_preserve_ppm": 980000,
+  "receiver_finish_ppm": 800000,
+  "reset_bonus_ppm": 0,
+  "retry_limit": 1,
+  "stall_penalty_ppm": 100000,
+  "capability_acquisition_limit": 2,
+  "swarm_min_marginal_milli": 1,
+  "rush_deterministic_bonus_ppm": 200000,
+  "budget_weights": {
+    "tokens": 1,
+    "monetary_cost_micros": 0,
+    "wall_clock_ms": 0,
+    "tool_calls": 0,
+    "inference_calls": 0,
+    "retry_count": 0,
+    "context_capacity": 0,
+    "provider_quota": 1
+  },
+  "allowed_side_effects": [
+    "read_only",
+    "local_mutation"
+  ],
+  "plays": [
+    {
+      "kind": "discover_capabilities",
+      "name": "discover",
+      "personnel_kind": "deterministic_procedure",
+      "operation": "discover",
+      "capability_id": "elci.cargo",
+      "target_gate": null,
+      "side_effect": "read_only",
+      "expected_ytg_reduction_milli": 0,
+      "marginal_cost": {
+        "tokens": 10,
+        "monetary_cost_micros": 1000,
+        "wall_clock_ms": 0,
+        "tool_calls": 1,
+        "inference_calls": 0,
+        "retry_count": 0,
+        "context_capacity": 0,
+        "provider_quota": 0
+      },
+      "reliability_ppm": 990000,
+      "survey": true,
+      "evidence_class": "capability_snapshot"
+    },
+    {
+      "kind": "inspect_environment",
+      "name": "inspect",
+      "personnel_kind": "deterministic_procedure",
+      "operation": "inspect",
+      "capability_id": "elci.cargo",
+      "target_gate": null,
+      "side_effect": "read_only",
+      "expected_ytg_reduction_milli": 0,
+      "marginal_cost": {
+        "tokens": 20,
+        "monetary_cost_micros": 2000,
+        "wall_clock_ms": 0,
+        "tool_calls": 1,
+        "inference_calls": 0,
+        "retry_count": 0,
+        "context_capacity": 0,
+        "provider_quota": 0
+      },
+      "reliability_ppm": 980000,
+      "survey": true,
+      "evidence_class": "environment_snapshot"
+    },
+    {
+      "kind": "run_deterministic_test",
+      "name": "compile",
+      "personnel_kind": "deterministic_procedure",
+      "operation": "compile",
+      "capability_id": "elci.cargo",
+      "target_gate": "implementation",
+      "side_effect": "read_only",
+      "expected_ytg_reduction_milli": 4000,
+      "marginal_cost": {
+        "tokens": 200,
+        "monetary_cost_micros": 20000,
+        "wall_clock_ms": 0,
+        "tool_calls": 1,
+        "inference_calls": 0,
+        "retry_count": 0,
+        "context_capacity": 0,
+        "provider_quota": 0
+      },
+      "reliability_ppm": 960000,
+      "survey": false,
+      "evidence_class": "compiler_result"
+    },
+    {
+      "kind": "run_deterministic_test",
+      "name": "unit",
+      "personnel_kind": "deterministic_procedure",
+      "operation": "test.unit",
+      "capability_id": "elci.cargo",
+      "target_gate": "unit_tests",
+      "side_effect": "read_only",
+      "expected_ytg_reduction_milli": 3000,
+      "marginal_cost": {
+        "tokens": 400,
+        "monetary_cost_micros": 40000,
+        "wall_clock_ms": 0,
+        "tool_calls": 1,
+        "inference_calls": 0,
+        "retry_count": 0,
+        "context_capacity": 0,
+        "provider_quota": 0
+      },
+      "reliability_ppm": 950000,
+      "survey": false,
+      "evidence_class": "test_report"
+    },
+    {
+      "kind": "run_deterministic_test",
+      "name": "integration",
+      "personnel_kind": "deterministic_procedure",
+      "operation": "test.integration",
+      "capability_id": "elci.cargo",
+      "target_gate": "integration_tests",
+      "side_effect": "read_only",
+      "expected_ytg_reduction_milli": 3000,
+      "marginal_cost": {
+        "tokens": 100,
+        "monetary_cost_micros": 10000,
+        "wall_clock_ms": 0,
+        "tool_calls": 1,
+        "inference_calls": 0,
+        "retry_count": 0,
+        "context_capacity": 0,
+        "provider_quota": 0
+      },
+      "reliability_ppm": 940000,
+      "survey": false,
+      "evidence_class": "test_report"
+    },
+    {
+      "kind": "route_specialist",
+      "name": "specialist",
+      "personnel_kind": "specialist_agent",
+      "operation": "specialist.review",
+      "capability_id": "personnel.specialist",
+      "target_gate": "integration_tests",
+      "side_effect": "read_only",
+      "expected_ytg_reduction_milli": 3000,
+      "marginal_cost": {
+        "tokens": 800,
+        "monetary_cost_micros": 80000,
+        "wall_clock_ms": 0,
+        "tool_calls": 1,
+        "inference_calls": 0,
+        "retry_count": 0,
+        "context_capacity": 0,
+        "provider_quota": 0
+      },
+      "reliability_ppm": 700000,
+      "survey": false,
+      "evidence_class": "test_report"
+    }
+  ],
+  "routing": {
+    "ytg": 1,
+    "success": 1,
+    "cost": 1,
+    "latency": 1,
+    "capability_fit": 1,
+    "reliability": 1,
+    "quota": 1,
+    "evidence_quality": 1,
+    "prior_min_samples": 3
+  }
+}

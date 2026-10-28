@@ -1,0 +1,17 @@
+[package]
+name = "playbook-routing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "Play admissibility and personnel routing. Tools outrank prestige."
+
+[dependencies]
+playbook-core.workspace = true
+playbook-policy.workspace = true
+playbook-security.workspace = true
+playbook-ytg.workspace = true
+
+[lints]
+workspace = true

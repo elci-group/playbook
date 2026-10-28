@@ -1,0 +1,100 @@
+[[file]]
+path = "README.md"
+required = true
+min_size_bytes = 400
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-core/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-state/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-sim/src/mvp.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-lastdown/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "fixtures/policy.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/policy_pass_heavy.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "schemas/prior_table.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/sprint_transcript.json"
+required = true
+min_size_bytes = 100
+
+[[command]]
+name = "cargo fmt"
+cmd = ["cargo", "fmt", "--all", "--check"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "cargo clippy"
+cmd = ["cargo", "clippy", "--offline", "--all-targets", "--", "-D", "warnings"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "cargo test"
+cmd = ["cargo", "test", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+stdout_contains = ["test result: ok"]
+
+[[command]]
+name = "tov check normalise"
+cmd = ["tov", "check", "--json", "tov/adapters/normalise.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check route helper"
+cmd = ["tov", "check", "--json", "tov/policies/route_helper.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check test report"
+cmd = ["tov", "check", "--json", "tov/transforms/test_report.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check capability probe"
+cmd = ["tov", "check", "--json", "tov/agents/capability_probe.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check explain"
+cmd = ["tov", "check", "--json", "tov/diagnostics/explain.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov tests"
+cmd = ["tov", "test", "tov"]
+expect_exit = 0
+timeout_secs = 120

@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/policy.json",
+  "title": "Playbook policy bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "schema_version", "plays", "rush_budget_fraction_ppm", "conversion_threshold_ppm"],
+  "properties": {
+    "version": { "type": "string" },
+    "schema_version": { "type": "integer" },
+    "plays": { "type": "array" },
+    "rush_budget_fraction_ppm": { "type": "integer" },
+    "conversion_threshold_ppm": { "type": "integer" },
+    "first_down_attempt_threshold": { "type": "integer" },
+    "allowed_side_effects": { "type": "array" },
+    "budget_weights": { "type": "object" }
+  }
+}

@@ -1,0 +1,15 @@
+[package]
+name = "playbook-evidence"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "Evidence scoring. Narrative claims carry no yards."
+
+[dependencies]
+playbook-core.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

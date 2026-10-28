@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/continuation.json",
+  "title": "Athletic-amnesia continuation package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["magic", "schema_version", "drive_id", "task_contract", "objective_state", "evidence_refs", "failure_refs", "budget_state", "continuation_constraints"],
+  "properties": {
+    "magic": { "type": "string", "const": "PLAYBOOK/1" },
+    "schema_version": { "type": "integer" },
+    "drive_id": { "type": "string" },
+    "task_contract": { "type": "object" },
+    "objective_state": { "type": "object" },
+    "validated_artefacts": { "type": "array" },
+    "unsatisfied_gates": { "type": "array" },
+    "evidence_refs": { "type": "array" },
+    "failure_refs": { "type": "array" },
+    "available_capabilities": { "type": "array" },
+    "budget_state": { "type": "object" },
+    "environment_snapshot": { "type": "object" },
+    "continuation_constraints": { "type": "array" },
+    "integrity_sha256": { "type": "string" }
+  }
+}

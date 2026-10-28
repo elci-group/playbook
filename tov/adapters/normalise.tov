@@ -1,0 +1,57 @@
+export type TestReport = {
+  command: string
+  repository_hash: string
+  test_suite: string
+  exit_code: int
+  passed: int
+  failed: int
+  ignored: int
+  timestamp: string
+  gate_id: string
+}
+
+export type Normalised = {
+  class: string
+  gate_id: string
+  accepted: bool
+  passed: int
+  failed: int
+}
+
+export function reportAccepted(report: TestReport): bool {
+  return report.exit_code === 0 && report.failed === 0 && report.passed > 0
+}
+
+export function normaliseTestReport(report: TestReport): string {
+  const body: Normalised = {
+    class: "test_report",
+    gate_id: report.gate_id,
+    accepted: reportAccepted(report),
+    passed: report.passed,
+    failed: report.failed,
+  }
+  return JSON.stringify(body)
+}
+
+function sample(): TestReport {
+  return {
+    command: "cargo test",
+    repository_hash: "abc",
+    test_suite: "unit",
+    exit_code: 0,
+    passed: 4,
+    failed: 0,
+    ignored: 0,
+    timestamp: "1",
+    gate_id: "unit_tests",
+  }
+}
+
+function main(): int {
+  console.log(normaliseTestReport(sample()))
+  return 0
+}
+
+test("a passing report is accepted", () => {
+  expect(reportAccepted(sample())).toBe(true)
+})

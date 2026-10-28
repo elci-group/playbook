@@ -1,0 +1,6 @@
+target/
+.uni/
+.kaptaind/
+*.log
+.env
+.env.*

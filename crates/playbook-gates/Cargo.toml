@@ -1,0 +1,16 @@
+[package]
+name = "playbook-gates"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "Deliver-gate graph. Satisfaction moves only on evidence or an explicit waiver."
+
+[dependencies]
+playbook-core.workspace = true
+playbook-evidence.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

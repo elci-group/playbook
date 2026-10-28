@@ -1,0 +1,15 @@
+[package]
+name = "playbook-elci"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "ELCI capability-plane contract and a scripted fixture plane."
+
+[dependencies]
+playbook-core.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/capability.json",
+  "title": "ELCI capability descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "provider", "operations", "evidence_classes", "side_effect_class"],
+  "properties": {
+    "id": { "type": "string" },
+    "version": { "type": "string" },
+    "provider": { "type": "string" },
+    "operations": { "type": "array", "items": { "type": "string" } },
+    "evidence_classes": { "type": "array", "items": { "type": "string" } },
+    "side_effect_class": { "type": "string" },
+    "inputs_schema": { "type": "object" },
+    "outputs_schema": { "type": "object" }
+  }
+}

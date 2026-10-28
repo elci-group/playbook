@@ -1,0 +1,31 @@
+export type Candidate = {
+  id: string
+  tier: int
+}
+
+export function preferLowestTier(candidates: Candidate[]): string {
+  let best = candidates[0]!
+  for (const candidate of candidates) {
+    if (candidate.tier < best.tier) {
+      best = candidate
+    }
+  }
+  return best.id
+}
+
+function main(): int {
+  const choice = preferLowestTier([
+    { id: "coding-specialist", tier: 2 },
+    { id: "cargo-toolchain", tier: 0 },
+  ])
+  console.log(choice)
+  return 0
+}
+
+test("deterministic tier wins", () => {
+  const choice = preferLowestTier([
+    { id: "coding-specialist", tier: 2 },
+    { id: "cargo-toolchain", tier: 0 },
+  ])
+  expect(choice).toBe("cargo-toolchain")
+})

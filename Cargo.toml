@@ -1,0 +1,53 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/playbook-core",
+    "crates/playbook-events",
+    "crates/playbook-evidence",
+    "crates/playbook-gates",
+    "crates/playbook-ytg",
+    "crates/playbook-budget",
+    "crates/playbook-security",
+    "crates/playbook-policy",
+    "crates/playbook-elci",
+    "crates/playbook-state",
+    "crates/playbook-routing",
+    "crates/playbook-lastdown",
+    "crates/playbook-observability",
+    "crates/playbook-sim",
+    "crates/playbook-cli",
+    "crates/playbook-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+rust-version = "1.85"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "1"
+playbook-core = { path = "crates/playbook-core" }
+playbook-events = { path = "crates/playbook-events" }
+playbook-evidence = { path = "crates/playbook-evidence" }
+playbook-gates = { path = "crates/playbook-gates" }
+playbook-ytg = { path = "crates/playbook-ytg" }
+playbook-budget = { path = "crates/playbook-budget" }
+playbook-security = { path = "crates/playbook-security" }
+playbook-policy = { path = "crates/playbook-policy" }
+playbook-elci = { path = "crates/playbook-elci" }
+playbook-state = { path = "crates/playbook-state" }
+playbook-routing = { path = "crates/playbook-routing" }
+playbook-lastdown = { path = "crates/playbook-lastdown" }
+playbook-observability = { path = "crates/playbook-observability" }
+playbook-sim = { path = "crates/playbook-sim" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

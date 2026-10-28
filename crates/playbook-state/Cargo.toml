@@ -1,0 +1,26 @@
+[package]
+name = "playbook-state"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "Deterministic drive state. Classification is a pure function of evidence, budget, and policy."
+
+[dependencies]
+playbook-core.workspace = true
+playbook-events.workspace = true
+playbook-evidence.workspace = true
+playbook-gates.workspace = true
+playbook-ytg.workspace = true
+playbook-budget.workspace = true
+playbook-policy.workspace = true
+playbook-security.workspace = true
+playbook-elci.workspace = true
+playbook-routing.workspace = true
+playbook-lastdown.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

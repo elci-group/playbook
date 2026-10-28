@@ -1,0 +1,13 @@
+export function stageLine(down: string, previous: int, current: int, budget: string, play: string): string {
+  return `${down}\nYTG ${previous} → ${current}\nBudget remaining: ${budget}\nPlay: ${play}`
+}
+
+function main(): int {
+  console.log(stageLine("3rd Down — Rush", 31, 18, "64%", "integration validation"))
+  return 0
+}
+
+test("stage line cites the measurement", () => {
+  const line = stageLine("3rd Down — Rush", 31, 18, "64%", "integration validation")
+  expect(line.includes("YTG 31")).toBe(true)
+})

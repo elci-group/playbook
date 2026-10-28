@@ -1,0 +1,29 @@
+export type TestReport = {
+  command: string
+  repository_hash: string
+  test_suite: string
+  exit_code: int
+  passed: int
+  failed: int
+  ignored: int
+  timestamp: string
+  gate_id: string
+}
+
+export function parseReport(text: string): TestReport throws SyntaxError {
+  const report: TestReport = try JSON.parse(text)
+  return report
+}
+
+function main(): int {
+  const text = "{\"command\":\"cargo test\",\"repository_hash\":\"abc\",\"test_suite\":\"unit\",\"exit_code\":0,\"passed\":4,\"failed\":0,\"ignored\":0,\"timestamp\":\"1\",\"gate_id\":\"unit_tests\"}"
+  const report = try parseReport(text)
+  console.log(report.gate_id)
+  return 0
+}
+
+test("parse keeps the gate id", () => {
+  const text = "{\"command\":\"cargo test\",\"repository_hash\":\"abc\",\"test_suite\":\"unit\",\"exit_code\":0,\"passed\":4,\"failed\":0,\"ignored\":0,\"timestamp\":\"1\",\"gate_id\":\"unit_tests\"}"
+  const report = try parseReport(text)
+  expect(report.passed).toBe(4)
+})

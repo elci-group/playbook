@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/prior_table.json",
+  "title": "Playbook historical prior table",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "priors"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "priors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rows"],
+      "properties": {
+        "rows": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["samples", "realized_reduction_sum_milli"],
+            "properties": {
+              "samples": { "type": "integer", "minimum": 0 },
+              "realized_reduction_sum_milli": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

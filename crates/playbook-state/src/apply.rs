@@ -1,0 +1,995 @@
+//! Fold drive events into state.
+//!
+//! Audit mode checks witnesses against the fold. Resimulate mode recomputes
+//! downs under another policy and keeps historical sealed packages.
+
+use playbook_budget::consume;
+use playbook_core::{
+    CapabilityRequirement, Disposition, Down, DriveBudget, DriveStatus, Evidence, EvidenceClass,
+    IdempotencyState, PlayStatus, PlaybookError, ProvisionStrategy, Waiver, PPM_SCALE,
+};
+use playbook_events::DriveEvent;
+use playbook_gates::{apply_evidence, invalidate_evidence, is_complete, waive};
+use playbook_lastdown::{evaluate, DoctrineInput};
+use playbook_policy::Policy;
+use playbook_routing::admit;
+use playbook_security::authorize;
+
+use crate::{classify_measurement, measurement_between, DriveState};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApplyMode {
+    Audit,
+    Resimulate,
+}
+
+/// Serialize a drive event log as JSON.
+pub fn export_log(events: &[DriveEvent]) -> Result<String, PlaybookError> {
+    serde_json::to_string(events).map_err(PlaybookError::json)
+}
+
+/// Parse a JSON drive event log.
+pub fn import_log(json: &str) -> Result<Vec<DriveEvent>, PlaybookError> {
+    serde_json::from_str(json).map_err(PlaybookError::json)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrajectoryPoint {
+    pub index: usize,
+    pub event: String,
+    pub down: Down,
+    pub ytg_milli: u32,
+    pub budget_remaining_ppm: u32,
+    pub completion_ppm: u32,
+    pub status: DriveStatus,
+}
+
+pub fn fold(
+    events: &[DriveEvent],
+    policy: &Policy,
+    mode: ApplyMode,
+) -> Result<DriveState, PlaybookError> {
+    let mut state = None;
+    for event in events {
+        state = Some(apply(state.as_ref(), event, policy, mode)?);
+    }
+    state.ok_or(PlaybookError::Incomplete)
+}
+
+pub fn trajectory(
+    events: &[DriveEvent],
+    policy: &Policy,
+    mode: ApplyMode,
+) -> Result<Vec<TrajectoryPoint>, PlaybookError> {
+    let mut state = None;
+    let mut points = Vec::new();
+    for (index, event) in events.iter().enumerate() {
+        let next = apply(state.as_ref(), event, policy, mode)?;
+        points.push(TrajectoryPoint {
+            index,
+            event: event.name().to_string(),
+            down: next.down(),
+            ytg_milli: next.ytg_milli(),
+            budget_remaining_ppm: next.budget_remaining_ppm(policy),
+            completion_ppm: next.completion_ppm(),
+            status: next.status(),
+        });
+        state = Some(next);
+    }
+    Ok(points)
+}
+
+pub fn apply(
+    existing: Option<&DriveState>,
+    event: &DriveEvent,
+    policy: &Policy,
+    mode: ApplyMode,
+) -> Result<DriveState, PlaybookError> {
+    match event {
+        DriveEvent::DriveStarted {
+            drive_id,
+            task,
+            budget,
+            at_ms,
+        } => {
+            if existing.is_some() {
+                return Err(PlaybookError::Closed);
+            }
+            playbook_core::accept_schema(playbook_core::SCHEMA_VERSION)?;
+            let mut next = DriveState::fresh(drive_id.clone(), task.clone(), *budget, *at_ms);
+            let before = next.clone();
+            close_cycle(&before, &mut next, policy);
+            Ok(next)
+        }
+        other => {
+            let Some(current) = existing else {
+                return Err(PlaybookError::Incomplete);
+            };
+            apply_open(current, other, policy, mode)
+        }
+    }
+}
+
+fn apply_open(
+    current: &DriveState,
+    event: &DriveEvent,
+    policy: &Policy,
+    mode: ApplyMode,
+) -> Result<DriveState, PlaybookError> {
+    let before = current.clone();
+    let mut next = current.clone();
+    match event {
+        DriveEvent::DriveStarted { .. } => return Err(PlaybookError::Closed),
+        DriveEvent::GateDeclared { gate } => {
+            if next.gates.iter().any(|existing| existing.id == gate.id) {
+                return Err(PlaybookError::UnknownGate(gate.id.to_string()));
+            }
+            next.gates.push(gate.clone());
+            next.refresh_ytg();
+            close_cycle(&before, &mut next, policy);
+        }
+        DriveEvent::CapabilityObserved {
+            capability,
+            generation,
+        } => {
+            if *generation < next.capability_generation {
+                return Err(PlaybookError::StaleCapability);
+            }
+            next.capability_generation = *generation;
+            if let Some(slot) = next
+                .capabilities
+                .iter_mut()
+                .find(|existing| existing.id == capability.id)
+            {
+                *slot = capability.clone();
+            } else {
+                next.capabilities.push(capability.clone());
+            }
+        }
+        DriveEvent::PreflightCompleted {
+            missing,
+            generation,
+        } => {
+            if *generation != next.capability_generation || *generation == 0 {
+                return Err(PlaybookError::StaleCapability);
+            }
+            next.missing_evidence = missing.clone();
+            next.preflight_complete = true;
+            next.cycle_failure = false;
+            next.failure_class = None;
+            close_cycle(&before, &mut next, policy);
+        }
+        DriveEvent::PlaySelected { decision } => {
+            let definition = policy.play(&decision.selected_operation).ok_or_else(|| {
+                PlaybookError::Inadmissible(
+                    decision.selected_operation.clone(),
+                    "unknown play".into(),
+                )
+            })?;
+            let personnel = decision
+                .selected_personnel
+                .clone()
+                .ok_or(PlaybookError::NoPlay)?;
+            admit_selected(&next, definition, &personnel, policy)?;
+            next.decisions.push((**decision).clone());
+            next.last_operation = Some(decision.selected_operation.clone());
+        }
+        DriveEvent::PersonnelChanged { personnel } => {
+            next.personnel = Some(personnel.clone());
+        }
+        DriveEvent::ToolInvoked { execution } => {
+            ensure_active(&next)?;
+            if next.last_operation.as_deref() != Some(execution.operation.as_str()) {
+                return Err(PlaybookError::Inadmissible(
+                    execution.operation.clone(),
+                    "invoke does not match the selected play".into(),
+                ));
+            }
+            if execution.capability_generation != next.capability_generation {
+                return Err(PlaybookError::StaleCapability);
+            }
+            if !next
+                .capabilities
+                .iter()
+                .any(|capability| capability.id == execution.capability_id)
+            {
+                return Err(PlaybookError::StaleCapability);
+            }
+            authorize(execution.side_effect, &policy.allowed_side_effects)?;
+            let definition = policy
+                .play(&execution.operation)
+                .ok_or(PlaybookError::NoPlay)?;
+            admit_selected(&next, definition, &execution.personnel_id, policy)?;
+            note_idempotency_start(&mut next, execution.idempotency_key.as_deref())?;
+            if execution.expected_ytg_reduction_milli > 0 {
+                next.attempts = next.attempts.saturating_add(1);
+            }
+            next.open_execution = Some(execution.clone());
+            next.last_operation = Some(execution.operation.clone());
+        }
+        DriveEvent::ToolSucceeded { result } => {
+            ensure_active(&next)?;
+            let execution = next.open_execution.clone().ok_or(PlaybookError::NoPlay)?;
+            if result.status != PlayStatus::Succeeded || result.play_id != execution.play_id {
+                return Err(PlaybookError::Inadmissible(
+                    result.operation.clone(),
+                    "a failed result cannot be recorded as success".into(),
+                ));
+            }
+            if !result.cost.fits_within(execution.budget_ceiling) {
+                return Err(PlaybookError::BudgetCeiling);
+            }
+            next.budget_consumed = consume(next.budget_initial, next.budget_consumed, result.cost)?;
+            next.last_cost = result.cost;
+            next.cycle_failure = false;
+            next.failure_class = None;
+            next.count_regression = false;
+            for evidence in &result.evidence {
+                ingest(&mut next, evidence)?;
+            }
+            settle_effects(
+                &mut next,
+                execution.idempotency_key.as_deref(),
+                &result.side_effects,
+            );
+            if execution.survey {
+                next.field_surveyed = true;
+            }
+            next.last_result = Some(PlayStatus::Succeeded);
+            next.open_execution = None;
+            next.at_ms = result.at_ms;
+            close_cycle(&before, &mut next, policy);
+            // Phase 8: the outcome enters the historical table only through a
+            // measured yards-to-go drop while the play ran. Claims never do.
+            let realized = before.ytg_milli.saturating_sub(next.ytg_milli);
+            next.priors.record(&execution.personnel_id, realized);
+        }
+        DriveEvent::ToolFailed { failure } => {
+            ensure_active(&next)?;
+            let execution = next.open_execution.clone().ok_or(PlaybookError::NoPlay)?;
+            if failure.play_id != execution.play_id {
+                return Err(PlaybookError::Inadmissible(
+                    failure.operation.clone(),
+                    "failure does not match the open play".into(),
+                ));
+            }
+            if !failure.cost.fits_within(execution.budget_ceiling) {
+                return Err(PlaybookError::BudgetCeiling);
+            }
+            next.budget_consumed =
+                consume(next.budget_initial, next.budget_consumed, failure.cost)?;
+            next.last_cost = failure.cost;
+            let evidence = Evidence::seal(
+                EvidenceClass::ToolInvocation,
+                serde_json::json!({
+                    "status": "failed",
+                    "kind": failure.kind,
+                    "operation": failure.operation,
+                }),
+                failure.at_ms,
+            )?;
+            next.failure_refs.push(evidence.id.clone());
+            next.evidence.push(evidence);
+            next.cycle_failure = true;
+            next.failure_class = Some(failure.kind.failure_class());
+            next.last_failure_kind = Some(failure.kind);
+            next.last_failed_operation = Some(failure.operation.clone());
+            next.last_failed_personnel = Some(failure.personnel_id.clone());
+            next.last_result = Some(PlayStatus::Failed);
+            settle_effects(
+                &mut next,
+                failure.idempotency_key.as_deref(),
+                &failure.side_effects,
+            );
+            next.failure_fingerprint = Some(next.fingerprint());
+            next.open_execution = None;
+            next.at_ms = failure.at_ms;
+            if failure.kind == playbook_core::ToolFailureKind::Unsupported {
+                next.acquisition_count = next.acquisition_count.saturating_add(1);
+            }
+            close_cycle(&before, &mut next, policy);
+            // A failure is a measured outcome of zero progress.
+            next.priors.record(&failure.personnel_id, 0);
+        }
+        DriveEvent::EvidenceAccepted { evidence } => {
+            ensure_active(&next)?;
+            next.cycle_failure = false;
+            next.failure_class = None;
+            next.count_regression = false;
+            ingest(&mut next, evidence)?;
+            next.at_ms = evidence.observed_at_ms;
+            close_cycle(&before, &mut next, policy);
+        }
+        DriveEvent::ArtefactProduced { artefact } => {
+            next.artefacts.push(artefact.clone());
+        }
+        DriveEvent::ArtefactValidated {
+            artefact_id,
+            evidence_id,
+        } => {
+            let artefact = next
+                .artefacts
+                .iter_mut()
+                .find(|artefact| &artefact.id == artefact_id)
+                .ok_or_else(|| PlaybookError::UnknownGate(artefact_id.to_string()))?;
+            if !next.evidence.iter().any(|item| &item.id == evidence_id) {
+                return Err(PlaybookError::Evidence(
+                    "validation evidence is missing".into(),
+                ));
+            }
+            artefact.validated = true;
+            artefact.evidence_id = Some(evidence_id.clone());
+        }
+        DriveEvent::ArtefactRejected {
+            artefact_id,
+            evidence_id,
+        } => {
+            let artefact = next
+                .artefacts
+                .iter_mut()
+                .find(|artefact| &artefact.id == artefact_id)
+                .ok_or_else(|| PlaybookError::UnknownGate(artefact_id.to_string()))?;
+            artefact.rejected = true;
+            artefact.validated = false;
+            let failed = invalidate_evidence(&mut next.gates, evidence_id);
+            if !failed.is_empty() {
+                next.count_regression = true;
+                next.material_failure = true;
+            }
+            next.refresh_ytg();
+            close_cycle(&before, &mut next, policy);
+        }
+        DriveEvent::BudgetConsumed { cost, at_ms } => {
+            ensure_active(&next)?;
+            next.cycle_failure = false;
+            next.failure_class = None;
+            next.count_regression = false;
+            next.budget_consumed = consume(next.budget_initial, next.budget_consumed, *cost)?;
+            next.last_cost = *cost;
+            next.at_ms = *at_ms;
+            close_cycle(&before, &mut next, policy);
+        }
+        DriveEvent::WaiverGranted {
+            gate_id,
+            authority,
+            reason,
+        } => {
+            ensure_active(&next)?;
+            let waiver = Waiver::new(authority, reason)?;
+            waive(&mut next.gates, gate_id, waiver)?;
+            next.refresh_ytg();
+            next.cycle_failure = false;
+            next.failure_class = None;
+            close_cycle(&before, &mut next, policy);
+        }
+        DriveEvent::YtgRecalculated {
+            ytg_milli,
+            previous_milli,
+        } => {
+            if mode == ApplyMode::Resimulate {
+                return Ok(next);
+            }
+            if next.ytg_milli != *ytg_milli || next.cycle_previous_ytg != *previous_milli {
+                return Err(PlaybookError::ReplayDivergence(format!(
+                    "ytg witness {previous_milli} → {ytg_milli}, state {} → {}",
+                    next.cycle_previous_ytg, next.ytg_milli
+                )));
+            }
+        }
+        DriveEvent::DownChanged { down, reasons } => {
+            if mode == ApplyMode::Resimulate {
+                return Ok(next);
+            }
+            if next.down != *down || next.explanation != *reasons {
+                return Err(PlaybookError::ReplayDivergence(format!(
+                    "down witness {} does not match {}",
+                    down.machine_id(),
+                    next.down.machine_id()
+                )));
+            }
+        }
+        DriveEvent::FourthDownDeclared {
+            probability_ppm,
+            threshold_ppm,
+            disposition,
+        } => {
+            if mode == ApplyMode::Resimulate {
+                return Ok(next);
+            }
+            let expected = policy.conversion_threshold(&next.task.workload_class);
+            if next.down != Down::FourthDown
+                || next.completion_ppm != *probability_ppm
+                || expected != *threshold_ppm
+                || next.disposition != Some(*disposition)
+            {
+                return Err(PlaybookError::ReplayDivergence(
+                    "fourth-down witness does not match the doctrine".into(),
+                ));
+            }
+        }
+        DriveEvent::CapabilityRequirementIssued { requirement } => {
+            if mode == ApplyMode::Resimulate {
+                return Ok(next);
+            }
+            if next.requirement.as_ref() != Some(requirement) {
+                return Err(PlaybookError::ReplayDivergence(
+                    "capability requirement witness does not match".into(),
+                ));
+            }
+        }
+        DriveEvent::FieldGoalSelected { gate_id } => {
+            if !next.gates.iter().any(|gate| &gate.id == gate_id) {
+                return Err(PlaybookError::UnknownGate(gate_id.to_string()));
+            }
+            next.field_goal_gate = Some(gate_id.clone());
+            next.disposition = Some(Disposition::FieldGoal);
+            score_field_goal(&mut next);
+        }
+        DriveEvent::PuntIssued { package } => {
+            if next.down != Down::FourthDown || next.disposition != Some(Disposition::Punt) {
+                return Err(PlaybookError::PuntNotReady);
+            }
+            if playbook_core::leaks_competitive_metadata(
+                &serde_json::to_vec(package).map_err(PlaybookError::json)?,
+            ) {
+                return Err(PlaybookError::AmnesiaLeak);
+            }
+            if mode == ApplyMode::Audit {
+                let sealed = next.seal_package(policy)?;
+                if sealed != **package {
+                    return Err(PlaybookError::ReplayDivergence(
+                        "punt package does not match the sealed field".into(),
+                    ));
+                }
+            }
+            next.package = Some((**package).clone());
+            next.status = DriveStatus::Punted;
+        }
+        DriveEvent::PossessionStarted {
+            personnel,
+            budget,
+            at_ms,
+        } => {
+            if next.status != DriveStatus::Punted && next.disposition != Some(Disposition::Reset) {
+                return Err(PlaybookError::PuntNotReady);
+            }
+            next.status = DriveStatus::Active;
+            next.possession_generation = next.possession_generation.saturating_add(1);
+            next.budget_initial = *budget;
+            next.budget_consumed = DriveBudget::zero();
+            next.last_cost = DriveBudget::zero();
+            next.personnel = Some(personnel.clone());
+            next.preflight_complete = false;
+            next.possession_restarted = true;
+            next.stall_cycles = 0;
+            next.cycle_failure = false;
+            next.failure_class = None;
+            next.last_failed_operation = None;
+            next.failure_fingerprint = None;
+            next.origin_ytg_milli = next.ytg_milli;
+            next.at_ms = *at_ms;
+            close_cycle(&before, &mut next, policy);
+        }
+        DriveEvent::AssessmentsRecorded { personnel } => {
+            next.assessments = personnel.clone();
+        }
+        DriveEvent::PriorsLoaded { priors } => {
+            // Phase 9: imported history is authoritative input, like the
+            // drive contract itself. It replaces whatever the table held;
+            // measured outcomes recorded afterwards accrue on top. The same
+            // event folds identically in audit and resimulate modes.
+            next.priors = priors.clone();
+        }
+        DriveEvent::SideEffectReconciled { key, occurred } => {
+            if next.idempotency.get(key) != Some(&IdempotencyState::Unknown) {
+                return Err(PlaybookError::Reconcile(key.clone()));
+            }
+            for effect in &mut next.unresolved_effects {
+                if &effect.idempotency_key == key {
+                    effect.occurred = Some(*occurred);
+                    effect.resolved = true;
+                }
+            }
+            next.unresolved_effects
+                .retain(|effect| effect.idempotency_key != *key || !effect.resolved);
+            next.idempotency
+                .insert(key.clone(), IdempotencyState::Committed);
+        }
+        DriveEvent::CompletionRejected { at_ms, reason } => {
+            if reason.trim().is_empty() {
+                return Err(PlaybookError::Incomplete);
+            }
+            next.false_completion_claims = next.false_completion_claims.saturating_add(1);
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::DriveCompleted { at_ms } => {
+            if !is_complete(&next.gates) || next.ytg_milli != 0 {
+                return Err(PlaybookError::Incomplete);
+            }
+            next.status = DriveStatus::Completed;
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::AbandonIssued { reason } => {
+            let decision = doctrine(&next, policy);
+            if next.task.integrity == playbook_core::TaskIntegrity::Sound
+                && decision.chosen != Disposition::Abandon
+            {
+                return Err(PlaybookError::DispositionMismatch);
+            }
+            if reason.trim().is_empty() {
+                return Err(PlaybookError::DispositionMismatch);
+            }
+            next.status = DriveStatus::Abandoned;
+            next.disposition = Some(Disposition::Abandon);
+        }
+    }
+    Ok(next)
+}
+
+fn close_cycle(before: &DriveState, next: &mut DriveState, policy: &Policy) {
+    let spent = consumed_increased(before.budget_consumed, next.budget_consumed);
+    if next.ytg_milli < before.ytg_milli {
+        next.stall_cycles = 0;
+        next.progress_cycles = next.progress_cycles.saturating_add(1);
+        next.validated_progress = true;
+    } else if spent {
+        next.stall_cycles = next.stall_cycles.saturating_add(1);
+    }
+    if next.ytg_milli > before.ytg_milli && next.count_regression {
+        next.material_failure = true;
+        next.cycle_failure = true;
+        next.failure_class = Some(playbook_core::FailureClass::TaskRegression);
+    }
+    if next
+        .gates
+        .iter()
+        .any(|gate| gate.satisfaction_ppm > 0 || gate.is_terminal())
+    {
+        next.validated_progress = true;
+    }
+    let measurement = measurement_between(before, next, policy);
+    let class = classify_measurement(&measurement, policy);
+    next.cycle_previous_ytg = before.ytg_milli;
+    next.down = class.down;
+    next.explanation = class.reasons;
+    next.completion_ppm = class.completion_ppm;
+    next.possession_restarted = false;
+    next.count_regression = false;
+    if class.down == Down::FourthDown {
+        next.disposition = Some(doctrine(next, policy).chosen);
+    }
+    if class.down == Down::ThirdDownPlayAction {
+        next.requirement = requirement(next, policy);
+    }
+    score_field_goal(next);
+}
+
+fn ingest(state: &mut DriveState, evidence: &Evidence) -> Result<(), PlaybookError> {
+    if state
+        .evidence
+        .iter()
+        .any(|existing| existing.id == evidence.id)
+    {
+        return Ok(());
+    }
+    let outcome = apply_evidence(&mut state.gates, evidence)?;
+    state.evidence.push(evidence.clone());
+    state.gate_reopens = state.gate_reopens.saturating_add(outcome.reopened);
+    if let Some(environment) = outcome.environment {
+        state.environment_snapshot = environment;
+    }
+    let before = state.ytg_milli;
+    state.refresh_ytg();
+    if state.ytg_milli > before {
+        state.count_regression = true;
+    }
+    if !outcome.failed.is_empty() {
+        state.cycle_failure = true;
+        state.material_failure = true;
+        if state.failure_class.is_none() {
+            state.failure_class = Some(playbook_core::FailureClass::ValidationFailure);
+        }
+    }
+    Ok(())
+}
+
+fn doctrine(state: &DriveState, policy: &Policy) -> playbook_lastdown::DoctrineDecision {
+    let full = state
+        .gates
+        .iter()
+        .map(|gate| u64::from(gate.weight_ppm))
+        .sum::<u64>()
+        / 1_000;
+    let banked = state
+        .gates
+        .iter()
+        .map(|gate| {
+            u64::from(gate.weight_ppm) * u64::from(gate.effective_satisfaction_ppm())
+                / u64::from(PPM_SCALE)
+        })
+        .sum::<u64>()
+        / 1_000;
+    evaluate(&DoctrineInput {
+        integrity: state.task.integrity,
+        full_utility: full,
+        banked_utility: banked,
+        p_score: state.completion_ppm,
+        p_preserve: policy.punt_preserve_ppm,
+        p_finish_after_handoff: policy.receiver_finish_ppm,
+        min_attempt: policy.min_attempt_ppm,
+        reset_bonus_ppm: policy.reset_bonus_ppm,
+    })
+}
+
+fn requirement(state: &DriveState, policy: &Policy) -> Option<CapabilityRequirement> {
+    let gate = state.gates.iter().find(|gate| {
+        gate.mandatory
+            && !gate.is_terminal()
+            && gate.required_evidence.iter().all(|class| {
+                !state
+                    .capabilities
+                    .iter()
+                    .any(|capability| capability.evidence_classes.contains(class))
+            })
+    })?;
+    let class = *gate.required_evidence.first()?;
+    let strategy = if state.acquisition_count >= policy.capability_acquisition_limit {
+        ProvisionStrategy::Defer
+    } else {
+        ProvisionStrategy::DiscoverExisting
+    };
+    Some(CapabilityRequirement {
+        capability_id: format!("missing.{class:?}"),
+        capability_class: format!("{class:?}"),
+        reason: format!("mandatory gate {} requires {class:?}", gate.id),
+        blocks_gate: gate.id.clone(),
+        provision_strategy: strategy,
+        estimated_cost: DriveBudget {
+            tokens: 10,
+            ..DriveBudget::zero()
+        },
+        reusable: true,
+    })
+}
+
+fn score_field_goal(state: &mut DriveState) {
+    if let Some(gate_id) = &state.field_goal_gate {
+        if state
+            .gates
+            .iter()
+            .any(|gate| &gate.id == gate_id && gate.is_terminal())
+        {
+            state.status = DriveStatus::FieldGoalScored;
+        }
+    }
+}
+
+fn ensure_active(state: &DriveState) -> Result<(), PlaybookError> {
+    if matches!(
+        state.status,
+        DriveStatus::Completed
+            | DriveStatus::Abandoned
+            | DriveStatus::FieldGoalScored
+            | DriveStatus::Punted
+    ) {
+        Err(PlaybookError::Closed)
+    } else {
+        Ok(())
+    }
+}
+
+fn note_idempotency_start(state: &mut DriveState, key: Option<&str>) -> Result<(), PlaybookError> {
+    let Some(key) = key else {
+        return Ok(());
+    };
+    match state.idempotency.get(key) {
+        Some(IdempotencyState::Committed) => Err(PlaybookError::DuplicateEffect(key.to_string())),
+        Some(IdempotencyState::Unknown | IdempotencyState::Started) => {
+            Err(PlaybookError::Reconcile(key.to_string()))
+        }
+        None => {
+            state
+                .idempotency
+                .insert(key.to_string(), IdempotencyState::Started);
+            Ok(())
+        }
+    }
+}
+
+fn settle_effects(
+    state: &mut DriveState,
+    key: Option<&str>,
+    effects: &[playbook_core::SideEffectNote],
+) {
+    let unresolved = effects.iter().any(|effect| !effect.resolved);
+    if let Some(key) = key {
+        let mark = if unresolved {
+            IdempotencyState::Unknown
+        } else {
+            IdempotencyState::Committed
+        };
+        state.idempotency.insert(key.to_string(), mark);
+    }
+    for effect in effects {
+        if !effect.resolved {
+            state.unresolved_effects.push(effect.clone());
+        }
+    }
+}
+
+fn admit_selected(
+    state: &DriveState,
+    definition: &playbook_core::PlayDefinition,
+    personnel: &playbook_core::PersonnelId,
+    policy: &Policy,
+) -> Result<(), PlaybookError> {
+    let person = playbook_core::Personnel {
+        id: personnel.clone(),
+        kind: definition.personnel_kind,
+        display_name: personnel.to_string(),
+        cost_tokens: 1,
+        latency_ms: 1,
+        capability_fit_ppm: PPM_SCALE,
+        reliability_ppm: PPM_SCALE,
+        quota_remaining_ppm: PPM_SCALE,
+        evidence_quality_ppm: PPM_SCALE,
+        own_ytg_milli: None,
+    };
+    let field = state.field_position(std::slice::from_ref(&person), policy)?;
+    admit(&field, definition, personnel, policy)
+}
+
+fn consumed_increased(before: DriveBudget, after: DriveBudget) -> bool {
+    after.tokens > before.tokens
+        || after.monetary_cost_micros > before.monetary_cost_micros
+        || after.wall_clock_ms > before.wall_clock_ms
+        || after.tool_calls > before.tool_calls
+        || after.inference_calls > before.inference_calls
+        || after.retry_count > before.retry_count
+        || after.context_capacity > before.context_capacity
+        || after.provider_quota > before.provider_quota
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use playbook_core::{
+        DriveId, Evidence, EvidenceClass, Gate, GateId, TaskContract, TaskIntegrity,
+    };
+    use playbook_policy::Policy;
+    use serde_json::json;
+
+    #[test]
+    fn authority_log_json_round_trips_and_audit_fold_matches_live_state() {
+        let policy = Policy::builtin();
+        let task = TaskContract {
+            statement: "compile the implementation".into(),
+            workload_class: "engineering".into(),
+            constraints: Vec::new(),
+            integrity: TaskIntegrity::Sound,
+        };
+        let mut authority = crate::Authority::start(
+            DriveId::new("json-roundtrip").unwrap(),
+            task,
+            DriveBudget::default(),
+            policy.clone(),
+            Vec::new(),
+            1,
+        )
+        .unwrap();
+        let gate = Gate::declare(
+            GateId::new("implementation").unwrap(),
+            "compiler accepts the implementation",
+            1_000_000,
+            Vec::new(),
+            vec![EvidenceClass::CompilerResult],
+            true,
+        )
+        .unwrap();
+        authority.declare_gate(gate).unwrap();
+        authority
+            .accept_evidence(
+                Evidence::seal(
+                    EvidenceClass::CompilerResult,
+                    json!({"gate_id": "implementation", "success": true}),
+                    2,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let json = export_log(authority.log()).unwrap();
+        let imported = import_log(&json).unwrap();
+        assert_eq!(imported, authority.log());
+        assert_eq!(
+            fold(&imported, &policy, ApplyMode::Audit).unwrap(),
+            *authority.state()
+        );
+    }
+
+    #[test]
+    fn priors_learn_from_measured_outcomes_and_replay_identically() {
+        use playbook_core::{Personnel, PersonnelId, PersonnelKind, YTG_REFERENCE_MILLI};
+        use playbook_elci::FixturePlane;
+
+        let policy = Policy::builtin();
+        let cargo = PersonnelId::new("cargo-toolchain").unwrap();
+        let roster = vec![Personnel {
+            id: cargo.clone(),
+            kind: PersonnelKind::DeterministicProcedure,
+            display_name: "cargo-toolchain".into(),
+            cost_tokens: 40,
+            latency_ms: 20,
+            capability_fit_ppm: playbook_core::PPM_SCALE,
+            reliability_ppm: 900_000,
+            quota_remaining_ppm: playbook_core::PPM_SCALE,
+            evidence_quality_ppm: playbook_core::PPM_SCALE,
+            own_ytg_milli: None,
+        }];
+        let mut authority = crate::Authority::start(
+            DriveId::new("drive-priors").unwrap(),
+            TaskContract {
+                statement: "compile the implementation".into(),
+                workload_class: "engineering".into(),
+                constraints: Vec::new(),
+                integrity: TaskIntegrity::Sound,
+            },
+            crate::started_budget(1_000, 1_000),
+            policy.clone(),
+            roster,
+            1,
+        )
+        .unwrap();
+        authority
+            .declare_gate(
+                Gate::declare(
+                    GateId::new("implementation").unwrap(),
+                    "compiler accepts the implementation",
+                    1_000_000,
+                    Vec::new(),
+                    vec![EvidenceClass::CompilerResult],
+                    true,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let mut plane = FixturePlane::mvp();
+        authority.preflight(&mut plane).unwrap();
+        let survey = authority.step(&mut plane, 100).unwrap();
+        assert_eq!(survey.selected_operation, "inspect");
+        let compile = authority.step(&mut plane, 200).unwrap();
+        assert_eq!(compile.selected_operation, "compile");
+
+        let priors = authority.state().priors();
+        let row = priors.row(&cargo).unwrap();
+        // The survey moved no yards; the compile removed them all.
+        assert_eq!(row.samples, 2);
+        assert_eq!(
+            row.realized_reduction_sum_milli,
+            u64::from(YTG_REFERENCE_MILLI)
+        );
+        assert_eq!(
+            priors.prior_milli(&cargo, policy.routing.prior_min_samples),
+            None
+        );
+        assert_eq!(priors.prior_milli(&cargo, 2), Some(YTG_REFERENCE_MILLI / 2));
+
+        let events = authority.log().to_vec();
+        let audit = fold(&events, &policy, ApplyMode::Audit).unwrap();
+        let resim = fold(&events, &policy, ApplyMode::Resimulate).unwrap();
+        assert_eq!(audit.priors(), authority.state().priors());
+        assert_eq!(resim.priors(), authority.state().priors());
+        assert_eq!(audit.priors(), resim.priors());
+    }
+
+    #[test]
+    fn loaded_priors_flip_routing_across_drives() {
+        use playbook_core::{Personnel, PersonnelId, PersonnelKind};
+        use playbook_elci::FixturePlane;
+        use playbook_routing::HistoricalPriorTable;
+
+        let policy = Policy::builtin();
+        let mut priors = HistoricalPriorTable::empty();
+        let measured = PersonnelId::new("measured-tool").unwrap();
+        for _ in 0..policy.routing.prior_min_samples {
+            priors.record(&measured, 3_000);
+        }
+
+        let roster = || {
+            vec![
+                Personnel {
+                    id: PersonnelId::new("fast-tool").unwrap(),
+                    kind: PersonnelKind::DeterministicProcedure,
+                    display_name: "fast-tool".into(),
+                    cost_tokens: 40,
+                    latency_ms: 20,
+                    capability_fit_ppm: playbook_core::PPM_SCALE,
+                    reliability_ppm: 900_000,
+                    quota_remaining_ppm: playbook_core::PPM_SCALE,
+                    evidence_quality_ppm: playbook_core::PPM_SCALE,
+                    own_ytg_milli: None,
+                },
+                Personnel {
+                    id: measured.clone(),
+                    kind: PersonnelKind::DeterministicProcedure,
+                    display_name: "measured-tool".into(),
+                    cost_tokens: 40,
+                    latency_ms: 20,
+                    capability_fit_ppm: playbook_core::PPM_SCALE,
+                    reliability_ppm: 900_000,
+                    quota_remaining_ppm: playbook_core::PPM_SCALE,
+                    evidence_quality_ppm: playbook_core::PPM_SCALE,
+                    own_ytg_milli: None,
+                },
+            ]
+        };
+        let setup = |authority: &mut crate::Authority| {
+            authority
+                .declare_gate(
+                    Gate::declare(
+                        GateId::new("implementation").unwrap(),
+                        "compiler accepts the implementation",
+                        1_000_000,
+                        Vec::new(),
+                        vec![EvidenceClass::CompilerResult],
+                        true,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+            let mut plane = FixturePlane::mvp();
+            authority.preflight(&mut plane).unwrap();
+            authority.step(&mut plane, 100).unwrap();
+            authority.step(&mut plane, 200).unwrap()
+        };
+
+        // Without history the tie breaks alphabetically.
+        let mut fresh = crate::Authority::start(
+            DriveId::new("drive-blind").unwrap(),
+            TaskContract {
+                statement: "compile the implementation".into(),
+                workload_class: "engineering".into(),
+                constraints: Vec::new(),
+                integrity: TaskIntegrity::Sound,
+            },
+            crate::started_budget(1_000, 1_000),
+            policy.clone(),
+            roster(),
+            1,
+        )
+        .unwrap();
+        let blind = setup(&mut fresh);
+        assert_eq!(
+            blind.selected_personnel.as_ref().unwrap().as_str(),
+            "fast-tool"
+        );
+
+        // The same drive with imported history routes by measured record.
+        let mut schooled = crate::Authority::start(
+            DriveId::new("drive-schooled").unwrap(),
+            TaskContract {
+                statement: "compile the implementation".into(),
+                workload_class: "engineering".into(),
+                constraints: Vec::new(),
+                integrity: TaskIntegrity::Sound,
+            },
+            crate::started_budget(1_000, 1_000),
+            policy.clone(),
+            roster(),
+            1,
+        )
+        .unwrap();
+        schooled.load_priors(priors.clone()).unwrap();
+        let taught = setup(&mut schooled);
+        assert_eq!(
+            taught.selected_personnel.as_ref().unwrap().as_str(),
+            "measured-tool"
+        );
+
+        // The load is part of the log, and the drive kept learning on top.
+        let replay = fold(schooled.log(), &policy, ApplyMode::Audit).unwrap();
+        assert_eq!(replay, *schooled.state());
+        let row = schooled.state().priors().row(&measured).unwrap();
+        assert_eq!(row.samples, priors.row(&measured).unwrap().samples + 2);
+    }
+}
