@@ -120,6 +120,12 @@ An open execution after recovery appears in the snapshot as
 `active_capability` and blocks advancement exactly as in-process: the next
 `steps` call returns 409 until `reconcile` closes the key.
 
+Known limitation, stated rather than hidden: `FixturePlane` holds its script
+queue in memory, so a recovered drive answers later plays with a fresh plane.
+Folded history is exact; future outcomes of a recovered drive are not
+comparable to a never-crashed run. A production plane removes this by owning
+its own durable state.
+
 ## 7. Observability
 
 One log line per request on stdout: `method path status micros`. `GET
@@ -130,9 +136,10 @@ logged, never fatal.
 
 ## 8. Resource limits
 
-Request headers: 8 KiB. Request bodies: 1 MiB. Read timeout: 10 s per
-request. Live drives: 256; further creations return 503. Journal directory:
-one file per drive, created at drive creation.
+Request headers: 8 KiB. Request bodies: 1 MiB; a larger body is rejected with
+413 and the standard envelope. Read timeout: 10 s per request. Live drives:
+256; further creations return 503. Journal directory: one file per drive,
+created at drive creation.
 
 ## 9. Configuration
 
