@@ -6,7 +6,8 @@
 use playbook_budget::consume;
 use playbook_core::{
     CapabilityRequirement, Disposition, Down, DriveBudget, DriveStatus, Evidence, EvidenceClass,
-    IdempotencyState, PlayStatus, PlaybookError, ProvisionStrategy, Waiver, PPM_SCALE,
+    IdempotencyState, PlayStatus, PlaybookError, ProvisionStrategy, SideEffectNote, Waiver,
+    PPM_SCALE,
 };
 use playbook_events::DriveEvent;
 use playbook_gates::{apply_evidence, invalidate_evidence, is_complete, waive};
@@ -179,6 +180,33 @@ fn apply_open(
         }
         DriveEvent::ToolInvoked { execution } => {
             ensure_active(&next)?;
+            ensure_no_open_execution(&next)?;
+            if execution.idempotency_key.is_none() {
+                return Err(PlaybookError::Inadmissible(
+                    execution.operation.clone(),
+                    "invocation requires an idempotency key".into(),
+                ));
+            }
+            let definition = policy
+                .play(&execution.operation)
+                .ok_or(PlaybookError::NoPlay)?;
+            let contract_mismatch = execution.drive_id != next.drive_id
+                || execution.play_kind != definition.kind
+                || execution.capability_id.as_str() != definition.capability_id.as_str()
+                || execution.side_effect != definition.side_effect
+                || execution.expected_evidence != [definition.evidence_class]
+                || execution.expected_ytg_reduction_milli
+                    != definition.expected_ytg_reduction_milli
+                || execution.survey != definition.survey
+                || next.personnel.as_ref().map(|person| &person.id)
+                    != Some(&execution.personnel_id)
+                || (mode == ApplyMode::Audit && execution.down != next.down);
+            if contract_mismatch {
+                return Err(PlaybookError::Inadmissible(
+                    execution.operation.clone(),
+                    "invoke does not match the drive, selected play, or policy contract".into(),
+                ));
+            }
             if next.last_operation.as_deref() != Some(execution.operation.as_str()) {
                 return Err(PlaybookError::Inadmissible(
                     execution.operation.clone(),
@@ -196,9 +224,6 @@ fn apply_open(
                 return Err(PlaybookError::StaleCapability);
             }
             authorize(execution.side_effect, &policy.allowed_side_effects)?;
-            let definition = policy
-                .play(&execution.operation)
-                .ok_or(PlaybookError::NoPlay)?;
             admit_selected(&next, definition, &execution.personnel_id, policy)?;
             note_idempotency_start(&mut next, execution.idempotency_key.as_deref())?;
             if execution.expected_ytg_reduction_milli > 0 {
@@ -210,12 +235,20 @@ fn apply_open(
         DriveEvent::ToolSucceeded { result } => {
             ensure_active(&next)?;
             let execution = next.open_execution.clone().ok_or(PlaybookError::NoPlay)?;
-            if result.status != PlayStatus::Succeeded || result.play_id != execution.play_id {
+            if result.status != PlayStatus::Succeeded
+                || result.play_id != execution.play_id
+                || result.operation != execution.operation
+            {
                 return Err(PlaybookError::Inadmissible(
                     result.operation.clone(),
                     "a failed result cannot be recorded as success".into(),
                 ));
             }
+            validate_effect_keys(
+                execution.idempotency_key.as_deref(),
+                &result.side_effects,
+                &execution.operation,
+            )?;
             if !result.cost.fits_within(execution.budget_ceiling) {
                 return Err(PlaybookError::BudgetCeiling);
             }
@@ -247,12 +280,23 @@ fn apply_open(
         DriveEvent::ToolFailed { failure } => {
             ensure_active(&next)?;
             let execution = next.open_execution.clone().ok_or(PlaybookError::NoPlay)?;
-            if failure.play_id != execution.play_id {
+            if failure.play_id != execution.play_id
+                || failure.operation != execution.operation
+                || failure.play_kind != execution.play_kind
+                || failure.personnel_id != execution.personnel_id
+                || failure.capability_id != execution.capability_id
+                || failure.idempotency_key != execution.idempotency_key
+            {
                 return Err(PlaybookError::Inadmissible(
                     failure.operation.clone(),
                     "failure does not match the open play".into(),
                 ));
             }
+            validate_effect_keys(
+                execution.idempotency_key.as_deref(),
+                &failure.side_effects,
+                &execution.operation,
+            )?;
             if !failure.cost.fits_within(execution.budget_ceiling) {
                 return Err(PlaybookError::BudgetCeiling);
             }
@@ -290,6 +334,63 @@ fn apply_open(
             close_cycle(&before, &mut next, policy);
             // A failure is a measured outcome of zero progress.
             next.priors.record(&failure.personnel_id, 0);
+        }
+        DriveEvent::ToolOutcomeRejected {
+            result,
+            failure,
+            reason,
+        } => {
+            let execution = next.open_execution.clone().ok_or(PlaybookError::NoPlay)?;
+            if reason.trim().is_empty() || (result.is_some() && failure.is_some()) {
+                return Err(PlaybookError::Inadmissible(
+                    execution.operation.clone(),
+                    "rejected outcome has an empty reason or conflicting observations".into(),
+                ));
+            }
+            let (cost, effects) = if let Some(result) = result {
+                (result.cost, result.side_effects.as_slice())
+            } else if let Some(failure) = failure {
+                (failure.cost, failure.side_effects.as_slice())
+            } else {
+                (DriveBudget::zero(), &[][..])
+            };
+            let Some(key) = execution.idempotency_key.as_deref() else {
+                return Err(PlaybookError::Reconcile(execution.play_id.to_string()));
+            };
+            if next.idempotency.get(key) != Some(&IdempotencyState::Started) {
+                return Err(PlaybookError::Reconcile(key.to_string()));
+            }
+
+            // The work already ran, so its observed cost is real even when it
+            // exceeded the ceiling or its evidence could not be accepted.
+            // Saturation avoids turning an accounting overflow into a loss of
+            // the invocation audit record.
+            next.budget_consumed = saturating_add_budget(next.budget_consumed, cost);
+            next.last_cost = cost;
+            next.idempotency
+                .insert(key.to_string(), IdempotencyState::Unknown);
+            for effect in effects {
+                if !effect.resolved {
+                    let mut effect = effect.clone();
+                    // Keep reconciliation addressable by the invocation key;
+                    // the raw mismatched note remains in the rejected event.
+                    effect.idempotency_key = key.to_string();
+                    next.unresolved_effects.push(effect);
+                }
+            }
+            if !next
+                .unresolved_effects
+                .iter()
+                .any(|effect| effect.idempotency_key == key && !effect.resolved)
+            {
+                next.unresolved_effects.push(SideEffectNote {
+                    class: execution.side_effect,
+                    idempotency_key: key.to_string(),
+                    summary: format!("outcome rejected: {reason}"),
+                    resolved: false,
+                    occurred: None,
+                });
+            }
         }
         DriveEvent::EvidenceAccepted { evidence } => {
             ensure_active(&next)?;
@@ -418,6 +519,7 @@ fn apply_open(
             }
         }
         DriveEvent::FieldGoalSelected { gate_id } => {
+            ensure_no_open_execution(&next)?;
             if !next.gates.iter().any(|gate| &gate.id == gate_id) {
                 return Err(PlaybookError::UnknownGate(gate_id.to_string()));
             }
@@ -426,6 +528,7 @@ fn apply_open(
             score_field_goal(&mut next);
         }
         DriveEvent::PuntIssued { package } => {
+            ensure_no_open_execution(&next)?;
             if next.down != Down::FourthDown || next.disposition != Some(Disposition::Punt) {
                 return Err(PlaybookError::PuntNotReady);
             }
@@ -450,6 +553,7 @@ fn apply_open(
             budget,
             at_ms,
         } => {
+            ensure_no_open_execution(&next)?;
             if next.status != DriveStatus::Punted && next.disposition != Some(Disposition::Reset) {
                 return Err(PlaybookError::PuntNotReady);
             }
@@ -481,7 +585,10 @@ fn apply_open(
             next.priors = priors.clone();
         }
         DriveEvent::SideEffectReconciled { key, occurred } => {
-            if next.idempotency.get(key) != Some(&IdempotencyState::Unknown) {
+            if !matches!(
+                next.idempotency.get(key),
+                Some(IdempotencyState::Unknown | IdempotencyState::Started)
+            ) {
                 return Err(PlaybookError::Reconcile(key.clone()));
             }
             for effect in &mut next.unresolved_effects {
@@ -494,6 +601,14 @@ fn apply_open(
                 .retain(|effect| effect.idempotency_key != *key || !effect.resolved);
             next.idempotency
                 .insert(key.clone(), IdempotencyState::Committed);
+            if next
+                .open_execution
+                .as_ref()
+                .and_then(|execution| execution.idempotency_key.as_ref())
+                .is_some_and(|open_key| open_key == key)
+            {
+                next.open_execution = None;
+            }
         }
         DriveEvent::CompletionRejected { at_ms, reason } => {
             if reason.trim().is_empty() {
@@ -503,6 +618,7 @@ fn apply_open(
             next.at_ms = *at_ms;
         }
         DriveEvent::DriveCompleted { at_ms } => {
+            ensure_no_open_execution(&next)?;
             if !is_complete(&next.gates) || next.ytg_milli != 0 {
                 return Err(PlaybookError::Incomplete);
             }
@@ -510,6 +626,7 @@ fn apply_open(
             next.at_ms = *at_ms;
         }
         DriveEvent::AbandonIssued { reason } => {
+            ensure_no_open_execution(&next)?;
             let decision = doctrine(&next, policy);
             if next.task.integrity == playbook_core::TaskIntegrity::Sound
                 && decision.chosen != Disposition::Abandon
@@ -714,6 +831,56 @@ fn settle_effects(
         if !effect.resolved {
             state.unresolved_effects.push(effect.clone());
         }
+    }
+}
+
+fn ensure_no_open_execution(state: &DriveState) -> Result<(), PlaybookError> {
+    if let Some(execution) = &state.open_execution {
+        return Err(PlaybookError::Reconcile(
+            execution
+                .idempotency_key
+                .clone()
+                .unwrap_or_else(|| execution.play_id.to_string()),
+        ));
+    }
+    if let Some(effect) = state.unresolved_effects.first() {
+        return Err(PlaybookError::Reconcile(effect.idempotency_key.clone()));
+    }
+    Ok(())
+}
+
+fn validate_effect_keys(
+    key: Option<&str>,
+    effects: &[SideEffectNote],
+    operation: &str,
+) -> Result<(), PlaybookError> {
+    let Some(key) = key else {
+        return Err(PlaybookError::Inadmissible(
+            operation.to_string(),
+            "execution has no idempotency key".into(),
+        ));
+    };
+    if effects.iter().any(|effect| effect.idempotency_key != key) {
+        return Err(PlaybookError::Inadmissible(
+            operation.to_string(),
+            "side effect note does not match the invocation idempotency key".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn saturating_add_budget(left: DriveBudget, right: DriveBudget) -> DriveBudget {
+    DriveBudget {
+        tokens: left.tokens.saturating_add(right.tokens),
+        monetary_cost_micros: left
+            .monetary_cost_micros
+            .saturating_add(right.monetary_cost_micros),
+        wall_clock_ms: left.wall_clock_ms.saturating_add(right.wall_clock_ms),
+        tool_calls: left.tool_calls.saturating_add(right.tool_calls),
+        inference_calls: left.inference_calls.saturating_add(right.inference_calls),
+        retry_count: left.retry_count.saturating_add(right.retry_count),
+        context_capacity: left.context_capacity.saturating_add(right.context_capacity),
+        provider_quota: left.provider_quota.saturating_add(right.provider_quota),
     }
 }
 

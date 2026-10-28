@@ -239,12 +239,22 @@ pub fn run_mvp() -> Result<MvpReport, PlaybookError> {
 }
 
 pub fn compare_policies(events: &[DriveEvent]) -> Result<PolicyComparison, PlaybookError> {
-    let current = Policy::builtin();
     let candidate = Policy::pass_heavy_contrast();
+    compare_policies_with(events, &candidate)
+}
+
+/// Compare the recorded event sequence under the builtin audit policy and a
+/// selected candidate policy. This reclassifies the same historical events;
+/// it does not generate new actions or predict a counterfactual drive.
+pub fn compare_policies_with(
+    events: &[DriveEvent],
+    candidate: &Policy,
+) -> Result<PolicyComparison, PlaybookError> {
+    let current = Policy::builtin();
     let audit = trajectory(events, &current, ApplyMode::Audit)?;
-    let resim = trajectory(events, &candidate, ApplyMode::Resimulate)?;
+    let resim = trajectory(events, candidate, ApplyMode::Resimulate)?;
     let audit_final = fold(events, &current, ApplyMode::Audit)?;
-    let resim_final = fold(events, &candidate, ApplyMode::Resimulate)?;
+    let resim_final = fold(events, candidate, ApplyMode::Resimulate)?;
     let ytg_trajectory: Vec<u32> = audit.iter().map(|point| point.ytg_milli).collect();
     // Gate declarations precede the first derived YTG point, whose value is zero;
     // use the observed maximum as the drive's starting YTG for efficiency.
@@ -257,6 +267,9 @@ pub fn compare_policies(events: &[DriveEvent]) -> Result<PolicyComparison, Playb
         (i64::from(ytg_before) - i64::from(audit_final.ytg_milli())) * i64::from(PPM_SCALE)
             / i64::from(ytg_before)
     };
+    // This is the net change between the first and last normalized remaining
+    // budget observations. A new possession can reallocate budget, so this is
+    // not cumulative consumption across a multi-possession trace.
     let budget_spent_ppm = i64::from(first_budget) - i64::from(last_budget);
     let efficiency_ratio_milli = if budget_spent_ppm <= 0 {
         0
@@ -276,10 +289,7 @@ pub fn compare_policies(events: &[DriveEvent]) -> Result<PolicyComparison, Playb
         completion_status: format!("{:?}", audit_final.status()),
         ytg_trajectory,
         budget_remaining_ppm: last_budget,
-        tool_failures: events
-            .iter()
-            .filter(|event| matches!(event, DriveEvent::ToolFailed { .. }))
-            .count() as u32,
+        tool_failures: count_unsuccessful_tool_outcomes(events),
         model_calls,
         personnel_changes: events
             .iter()
@@ -324,6 +334,18 @@ fn count_model_calls(events: &[DriveEvent]) -> u32 {
         }
     }
     count
+}
+
+fn count_unsuccessful_tool_outcomes(events: &[DriveEvent]) -> u32 {
+    events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                DriveEvent::ToolFailed { .. } | DriveEvent::ToolOutcomeRejected { .. }
+            )
+        })
+        .count() as u32
 }
 
 pub fn control_duplicate_failures() -> Result<u32, PlaybookError> {
@@ -437,5 +459,15 @@ mod comparison_tests {
             DriveEvent::ToolInvoked { execution },
         ];
         assert_eq!(count_model_calls(&events), 1);
+    }
+
+    #[test]
+    fn rejected_tool_outcomes_count_as_unsuccessful_executions() {
+        let event = DriveEvent::ToolOutcomeRejected {
+            result: None,
+            failure: None,
+            reason: "response could not be committed".into(),
+        };
+        assert_eq!(count_unsuccessful_tool_outcomes(&[event]), 1);
     }
 }

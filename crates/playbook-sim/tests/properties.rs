@@ -6,7 +6,7 @@ use playbook_sim::{
     FixturePlane, GateId, Measurement, PlayStatus, PlaybookError, Policy, SideEffectClass,
     PPM_SCALE,
 };
-use serde_json::json;
+use serde_json::{json, Value};
 
 #[test]
 fn invariants_hold_on_the_engine() {
@@ -127,40 +127,321 @@ fn a_missing_tov_adapter_stays_isolated() {
 }
 
 #[test]
+fn inconsistent_nonzero_test_exit_reopens_an_already_satisfied_gate() {
+    let (mut drive, _) = open_drive(
+        FixturePlane::ready(),
+        vec![gate_one("unit_tests", EvidenceClass::TestReport)],
+    )
+    .unwrap();
+    let passing_evidence = Evidence::seal(
+        EvidenceClass::TestReport,
+        json!({
+            "command": "cargo test",
+            "repository_hash": "abc",
+            "test_suite": "unit",
+            "exit_code": 0,
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0,
+            "timestamp": "13",
+            "gate_id": "unit_tests"
+        }),
+        13,
+    )
+    .unwrap();
+    drive.accept_evidence(passing_evidence).unwrap();
+    assert_eq!(
+        drive.state().gates()[0].state,
+        playbook_core::GateState::Satisfied
+    );
+
+    let inconsistent = Evidence::seal(
+        EvidenceClass::TestReport,
+        json!({
+            "command": "cargo test",
+            "repository_hash": "abc",
+            "test_suite": "unit",
+            "exit_code": 1,
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0,
+            "timestamp": "14",
+            "gate_id": "unit_tests"
+        }),
+        14,
+    )
+    .unwrap();
+    drive.accept_evidence(inconsistent).unwrap();
+    assert_eq!(
+        drive.state().gates()[0].state,
+        playbook_core::GateState::Failed
+    );
+    assert_eq!(drive.state().gates()[0].satisfaction_ppm, 0);
+    assert!(!drive.state().gates()[0].is_terminal());
+}
+
+#[test]
+fn partial_test_failure_preserves_progress_and_reopens_satisfied_gate() {
+    let (mut drive, _) = open_drive(
+        FixturePlane::ready(),
+        vec![gate_one("unit_tests", EvidenceClass::TestReport)],
+    )
+    .unwrap();
+    let partial_failure = |passed: u64, failed: u64, exit_code: i64, timestamp: &str| {
+        Evidence::seal(
+            EvidenceClass::TestReport,
+            json!({
+                "command": "cargo test",
+                "repository_hash": "abc",
+                "test_suite": "unit",
+                "exit_code": exit_code,
+                "passed": passed,
+                "failed": failed,
+                "ignored": 0,
+                "timestamp": timestamp,
+                "gate_id": "unit_tests"
+            }),
+            timestamp.parse::<u64>().unwrap(),
+        )
+        .unwrap()
+    };
+
+    drive
+        .accept_evidence(partial_failure(3, 1, 1, "21"))
+        .unwrap();
+    assert_eq!(drive.state().gates()[0].satisfaction_ppm, 750_000);
+    assert_eq!(
+        drive.state().gates()[0].state,
+        playbook_core::GateState::InProgress
+    );
+
+    drive
+        .accept_evidence(partial_failure(4, 0, 0, "22"))
+        .unwrap();
+    assert_eq!(
+        drive.state().gates()[0].state,
+        playbook_core::GateState::Satisfied
+    );
+
+    drive
+        .accept_evidence(partial_failure(3, 1, 1, "23"))
+        .unwrap();
+    assert_eq!(drive.state().gates()[0].satisfaction_ppm, 750_000);
+    assert_eq!(
+        drive.state().gates()[0].state,
+        playbook_core::GateState::InProgress
+    );
+    assert!(!drive.state().gates()[0].is_terminal());
+}
+
+#[test]
 fn schemas_name_the_contract_fields() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas");
-    for (file, keys) in [
-        (
-            "policy.json",
-            &["version", "plays", "rush_budget_fraction_ppm"][..],
-        ),
-        (
-            "evidence.json",
-            &["id", "class", "body", "observed_at_ms"][..],
-        ),
-        (
-            "capability.json",
-            &["id", "operations", "evidence_classes", "side_effect_class"][..],
-        ),
-        (
-            "continuation.json",
-            &["magic", "objective_state", "evidence_refs", "budget_state"][..],
-        ),
-        (
-            "play_execution.json",
-            &[
-                "drive_id",
-                "play_id",
-                "operation",
-                "budget_ceiling",
-                "idempotency_key",
-            ][..],
-        ),
+    let report = run_mvp().unwrap();
+    let policy = serde_json::to_value(Policy::builtin()).unwrap();
+    let evidence = report
+        .events
+        .iter()
+        .find_map(|event| match event {
+            DriveEvent::EvidenceAccepted { evidence } => {
+                Some(serde_json::to_value(evidence).unwrap())
+            }
+            _ => None,
+        })
+        .unwrap();
+    let capability = report
+        .events
+        .iter()
+        .find_map(|event| match event {
+            DriveEvent::CapabilityObserved { capability, .. } => {
+                Some(serde_json::to_value(capability).unwrap())
+            }
+            _ => None,
+        })
+        .unwrap();
+    let execution = report
+        .events
+        .iter()
+        .find_map(|event| match event {
+            DriveEvent::ToolInvoked { execution } => Some(serde_json::to_value(execution).unwrap()),
+            _ => None,
+        })
+        .unwrap();
+    let continuation = serde_json::to_value(report.final_state.package().unwrap()).unwrap();
+    let mut prior_table = playbook_core::HistoricalPriorTable::empty();
+    prior_table.record(&playbook_core::PersonnelId::new("agent1").unwrap(), 8_000);
+    let prior_bundle = serde_json::to_value(playbook_core::PriorBundle {
+        schema_version: 1,
+        priors: prior_table,
+    })
+    .unwrap();
+
+    for (file, record) in [
+        ("policy.json", policy),
+        ("evidence.json", evidence),
+        ("capability.json", capability),
+        ("continuation.json", continuation),
+        ("play_execution.json", execution.clone()),
+        ("prior_table.json", prior_bundle),
     ] {
-        let text = std::fs::read_to_string(root.join(file)).unwrap();
-        for key in keys {
-            assert!(text.contains(&format!("\"{key}\"")), "{file} missing {key}");
+        let schema: Value =
+            serde_json::from_str(&std::fs::read_to_string(root.join(file)).unwrap()).unwrap();
+        assert_schema_subset(&schema, &record, file);
+    }
+
+    // The exact serialized execution includes every deny-unknown-fields member,
+    // including the nullable idempotency key.
+    assert!(execution["idempotency_key"].is_null() || execution["idempotency_key"].is_string());
+    let mut missing = execution.clone();
+    missing.as_object_mut().unwrap().remove("personnel_id");
+    let execution_schema: Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("play_execution.json")).unwrap())
+            .unwrap();
+    let mut nullable_key = execution.clone();
+    nullable_key["idempotency_key"] = Value::Null;
+    assert_schema_subset(
+        &execution_schema,
+        &nullable_key,
+        "play_execution.json nullable key",
+    );
+    assert!(validate_schema_subset(&execution_schema, &missing).is_err());
+    let mut extra = execution.clone();
+    extra["unrecognized"] = json!(true);
+    assert!(validate_schema_subset(&execution_schema, &extra).is_err());
+    let mut wrong_type = execution;
+    wrong_type["capability_generation"] = json!("one");
+    assert!(validate_schema_subset(&execution_schema, &wrong_type).is_err());
+
+    let prior_schema: Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("prior_table.json")).unwrap())
+            .unwrap();
+    let mut negative_count = serde_json::to_value(playbook_core::PriorBundle {
+        schema_version: 1,
+        priors: {
+            let mut table = playbook_core::HistoricalPriorTable::empty();
+            table.record(&playbook_core::PersonnelId::new("agent1").unwrap(), 8_000);
+            table
+        },
+    })
+    .unwrap();
+    negative_count["priors"]["rows"]["agent1"]["samples"] = json!(-1);
+    assert!(validate_schema_subset(&prior_schema, &negative_count).is_err());
+}
+
+// These contracts use only this small JSON Schema subset. Keeping the test
+// validator local avoids a runtime or development dependency on a validator
+// crate while still checking serialized fixtures recursively.
+fn assert_schema_subset(schema: &Value, record: &Value, name: &str) {
+    if let Err(message) = validate_schema_subset(schema, record) {
+        panic!("{name} serialized record does not match schema: {message}");
+    }
+}
+
+fn validate_schema_subset(schema: &Value, value: &Value) -> Result<(), String> {
+    const SUPPORTED: &[&str] = &[
+        "$schema",
+        "$id",
+        "title",
+        "description",
+        "type",
+        "const",
+        "enum",
+        "required",
+        "properties",
+        "additionalProperties",
+        "items",
+        "oneOf",
+        "minimum",
+    ];
+    if let Some(object) = schema.as_object() {
+        if let Some(keyword) = object.keys().find(|key| !SUPPORTED.contains(&key.as_str())) {
+            return Err(format!("unsupported schema keyword `{keyword}`"));
         }
+    }
+    if let Some(variants) = schema.get("oneOf").and_then(Value::as_array) {
+        let matches = variants
+            .iter()
+            .filter(|variant| validate_schema_subset(variant, value).is_ok())
+            .count();
+        if matches != 1 {
+            return Err(format!("value {value} matches {matches} oneOf variants"));
+        }
+    }
+    if let Some(expected) = schema.get("type") {
+        let valid = match expected {
+            Value::String(kind) => matches_json_type(kind, value),
+            Value::Array(kinds) => kinds
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|kind| matches_json_type(kind, value)),
+            _ => return Err("schema `type` must be a string or array".into()),
+        };
+        if !valid {
+            return Err(format!("value {value} has the wrong JSON type"));
+        }
+    }
+    if let Some(expected) = schema.get("const") {
+        if expected != value {
+            return Err(format!("value {value} does not match const {expected}"));
+        }
+    }
+    if let Some(allowed) = schema.get("enum").and_then(Value::as_array) {
+        if !allowed.contains(value) {
+            return Err(format!("value {value} is outside enum {allowed:?}"));
+        }
+    }
+    if let Some(minimum) = schema.get("minimum").and_then(Value::as_f64) {
+        let Some(actual) = value.as_f64() else {
+            return Err(format!("value {value} is not numeric for minimum"));
+        };
+        if actual < minimum {
+            return Err(format!("value {actual} is below minimum {minimum}"));
+        }
+    }
+    if let Some(object) = value.as_object() {
+        if let Some(required) = schema.get("required").and_then(Value::as_array) {
+            for key in required.iter().filter_map(Value::as_str) {
+                if !object.contains_key(key) {
+                    return Err(format!("missing required property `{key}`"));
+                }
+            }
+        }
+        let properties = schema.get("properties").and_then(Value::as_object);
+        for (key, child) in object {
+            if let Some(property_schema) = properties.and_then(|props| props.get(key)) {
+                validate_schema_subset(property_schema, child)
+                    .map_err(|error| format!("property `{key}`: {error}"))?;
+            } else if let Some(additional) = schema.get("additionalProperties") {
+                match additional {
+                    Value::Bool(false) => return Err(format!("unexpected property `{key}`")),
+                    Value::Object(_) => validate_schema_subset(additional, child)
+                        .map_err(|error| format!("additional property `{key}`: {error}"))?,
+                    _ => {}
+                }
+            }
+        }
+    }
+    if let Some(items) = schema.get("items") {
+        if let Some(array) = value.as_array() {
+            for (index, item) in array.iter().enumerate() {
+                validate_schema_subset(items, item)
+                    .map_err(|error| format!("item {index}: {error}"))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn matches_json_type(kind: &str, value: &Value) -> bool {
+    match kind {
+        "object" => value.is_object(),
+        "array" => value.is_array(),
+        "string" => value.is_string(),
+        "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+        "number" => value.is_number(),
+        "boolean" => value.is_boolean(),
+        "null" => value.is_null(),
+        _ => false,
     }
 }
 

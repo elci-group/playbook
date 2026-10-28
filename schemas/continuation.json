@@ -4,21 +4,108 @@
   "title": "Athletic-amnesia continuation package",
   "type": "object",
   "additionalProperties": false,
-  "required": ["magic", "schema_version", "drive_id", "task_contract", "objective_state", "evidence_refs", "failure_refs", "budget_state", "continuation_constraints"],
+  "required": ["magic", "schema_version", "drive_id", "task_contract", "objective_state", "validated_artefacts", "unsatisfied_gates", "evidence_refs", "failure_refs", "available_capabilities", "budget_state", "environment_snapshot", "continuation_constraints", "integrity_sha256"],
   "properties": {
     "magic": { "type": "string", "const": "PLAYBOOK/1" },
     "schema_version": { "type": "integer" },
     "drive_id": { "type": "string" },
-    "task_contract": { "type": "object" },
-    "objective_state": { "type": "object" },
-    "validated_artefacts": { "type": "array" },
-    "unsatisfied_gates": { "type": "array" },
-    "evidence_refs": { "type": "array" },
-    "failure_refs": { "type": "array" },
-    "available_capabilities": { "type": "array" },
-    "budget_state": { "type": "object" },
-    "environment_snapshot": { "type": "object" },
-    "continuation_constraints": { "type": "array" },
+    "task_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "workload_class", "constraints", "integrity"],
+      "properties": {
+        "statement": { "type": "string" },
+        "workload_class": { "type": "string" },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "value"],
+            "properties": { "key": { "type": "string" }, "value": { "type": "string" } }
+          }
+        },
+        "integrity": { "type": "string" }
+      }
+    },
+    "objective_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measured_ytg_milli", "down", "possession_generation", "status"],
+      "properties": {
+        "measured_ytg_milli": { "type": "integer" },
+        "down": { "type": "string" },
+        "possession_generation": { "type": "integer" },
+        "status": { "type": "string" }
+      }
+    },
+    "validated_artefacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "digest", "validated", "rejected", "evidence_id"],
+        "properties": {
+          "id": { "type": "string" },
+          "digest": { "type": "string" },
+          "validated": { "type": "boolean" },
+          "rejected": { "type": "boolean" },
+          "evidence_id": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "unsatisfied_gates": { "type": "array", "items": { "type": "string" } },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "failure_refs": { "type": "array", "items": { "type": "string" } },
+    "available_capabilities": { "type": "array", "items": { "type": "string" } },
+    "budget_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initial", "consumed", "remaining_fraction_ppm"],
+      "properties": {
+        "initial": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+          "properties": {
+            "tokens": { "type": "integer" },
+            "monetary_cost_micros": { "type": "integer" },
+            "wall_clock_ms": { "type": "integer" },
+            "tool_calls": { "type": "integer" },
+            "inference_calls": { "type": "integer" },
+            "retry_count": { "type": "integer" },
+            "context_capacity": { "type": "integer" },
+            "provider_quota": { "type": "integer" }
+          }
+        },
+        "consumed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+          "properties": {
+            "tokens": { "type": "integer" },
+            "monetary_cost_micros": { "type": "integer" },
+            "wall_clock_ms": { "type": "integer" },
+            "tool_calls": { "type": "integer" },
+            "inference_calls": { "type": "integer" },
+            "retry_count": { "type": "integer" },
+            "context_capacity": { "type": "integer" },
+            "provider_quota": { "type": "integer" }
+          }
+        },
+        "remaining_fraction_ppm": { "type": "integer" }
+      }
+    },
+    "environment_snapshot": {},
+    "continuation_constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "value"],
+        "properties": { "key": { "type": "string" }, "value": { "type": "string" } }
+      }
+    },
     "integrity_sha256": { "type": "string" }
   }
 }

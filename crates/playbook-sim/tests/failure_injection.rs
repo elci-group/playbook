@@ -275,7 +275,7 @@ fn unsupported_is_capability_absence_and_a_missing_class_is_play_action() {
 }
 
 #[test]
-fn duplicate_delivery_and_stale_capability_leave_state_unchanged() {
+fn duplicate_delivery_rolls_back_but_stale_capability_preserves_open_invocation() {
     let mut plane = FixturePlane::ready();
     plane.push_success("inspect", env(), tiny());
     let (mut drive, mut plane) = prepare(
@@ -300,7 +300,17 @@ fn duplicate_delivery_and_stale_capability_leave_state_unchanged() {
         drive.step(&mut plane, 100).unwrap_err(),
         PlaybookError::StaleCapability
     );
-    assert_eq!(drive.state(), &before);
+    assert_ne!(drive.state(), &before);
+    assert!(drive.log().iter().any(|event| matches!(
+        event,
+        DriveEvent::ToolOutcomeRejected {
+            result: None,
+            failure: None,
+            reason,
+        } if reason.contains("capability snapshot is stale")
+    )));
+    let retry = drive.step(&mut plane, 101).unwrap_err();
+    assert!(matches!(retry, PlaybookError::Reconcile(_)));
 }
 
 #[test]

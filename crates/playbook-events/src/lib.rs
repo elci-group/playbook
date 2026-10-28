@@ -43,6 +43,14 @@ pub enum DriveEvent {
     ToolFailed {
         failure: ToolFailure,
     },
+    /// A plane returned an outcome that could not be committed, or its
+    /// response was lost after invocation. Preserve the observation for audit
+    /// and require reconciliation before another execution.
+    ToolOutcomeRejected {
+        result: Option<Box<PlayResult>>,
+        failure: Option<ToolFailure>,
+        reason: String,
+    },
     EvidenceAccepted {
         evidence: Evidence,
     },
@@ -127,6 +135,7 @@ impl DriveEvent {
             Self::ToolInvoked { .. } => "tool_invoked",
             Self::ToolSucceeded { .. } => "tool_succeeded",
             Self::ToolFailed { .. } => "tool_failed",
+            Self::ToolOutcomeRejected { .. } => "tool_outcome_rejected",
             Self::EvidenceAccepted { .. } => "evidence_accepted",
             Self::ArtefactProduced { .. } => "artefact_produced",
             Self::ArtefactValidated { .. } => "artefact_validated",

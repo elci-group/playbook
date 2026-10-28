@@ -46,14 +46,42 @@ realized yards-to-go reduction.
 The `sim` report includes completion status, the yards-to-go trajectory, remaining
 budget, tool failures, model calls, personnel changes, the first fourth-down
 index, elapsed budgeted time, monetary cost, satisfied gates, and integer drive
-efficiency. Efficiency measures progress from the trajectory's maximum
+efficiency. `--trace` accepts `mvp` or a JSON event-log path. `--policy` selects
+`builtin` / `playbook-policy-1` or `pass-heavy` /
+`playbook-policy-pass-heavy`; unknown or incomplete options fail. The comparison
+reclassifies recorded events under the selected policy. It does not generate
+counterfactual actions or demonstrate improved live routing outcomes. Reported
+cost and efficiency metrics describe the observed trace under the builtin
+audit policy. Efficiency measures progress from the trajectory's maximum
 yards-to-go to its final value, so the initial event before gate declaration
-does not hide the work completed. Budget consumption compares the first and
-last trajectory points across the complete drive, including renewed possessions.
+does not hide the work completed. `budget_spent_ppm` is the net change in
+normalized remaining budget between the first and last trajectory points;
+renewed possessions can replenish that budget, so it is not cumulative spend
+across restarts. The efficiency ratio shares this limitation.
 
 `playbook mvp` runs the acceptance drive: gate decomposition, capability discovery, first down, evidence-backed yardage, second down gain, third down pass, an induced tool failure, a refused blind retry, budget pressure, fourth down, a punt, a fresh possession with an independent yards estimate, completion, and an audit replay. The replayed state equals the live state.
 
 ## Delivery status
+
+Playbook is a deterministic control-plane prototype. The acceptance drive and
+failure-injection suite exercise fixture capabilities; they do not demonstrate
+a live Lucid/ELCI integration. The CLI's `status` and `explain` commands describe
+the acceptance drive, and `playbook-server` serves one fixed demo snapshot and
+then exits. There is no continuously running drive service or OTLP exporter.
+
+The event log supports audit replay, but serialization alone is not durable
+execution recovery. A host must persist an invocation before dispatching a
+real tool, preserve its returned outcome, and reconcile uncertain side effects
+after a crash. This repository does not provide a durable write-ahead store.
+
+`Authority::resume` restores a saved log in audit mode. Once `ToolInvoked` is
+recorded, an execution error does not roll back the invocation. A
+`ToolOutcomeRejected` event retains the returned observation and its reported
+cost, even if it exceeds the allocation; unavailable costs remain unknown.
+The host must reconcile uncertain outcomes before further execution or closing
+the drive. Invocations require an idempotency key, although the wire contract
+can represent a null key. Rejected outcomes appear in failure counters and
+tool-span diagnostics.
 
 Phases 0 through 6 are in this tree: schemas, the deterministic core, the ELCI envelope, play admissibility, Lastdown dispositions, isolated Tov adapters, and trace replay with failure injection.
 

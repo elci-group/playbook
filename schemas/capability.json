@@ -4,7 +4,7 @@
   "title": "ELCI capability descriptor",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "version", "provider", "operations", "evidence_classes", "side_effect_class"],
+  "required": ["id", "version", "provider", "operations", "inputs_schema", "outputs_schema", "cost_model", "side_effect_class", "permissions", "environment_requirements", "reliability_ppm", "reliability_samples", "evidence_classes"],
   "properties": {
     "id": { "type": "string" },
     "version": { "type": "string" },
@@ -13,6 +13,25 @@
     "evidence_classes": { "type": "array", "items": { "type": "string" } },
     "side_effect_class": { "type": "string" },
     "inputs_schema": { "type": "object" },
-    "outputs_schema": { "type": "object" }
+    "outputs_schema": { "type": "object" },
+    "cost_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+      "properties": {
+        "tokens": { "type": "integer" },
+        "monetary_cost_micros": { "type": "integer" },
+        "wall_clock_ms": { "type": "integer" },
+        "tool_calls": { "type": "integer" },
+        "inference_calls": { "type": "integer" },
+        "retry_count": { "type": "integer" },
+        "context_capacity": { "type": "integer" },
+        "provider_quota": { "type": "integer" }
+      }
+    },
+    "permissions": { "type": "array", "items": { "type": "string" } },
+    "environment_requirements": { "type": "array", "items": { "type": "string" } },
+    "reliability_ppm": { "type": "integer" },
+    "reliability_samples": { "type": "integer" }
   }
 }

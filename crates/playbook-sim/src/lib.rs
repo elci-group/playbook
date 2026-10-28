@@ -13,7 +13,8 @@ pub use harness::{
     weighted_gate,
 };
 pub use mvp::{
-    compare_policies, control_duplicate_failures, run_mvp, stage_names, MvpReport, PolicyComparison,
+    compare_policies, compare_policies_with, control_duplicate_failures, run_mvp, stage_names,
+    MvpReport, PolicyComparison,
 };
 pub use normalise::{normalise_test_report, try_tov_normalise, NormaliseOutcome};
 

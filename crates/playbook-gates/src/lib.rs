@@ -62,17 +62,18 @@ pub fn apply_evidence(
             }
             let before = gate.satisfaction_ppm;
             let before_state = gate.state;
-            if scored.failed && scored.satisfaction_ppm <= before {
-                if before_state == GateState::Satisfied {
+            if scored.failed {
+                let target_state = if scored.satisfaction_ppm == 0 {
+                    GateState::Failed
+                } else {
+                    GateState::InProgress
+                };
+                if before_state == GateState::Satisfied && target_state != GateState::Satisfied {
                     reopened += 1;
                 }
-                if before_state != GateState::Failed || before != scored.satisfaction_ppm {
+                if before_state != target_state || before != scored.satisfaction_ppm {
                     gate.satisfaction_ppm = scored.satisfaction_ppm;
-                    gate.state = if scored.satisfaction_ppm == 0 {
-                        GateState::Failed
-                    } else {
-                        GateState::InProgress
-                    };
+                    gate.state = target_state;
                     gate.satisfaction_source = SatisfactionSource::Evidence;
                     gate.confidence_ppm = scored.satisfaction_ppm;
                     gate.satisfying_evidence = Some(evidence.id.clone());

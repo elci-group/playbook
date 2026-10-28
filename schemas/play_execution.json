@@ -4,16 +4,54 @@
   "title": "ELCI play execution envelope",
   "type": "object",
   "additionalProperties": false,
-  "required": ["drive_id", "play_id", "operation", "capability_id", "budget_ceiling", "idempotency_key"],
+  "required": ["drive_id", "play_id", "play_kind", "operation", "down", "capability_id", "capability_generation", "personnel_id", "inputs", "expected_evidence", "expected_ytg_reduction_milli", "survey", "budget_ceiling", "timeout_ms", "retry_policy", "side_effect", "idempotency_key"],
   "properties": {
     "drive_id": { "type": "string" },
     "play_id": { "type": "string" },
+    "play_kind": { "type": "string" },
     "operation": { "type": "string" },
+    "down": { "type": "string" },
     "capability_id": { "type": "string" },
     "capability_generation": { "type": "integer" },
-    "budget_ceiling": { "type": "object" },
-    "idempotency_key": { "type": "string" },
-    "expected_evidence": { "type": "array" },
+    "personnel_id": { "type": "string" },
+    "inputs": {},
+    "expected_ytg_reduction_milli": { "type": "integer" },
+    "survey": { "type": "boolean" },
+    "budget_ceiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+      "properties": {
+        "tokens": { "type": "integer" },
+        "monetary_cost_micros": { "type": "integer" },
+        "wall_clock_ms": { "type": "integer" },
+        "tool_calls": { "type": "integer" },
+        "inference_calls": { "type": "integer" },
+        "retry_count": { "type": "integer" },
+        "context_capacity": { "type": "integer" },
+        "provider_quota": { "type": "integer" }
+      }
+    },
+    "idempotency_key": { "type": ["string", "null"] },
+    "expected_evidence": { "type": "array", "items": { "type": "string" } },
+    "retry_policy": {
+      "oneOf": [
+        { "type": "string", "enum": ["no_retry"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["transient_only"],
+          "properties": {
+            "transient_only": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["limit"],
+              "properties": { "limit": { "type": "integer" } }
+            }
+          }
+        }
+      ]
+    },
     "side_effect": { "type": "string" },
     "timeout_ms": { "type": "integer" }
   }

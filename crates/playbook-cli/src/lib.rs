@@ -5,7 +5,7 @@
 use playbook_core::PlaybookError;
 use playbook_observability::{audit_text, stage_line};
 use playbook_policy::Policy;
-use playbook_sim::{compare_policies, run_mvp, MvpReport};
+use playbook_sim::{compare_policies_with, run_mvp, DriveEvent, MvpReport};
 
 pub fn run(args: &[impl AsRef<str>]) -> i32 {
     let args: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
@@ -58,22 +58,34 @@ fn print_mvp() -> Result<(), PlaybookError> {
 
 fn print_sim(args: &[&str]) -> Result<(), PlaybookError> {
     let mut policy_name = "playbook-policy-pass-heavy";
+    let mut trace_name = "mvp";
     let mut index = 0;
     while index < args.len() {
-        if args[index] == "--policy" {
-            policy_name = args.get(index + 1).copied().unwrap_or(policy_name);
-            index += 2;
-            continue;
+        match args[index] {
+            "--policy" => {
+                policy_name = args.get(index + 1).copied().ok_or_else(|| {
+                    PlaybookError::Evidence("--policy requires a policy name".into())
+                })?;
+                index += 2;
+            }
+            "--trace" => {
+                trace_name = args.get(index + 1).copied().ok_or_else(|| {
+                    PlaybookError::Evidence("--trace requires mvp or an event-log path".into())
+                })?;
+                index += 2;
+            }
+            other => {
+                return Err(PlaybookError::Evidence(format!(
+                    "unknown sim argument {other}"
+                )));
+            }
         }
-        if args[index] == "--trace" {
-            index += 2;
-            continue;
-        }
-        index += 1;
     }
-    let report = accepted_report()?;
-    let comparison = compare_policies(&report.events)?;
-    println!("policy {policy_name}");
+    let policy = resolve_policy(policy_name)?;
+    let events = load_trace(trace_name)?;
+    let comparison = compare_policies_with(&events, &policy)?;
+    println!("trace {trace_name}");
+    println!("policy {}", policy.version);
     println!("ytg_match {}", comparison.ytg_match);
     println!("budget_match {}", comparison.budget_match);
     println!("completion_match {}", comparison.completion_match);
@@ -94,12 +106,25 @@ fn print_sim(args: &[&str]) -> Result<(), PlaybookError> {
         "efficiency_ratio_milli {}",
         comparison.efficiency_ratio_milli
     );
-    if !comparison.ytg_match || !comparison.budget_match || !comparison.down_labels_differ {
-        return Err(PlaybookError::ReplayDivergence(
-            "policy comparison diverged".into(),
-        ));
-    }
     Ok(())
+}
+
+fn resolve_policy(name: &str) -> Result<Policy, PlaybookError> {
+    match name {
+        "builtin" | "playbook-policy-1" => Ok(Policy::builtin()),
+        "pass-heavy" | "playbook-policy-pass-heavy" => Ok(Policy::pass_heavy_contrast()),
+        _ => Err(PlaybookError::Evidence(format!("unknown policy {name}"))),
+    }
+}
+
+fn load_trace(name: &str) -> Result<Vec<DriveEvent>, PlaybookError> {
+    if name == "mvp" {
+        return Ok(accepted_report()?.events);
+    }
+    let text = std::fs::read_to_string(name).map_err(|error| {
+        PlaybookError::Evidence(format!("could not read trace {name}: {error}"))
+    })?;
+    serde_json::from_str(&text).map_err(PlaybookError::json)
 }
 
 fn print_sprint() -> Result<(), PlaybookError> {
@@ -227,7 +252,33 @@ mod tests {
             ]),
             0
         );
+        assert_eq!(run(&["sim", "--policy", "builtin", "--trace", "mvp"]), 0);
         assert_eq!(run(&["explain"]), 0);
         assert_eq!(run(&["status"]), 0);
+    }
+
+    #[test]
+    fn sim_rejects_unknown_and_missing_arguments() {
+        assert_eq!(run(&["sim", "--bogus"]), 1);
+        assert_eq!(run(&["sim", "--trace"]), 1);
+        assert_eq!(run(&["sim", "--policy"]), 1);
+        assert_eq!(run(&["sim", "--policy", "mystery"]), 1);
+    }
+
+    #[test]
+    fn sim_loads_json_event_log_paths() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/sprint_transcript.json");
+        let trace = load_trace(path.to_str().unwrap()).unwrap();
+        assert!(!trace.is_empty());
+        assert_eq!(resolve_policy("builtin").unwrap(), Policy::builtin());
+        assert_eq!(
+            resolve_policy("playbook-policy-pass-heavy").unwrap(),
+            Policy::pass_heavy_contrast()
+        );
+        let builtin = compare_policies_with(&trace, &Policy::builtin()).unwrap();
+        let pass_heavy = compare_policies_with(&trace, &Policy::pass_heavy_contrast()).unwrap();
+        assert!(!builtin.down_labels_differ);
+        assert!(pass_heavy.down_labels_differ);
     }
 }

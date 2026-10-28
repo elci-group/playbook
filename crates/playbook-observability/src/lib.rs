@@ -84,7 +84,9 @@ pub fn rollup(events: &[DriveEvent]) -> Rollup {
     for event in events {
         match event {
             DriveEvent::PlaySelected { .. } => rollup.plays += 1,
-            DriveEvent::ToolFailed { .. } => rollup.tool_failures += 1,
+            DriveEvent::ToolFailed { .. } | DriveEvent::ToolOutcomeRejected { .. } => {
+                rollup.tool_failures += 1;
+            }
             DriveEvent::PuntIssued { .. } => rollup.punts += 1,
             DriveEvent::FieldGoalSelected { .. } => rollup.field_goals += 1,
             DriveEvent::FourthDownDeclared { disposition, .. } => {
@@ -122,6 +124,7 @@ pub fn spans(drive_id: &str, events: &[DriveEvent]) -> Vec<SpanNode> {
         attributes: BTreeMap::from([("drive_id".into(), drive_id.to_string())]),
     }];
     let mut play_span = None;
+    let mut tool_span = None;
     for (index, event) in events.iter().enumerate() {
         match event {
             DriveEvent::PlaySelected { decision } => {
@@ -139,6 +142,7 @@ pub fn spans(drive_id: &str, events: &[DriveEvent]) -> Vec<SpanNode> {
                 play_span = Some(span_id);
             }
             DriveEvent::ToolInvoked { execution } => {
+                tool_span = Some(out.len());
                 out.push(SpanNode {
                     trace_id: trace_id.clone(),
                     span_id: format!("{drive_id}:tool:{index}"),
@@ -149,6 +153,17 @@ pub fn spans(drive_id: &str, events: &[DriveEvent]) -> Vec<SpanNode> {
                         execution.capability_id.to_string(),
                     )]),
                 });
+            }
+            DriveEvent::ToolOutcomeRejected { reason, .. } => {
+                if let Some(index) = tool_span {
+                    out[index]
+                        .attributes
+                        .insert("outcome".into(), "rejected".into());
+                    out[index]
+                        .attributes
+                        .insert("reconciliation_required".into(), "true".into());
+                    out[index].attributes.insert("error".into(), reason.clone());
+                }
             }
             _ => {}
         }
@@ -190,5 +205,43 @@ mod tests {
         assert!(text.contains("YTG 31 → 18"));
         assert!(text.contains("Budget remaining: 64%"));
         assert!(text.contains("Play: integration validation"));
+    }
+
+    #[test]
+    fn rejected_outcome_is_visible_in_failure_metrics_and_tool_span() {
+        use playbook_core::{Down, PlayExecution, PlayKind, RetryPolicy, SideEffectClass};
+        let execution = PlayExecution {
+            drive_id: playbook_core::DriveId::new("drive-1").unwrap(),
+            play_id: playbook_core::PlayId::new("play-1").unwrap(),
+            play_kind: PlayKind::DiscoverCapabilities,
+            operation: "discover".into(),
+            down: Down::FirstDown,
+            capability_id: playbook_core::CapabilityId::new("elci.discovery").unwrap(),
+            capability_generation: 1,
+            personnel_id: playbook_core::PersonnelId::new("worker").unwrap(),
+            inputs: Default::default(),
+            expected_evidence: Vec::new(),
+            expected_ytg_reduction_milli: 0,
+            survey: true,
+            budget_ceiling: playbook_core::DriveBudget::zero(),
+            timeout_ms: 100,
+            retry_policy: RetryPolicy::NoRetry,
+            side_effect: SideEffectClass::ReadOnly,
+            idempotency_key: Some("invoke-1".into()),
+        };
+        let events = vec![
+            DriveEvent::ToolInvoked { execution },
+            DriveEvent::ToolOutcomeRejected {
+                result: None,
+                failure: None,
+                reason: "response lost".into(),
+            },
+        ];
+        assert_eq!(rollup(&events).tool_failures, 1);
+        let trace = spans("drive-1", &events);
+        let attributes = &trace[1].attributes;
+        assert_eq!(attributes["outcome"], "rejected");
+        assert_eq!(attributes["reconciliation_required"], "true");
+        assert_eq!(attributes["error"], "response lost");
     }
 }

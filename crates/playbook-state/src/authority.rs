@@ -48,6 +48,23 @@ impl Authority {
         Ok(authority)
     }
 
+    /// Restore an authority from its validated event history. The caller is
+    /// responsible for durably saving `ToolInvoked` before calling the plane;
+    /// this in-memory type cannot provide a write-ahead storage guarantee.
+    pub fn resume(
+        events: Vec<DriveEvent>,
+        policy: Policy,
+        roster: Vec<Personnel>,
+    ) -> Result<Self, PlaybookError> {
+        let state = crate::fold(&events, &policy, crate::ApplyMode::Audit)?;
+        Ok(Self {
+            state,
+            events,
+            policy,
+            roster,
+        })
+    }
+
     pub fn state(&self) -> &DriveState {
         &self.state
     }
@@ -90,6 +107,7 @@ impl Authority {
         plane: &mut dyn CapabilityPlane,
         at_ms: u64,
     ) -> Result<DecisionRecord, PlaybookError> {
+        self.ensure_no_open_execution()?;
         let field = self.state.field_position(&self.roster, &self.policy)?;
         let decision = playbook_routing::select(&field, &self.policy)?;
         self.run_decision(decision, plane, at_ms)
@@ -101,6 +119,7 @@ impl Authority {
         plane: &mut dyn CapabilityPlane,
         at_ms: u64,
     ) -> Result<DecisionRecord, PlaybookError> {
+        self.ensure_no_open_execution()?;
         let definition = self
             .policy
             .play(operation)
@@ -134,6 +153,7 @@ impl Authority {
     }
 
     pub fn punt(&mut self) -> Result<(), PlaybookError> {
+        self.ensure_no_open_execution()?;
         if self.state.down() != Down::FourthDown
             || self.state.disposition() != Some(Disposition::Punt)
         {
@@ -151,6 +171,7 @@ impl Authority {
         budget: DriveBudget,
         at_ms: u64,
     ) -> Result<(), PlaybookError> {
+        self.ensure_no_open_execution()?;
         self.push(DriveEvent::PossessionStarted {
             personnel,
             budget,
@@ -189,6 +210,7 @@ impl Authority {
     }
 
     pub fn claim_complete(&mut self, at_ms: u64) -> Result<bool, PlaybookError> {
+        self.ensure_no_open_execution()?;
         if is_complete(self.state.gates()) && self.state.ytg_milli() == 0 {
             self.push(DriveEvent::DriveCompleted { at_ms })?;
             Ok(true)
@@ -219,10 +241,12 @@ impl Authority {
         &mut self,
         gate_id: playbook_core::GateId,
     ) -> Result<(), PlaybookError> {
+        self.ensure_no_open_execution()?;
         self.push(DriveEvent::FieldGoalSelected { gate_id })
     }
 
     pub fn abandon(&mut self, reason: &str) -> Result<(), PlaybookError> {
+        self.ensure_no_open_execution()?;
         self.push(DriveEvent::AbandonIssued {
             reason: reason.to_string(),
         })
@@ -271,16 +295,37 @@ impl Authority {
         plane: &mut dyn CapabilityPlane,
         at_ms: u64,
     ) -> Result<DecisionRecord, PlaybookError> {
+        self.ensure_no_open_execution()?;
         let mark = self.events.len();
         let saved = self.state.clone();
         match self.commit_decision(decision, plane, at_ms) {
             Ok(record) => Ok(record),
             Err(err) => {
-                self.events.truncate(mark);
-                self.state = saved;
+                let invocation_recorded = self.events[mark..]
+                    .iter()
+                    .any(|event| matches!(event, DriveEvent::ToolInvoked { .. }));
+                if !invocation_recorded {
+                    self.events.truncate(mark);
+                    self.state = saved;
+                }
                 Err(err)
             }
         }
+    }
+
+    fn ensure_no_open_execution(&self) -> Result<(), PlaybookError> {
+        if let Some(execution) = &self.state.open_execution {
+            return Err(PlaybookError::Reconcile(
+                execution
+                    .idempotency_key
+                    .clone()
+                    .unwrap_or_else(|| execution.play_id.to_string()),
+            ));
+        }
+        if let Some(effect) = self.state.unresolved_effects.first() {
+            return Err(PlaybookError::Reconcile(effect.idempotency_key.clone()));
+        }
+        Ok(())
     }
 
     fn commit_decision(
@@ -348,14 +393,41 @@ impl Authority {
         self.push(DriveEvent::ToolInvoked {
             execution: execution.clone(),
         })?;
-        match plane.execute(&execution)? {
-            PlaneResult::Done(result) => {
-                self.push(DriveEvent::ToolSucceeded {
-                    result: Box::new(result),
+        let outcome = match plane.execute(&execution) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                self.push(DriveEvent::ToolOutcomeRejected {
+                    result: None,
+                    failure: None,
+                    reason: error.to_string(),
                 })?;
+                return Err(error);
+            }
+        };
+        match outcome {
+            PlaneResult::Done(result) => {
+                if let Err(error) = self.push(DriveEvent::ToolSucceeded {
+                    result: Box::new(result.clone()),
+                }) {
+                    self.push(DriveEvent::ToolOutcomeRejected {
+                        result: Some(Box::new(result)),
+                        failure: None,
+                        reason: error.to_string(),
+                    })?;
+                    return Err(error);
+                }
             }
             PlaneResult::Failed(failure) => {
-                self.push(DriveEvent::ToolFailed { failure })?;
+                if let Err(error) = self.push(DriveEvent::ToolFailed {
+                    failure: failure.clone(),
+                }) {
+                    self.push(DriveEvent::ToolOutcomeRejected {
+                        result: None,
+                        failure: Some(failure),
+                        reason: error.to_string(),
+                    })?;
+                    return Err(error);
+                }
             }
         }
         self.witnesses()?;
@@ -411,5 +483,538 @@ pub fn started_budget(tokens: u64, quota: u64) -> DriveBudget {
         retry_count: 5,
         context_capacity: 100_000,
         provider_quota: quota,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use playbook_core::{
+        EvidenceClass, Gate, GateId, PersonnelId, PersonnelKind, PlayKind, SideEffectClass,
+        SideEffectNote, TaskContract, TaskIntegrity, ToolFailure, ToolFailureKind,
+    };
+    use playbook_elci::{CapabilitySnapshot, FixturePlane};
+    use serde_json::json;
+
+    #[derive(Clone, Copy)]
+    enum ResponseMode {
+        Error,
+        InvalidEvidence,
+        OverBudget,
+        MismatchedPlayId,
+        MismatchedOperation,
+        UnresolvedEffect,
+        MismatchedEffectKey,
+        WrongFailurePlayKind,
+    }
+
+    struct MutatingPlane {
+        inner: FixturePlane,
+        mode: ResponseMode,
+        mutations: usize,
+    }
+
+    impl CapabilityPlane for MutatingPlane {
+        fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+            self.inner.discover()
+        }
+
+        fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
+            if execution.operation != "compile" {
+                return self.inner.execute(execution);
+            }
+            self.mutations += 1;
+            if matches!(self.mode, ResponseMode::Error) {
+                return Err(PlaybookError::NoPlay);
+            }
+            if matches!(self.mode, ResponseMode::WrongFailurePlayKind) {
+                return Ok(PlaneResult::Failed(ToolFailure {
+                    play_id: execution.play_id.clone(),
+                    play_kind: PlayKind::DiscoverCapabilities,
+                    operation: execution.operation.clone(),
+                    capability_id: execution.capability_id.clone(),
+                    personnel_id: execution.personnel_id.clone(),
+                    kind: ToolFailureKind::Unknown,
+                    diagnostics: vec!["wrong play kind".into()],
+                    cost: DriveBudget::zero(),
+                    at_ms: execution.timeout_ms,
+                    idempotency_key: execution.idempotency_key.clone(),
+                    side_effects: Vec::new(),
+                }));
+            }
+            let PlaneResult::Done(mut result) = self.inner.execute(execution)? else {
+                panic!("fixture compile should return a result")
+            };
+            match self.mode {
+                ResponseMode::Error => unreachable!(),
+                ResponseMode::InvalidEvidence => {
+                    result.evidence[0].body["success"] = json!(false);
+                    let key = execution.idempotency_key.clone().unwrap();
+                    result.side_effects.push(SideEffectNote {
+                        class: SideEffectClass::RepositoryMutation,
+                        idempotency_key: key,
+                        summary: "repository was changed".into(),
+                        resolved: false,
+                        occurred: None,
+                    });
+                }
+                ResponseMode::OverBudget => {
+                    result.cost.tokens = execution.budget_ceiling.tokens.saturating_add(25);
+                }
+                ResponseMode::MismatchedPlayId => {
+                    result.play_id = playbook_core::PlayId::new("foreign-play").unwrap();
+                }
+                ResponseMode::MismatchedOperation => result.operation = "test.unit".into(),
+                ResponseMode::UnresolvedEffect | ResponseMode::MismatchedEffectKey => {
+                    result.side_effects.push(SideEffectNote {
+                        class: SideEffectClass::RemoteMutation,
+                        idempotency_key: if matches!(self.mode, ResponseMode::UnresolvedEffect) {
+                            execution.idempotency_key.clone().unwrap()
+                        } else {
+                            "foreign-effect-key".into()
+                        },
+                        summary: "remote mutation may have occurred".into(),
+                        resolved: false,
+                        occurred: None,
+                    });
+                }
+                ResponseMode::WrongFailurePlayKind => unreachable!(),
+            }
+            Ok(PlaneResult::Done(result))
+        }
+    }
+
+    fn ready_authority() -> (Authority, MutatingPlane) {
+        let policy = Policy::builtin();
+        let personnel = Personnel {
+            id: PersonnelId::new("cargo-toolchain").unwrap(),
+            kind: PersonnelKind::DeterministicProcedure,
+            display_name: "cargo-toolchain".into(),
+            cost_tokens: 40,
+            latency_ms: 20,
+            capability_fit_ppm: playbook_core::PPM_SCALE,
+            reliability_ppm: 900_000,
+            quota_remaining_ppm: playbook_core::PPM_SCALE,
+            evidence_quality_ppm: playbook_core::PPM_SCALE,
+            own_ytg_milli: None,
+        };
+        let mut authority = Authority::start(
+            playbook_core::DriveId::new("uncertain-execution").unwrap(),
+            TaskContract {
+                statement: "compile implementation".into(),
+                workload_class: "engineering".into(),
+                constraints: Vec::new(),
+                integrity: TaskIntegrity::Sound,
+            },
+            started_budget(1_000, 1_000),
+            policy,
+            vec![personnel],
+            1,
+        )
+        .unwrap();
+        authority
+            .declare_gate(
+                Gate::declare(
+                    GateId::new("implementation").unwrap(),
+                    "compiler accepts the implementation",
+                    1_000_000,
+                    Vec::new(),
+                    vec![EvidenceClass::CompilerResult],
+                    true,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let mut plane = MutatingPlane {
+            inner: FixturePlane::mvp(),
+            mode: ResponseMode::Error,
+            mutations: 0,
+        };
+        authority.preflight(&mut plane).unwrap();
+        authority.step(&mut plane, 100).unwrap();
+        (authority, plane)
+    }
+
+    fn compile(authority: &mut Authority, plane: &mut MutatingPlane) -> PlaybookError {
+        authority.try_operation("compile", plane, 200).unwrap_err()
+    }
+
+    #[test]
+    fn plane_error_preserves_open_invocation_and_blocks_reexecution() {
+        let (mut authority, mut plane) = ready_authority();
+        let original_log_len = authority.log().len();
+        assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
+        assert_eq!(plane.mutations, 1);
+        assert!(authority.log()[original_log_len..]
+            .iter()
+            .any(|event| matches!(event, DriveEvent::ToolInvoked { .. })));
+        assert!(matches!(
+            authority.log().last(),
+            Some(DriveEvent::ToolOutcomeRejected {
+                result: None,
+                failure: None,
+                ..
+            })
+        ));
+        let rejected = authority.log().last().unwrap();
+        assert!(matches!(
+            crate::apply(
+                Some(authority.state()),
+                rejected,
+                authority.policy(),
+                crate::ApplyMode::Audit
+            ),
+            Err(PlaybookError::Reconcile(_))
+        ));
+        let invocation = authority
+            .log()
+            .iter()
+            .find(|event| matches!(event, DriveEvent::ToolInvoked { .. }))
+            .unwrap();
+        assert!(matches!(
+            crate::apply(
+                Some(authority.state()),
+                invocation,
+                authority.policy(),
+                crate::ApplyMode::Audit
+            ),
+            Err(PlaybookError::Reconcile(_))
+        ));
+        let invocation_index = authority
+            .log()
+            .iter()
+            .position(|event| matches!(event, DriveEvent::ToolInvoked { .. }))
+            .unwrap();
+        let before_invocation = crate::fold(
+            &authority.log()[..invocation_index],
+            authority.policy(),
+            crate::ApplyMode::Audit,
+        )
+        .unwrap();
+        let mut missing_key_invocation = invocation.clone();
+        let DriveEvent::ToolInvoked { execution } = &mut missing_key_invocation else {
+            unreachable!()
+        };
+        execution.idempotency_key = None;
+        assert!(matches!(
+            crate::apply(
+                Some(&before_invocation),
+                &missing_key_invocation,
+                authority.policy(),
+                crate::ApplyMode::Audit
+            ),
+            Err(PlaybookError::Inadmissible(_, _))
+        ));
+        assert!(matches!(
+            authority.claim_complete(202),
+            Err(PlaybookError::Reconcile(_))
+        ));
+
+        let again = authority
+            .try_operation("compile", &mut plane, 201)
+            .unwrap_err();
+        assert!(matches!(again, PlaybookError::Reconcile(_)));
+        assert_eq!(plane.mutations, 1);
+    }
+
+    #[test]
+    fn pending_execution_blocks_terminal_and_handoff_events() {
+        let (mut authority, mut plane) = ready_authority();
+        assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
+        let state = authority.state();
+        let package = state.seal_package(authority.policy()).unwrap();
+        let events = [
+            DriveEvent::PuntIssued {
+                package: Box::new(package),
+            },
+            DriveEvent::PossessionStarted {
+                personnel: authority.roster[0].clone(),
+                budget: started_budget(1_000, 1_000),
+                at_ms: 202,
+            },
+            DriveEvent::FieldGoalSelected {
+                gate_id: GateId::new("implementation").unwrap(),
+            },
+            DriveEvent::DriveCompleted { at_ms: 202 },
+            DriveEvent::AbandonIssued {
+                reason: "handoff".into(),
+            },
+        ];
+        for event in &events {
+            assert!(matches!(
+                crate::apply(
+                    Some(authority.state()),
+                    event,
+                    authority.policy(),
+                    crate::ApplyMode::Audit
+                ),
+                Err(PlaybookError::Reconcile(_))
+            ));
+        }
+        assert!(matches!(authority.punt(), Err(PlaybookError::Reconcile(_))));
+        assert!(matches!(
+            authority.receive(
+                authority.roster[0].clone(),
+                started_budget(1_000, 1_000),
+                202
+            ),
+            Err(PlaybookError::Reconcile(_))
+        ));
+        assert!(matches!(
+            authority.select_field_goal(GateId::new("implementation").unwrap()),
+            Err(PlaybookError::Reconcile(_))
+        ));
+    }
+
+    #[test]
+    fn rejected_invalid_evidence_keeps_observed_cost_and_effects_for_reconciliation() {
+        let (mut authority, mut plane) = ready_authority();
+        plane.mode = ResponseMode::InvalidEvidence;
+        assert_eq!(
+            compile(&mut authority, &mut plane),
+            PlaybookError::DigestMismatch
+        );
+        assert_eq!(authority.state.budget_consumed().tokens, 220);
+        assert_eq!(authority.state.unresolved_effects.len(), 1);
+        assert_eq!(
+            authority.state.unresolved_effects[0].class,
+            SideEffectClass::RepositoryMutation
+        );
+        assert_eq!(
+            authority.state.idempotency.values().next(),
+            Some(&playbook_core::IdempotencyState::Unknown)
+        );
+
+        let key = authority
+            .state
+            .open_execution
+            .as_ref()
+            .unwrap()
+            .idempotency_key
+            .clone()
+            .unwrap();
+        let events = authority.log().to_vec();
+        let mut recovered =
+            Authority::resume(events, authority.policy.clone(), authority.roster.clone()).unwrap();
+        assert!(recovered.state.open_execution.is_some());
+        recovered.reconcile(&key, true).unwrap();
+        assert!(recovered.state.open_execution.is_none());
+        assert!(recovered.state.unresolved_effects.is_empty());
+    }
+
+    #[test]
+    fn resume_detects_crash_open_invocation_and_reconciliation_closes_it() {
+        let (mut authority, mut plane) = ready_authority();
+        assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
+        let invoke_end = authority
+            .log()
+            .iter()
+            .position(|event| matches!(event, DriveEvent::ToolInvoked { .. }))
+            .unwrap()
+            + 1;
+        let crash_log = authority.log()[..invoke_end].to_vec();
+        let execution = match crash_log.last().unwrap() {
+            DriveEvent::ToolInvoked { execution } => execution,
+            _ => unreachable!(),
+        };
+        let key = execution.idempotency_key.clone().unwrap();
+        let mut resumed = Authority::resume(
+            crash_log,
+            authority.policy.clone(),
+            authority.roster.clone(),
+        )
+        .unwrap();
+        assert!(resumed.state.open_execution.is_some());
+        assert!(matches!(
+            resumed.try_operation("compile", &mut plane, 201),
+            Err(PlaybookError::Reconcile(_))
+        ));
+        resumed.reconcile(&key, false).unwrap();
+        assert!(resumed.state.open_execution.is_none());
+    }
+
+    #[test]
+    fn rejected_over_budget_response_records_actual_cost_even_past_allocation() {
+        let (mut authority, mut plane) = ready_authority();
+        plane.mode = ResponseMode::OverBudget;
+        assert_eq!(
+            compile(&mut authority, &mut plane),
+            PlaybookError::BudgetCeiling
+        );
+        assert_eq!(authority.state.budget_consumed().tokens, 1_025);
+        assert_eq!(authority.state.budget_remaining_ppm(authority.policy()), 0);
+        assert!(authority.state.open_execution.is_some());
+        assert!(matches!(
+            authority.log().last(),
+            Some(DriveEvent::ToolOutcomeRejected {
+                result: Some(_),
+                failure: None,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn rejected_mismatched_play_id_is_retained_as_an_observation() {
+        let (mut authority, mut plane) = ready_authority();
+        plane.mode = ResponseMode::MismatchedPlayId;
+        assert!(matches!(
+            compile(&mut authority, &mut plane),
+            PlaybookError::Inadmissible(_, _)
+        ));
+        assert!(matches!(
+            authority.log().last(),
+            Some(DriveEvent::ToolOutcomeRejected {
+                result: Some(result),
+                ..
+            }) if result.play_id.as_str() == "foreign-play"
+        ));
+        assert_eq!(authority.state.budget_consumed().tokens, 220);
+    }
+
+    #[test]
+    fn rejected_mismatched_operation_is_retained_as_an_observation() {
+        let (mut authority, mut plane) = ready_authority();
+        plane.mode = ResponseMode::MismatchedOperation;
+        assert!(matches!(
+            compile(&mut authority, &mut plane),
+            PlaybookError::Inadmissible(_, _)
+        ));
+        assert!(matches!(
+            authority.log().last(),
+            Some(DriveEvent::ToolOutcomeRejected {
+                result: Some(result),
+                ..
+            }) if result.operation == "test.unit"
+        ));
+        assert_eq!(authority.state.budget_consumed().tokens, 220);
+    }
+
+    #[test]
+    fn accepted_success_with_unresolved_effect_blocks_completion_until_reconciled() {
+        let (mut authority, mut plane) = ready_authority();
+        plane.mode = ResponseMode::UnresolvedEffect;
+        authority.try_operation("compile", &mut plane, 200).unwrap();
+        assert_eq!(authority.state.ytg_milli(), 0);
+        assert_eq!(authority.state.unresolved_effects.len(), 1);
+        let key = authority.state.unresolved_effects[0]
+            .idempotency_key
+            .clone();
+        assert!(matches!(
+            authority.claim_complete(201),
+            Err(PlaybookError::Reconcile(_))
+        ));
+
+        authority.reconcile(&key, true).unwrap();
+        assert!(authority.state.unresolved_effects.is_empty());
+        assert!(authority.claim_complete(202).unwrap());
+    }
+
+    #[test]
+    fn mismatched_effect_key_is_preserved_and_reconciled_under_invocation_key() {
+        let (mut authority, mut plane) = ready_authority();
+        plane.mode = ResponseMode::MismatchedEffectKey;
+        assert!(matches!(
+            compile(&mut authority, &mut plane),
+            PlaybookError::Inadmissible(_, _)
+        ));
+        let key = authority
+            .state
+            .open_execution
+            .as_ref()
+            .unwrap()
+            .idempotency_key
+            .clone()
+            .unwrap();
+        assert_eq!(authority.state.unresolved_effects[0].idempotency_key, key);
+        assert!(matches!(
+            authority.log().last(),
+            Some(DriveEvent::ToolOutcomeRejected {
+                result: Some(result),
+                ..
+            }) if result.side_effects[0].idempotency_key == "foreign-effect-key"
+        ));
+        authority.reconcile(&key, true).unwrap();
+        assert!(authority.state.unresolved_effects.is_empty());
+    }
+
+    #[test]
+    fn failure_with_wrong_play_kind_is_rejected_and_preserved() {
+        let (mut authority, mut plane) = ready_authority();
+        plane.mode = ResponseMode::WrongFailurePlayKind;
+        assert!(matches!(
+            compile(&mut authority, &mut plane),
+            PlaybookError::Inadmissible(_, _)
+        ));
+        assert!(matches!(
+            authority.log().last(),
+            Some(DriveEvent::ToolOutcomeRejected {
+                failure: Some(failure),
+                ..
+            }) if failure.play_kind == PlayKind::DiscoverCapabilities
+        ));
+    }
+
+    #[test]
+    fn tampered_invocation_contract_is_rejected_by_audit_fold() {
+        let (mut authority, mut plane) = ready_authority();
+        assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
+        let invoke_index = authority
+            .log()
+            .iter()
+            .rposition(|event| matches!(event, DriveEvent::ToolInvoked { .. }))
+            .unwrap();
+        let before = crate::fold(
+            &authority.log()[..invoke_index],
+            authority.policy(),
+            crate::ApplyMode::Audit,
+        )
+        .unwrap();
+        let DriveEvent::ToolInvoked { execution } = &authority.log()[invoke_index] else {
+            unreachable!()
+        };
+        let original = execution.clone();
+        let policy = authority.policy();
+        let rejected = |execution: PlayExecution| {
+            let event = DriveEvent::ToolInvoked { execution };
+            let error =
+                crate::apply(Some(&before), &event, policy, crate::ApplyMode::Audit).unwrap_err();
+            assert!(
+                matches!(error, PlaybookError::Inadmissible(_, _)),
+                "{error:?}"
+            );
+        };
+
+        let mut tampered = original.clone();
+        tampered.drive_id = playbook_core::DriveId::new("other-drive").unwrap();
+        rejected(tampered);
+        let mut tampered = original.clone();
+        tampered.play_kind = PlayKind::DiscoverCapabilities;
+        rejected(tampered);
+        let mut tampered = original.clone();
+        tampered.down = playbook_core::Down::SecondDownGain;
+        rejected(tampered);
+        let mut tampered = original.clone();
+        tampered.capability_id = playbook_core::CapabilityId::new("elci.other").unwrap();
+        rejected(tampered);
+        let mut tampered = original.clone();
+        tampered.side_effect = SideEffectClass::LocalMutation;
+        rejected(tampered);
+        let mut tampered = original.clone();
+        tampered.expected_evidence = vec![if original.expected_evidence.first()
+            == Some(&EvidenceClass::EnvironmentSnapshot)
+        {
+            EvidenceClass::CompilerResult
+        } else {
+            EvidenceClass::EnvironmentSnapshot
+        }];
+        rejected(tampered);
+        let mut tampered = original.clone();
+        tampered.expected_ytg_reduction_milli =
+            original.expected_ytg_reduction_milli.saturating_add(1);
+        rejected(tampered);
+        let mut tampered = original;
+        tampered.survey = !tampered.survey;
+        rejected(tampered);
     }
 }

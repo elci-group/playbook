@@ -79,7 +79,10 @@ fn score_test(body: &Value) -> Result<EvidenceScore, PlaybookError> {
     let failed = require_u64(body, "failed")?;
     let _ignored = require_u64(body, "ignored")?;
     let total = passed.saturating_add(failed);
-    let satisfaction_ppm = if failed == 0 && exit_code == 0 && passed > 0 {
+    let inconsistent_exit = exit_code != 0 && failed == 0;
+    let satisfaction_ppm = if inconsistent_exit {
+        0
+    } else if failed == 0 && exit_code == 0 && passed > 0 {
         PPM_SCALE
     } else {
         passed
@@ -88,10 +91,10 @@ fn score_test(body: &Value) -> Result<EvidenceScore, PlaybookError> {
             .and_then(|ratio| u32::try_from(ratio).ok())
             .unwrap_or(0)
     };
-    let hard_fail = exit_code != 0 && passed == 0;
+    let hard_fail = inconsistent_exit || (exit_code != 0 && passed == 0);
     Ok(EvidenceScore {
         satisfaction_ppm,
-        failed: hard_fail || (failed > 0 && satisfaction_ppm == 0),
+        failed: hard_fail || failed > 0,
         applies_to_gates: true,
         environment: None,
     })
@@ -160,6 +163,46 @@ mod tests {
         )
         .unwrap();
         assert_eq!(score.satisfaction_ppm, PPM_SCALE / 2);
-        assert!(!score.failed);
+        assert!(score.failed);
+    }
+
+    #[test]
+    fn nonzero_exit_with_no_reported_failures_is_a_hard_failure() {
+        let score = score(
+            EvidenceClass::TestReport,
+            &json!({
+                "command": "cargo test",
+                "repository_hash": "abc",
+                "test_suite": "integration",
+                "exit_code": 1,
+                "passed": 4,
+                "failed": 0,
+                "ignored": 0,
+                "timestamp": "11"
+            }),
+        )
+        .unwrap();
+        assert_eq!(score.satisfaction_ppm, 0);
+        assert!(score.failed);
+    }
+
+    #[test]
+    fn zero_exit_with_a_failing_test_preserves_partial_progress() {
+        let score = score(
+            EvidenceClass::TestReport,
+            &json!({
+                "command": "cargo test",
+                "repository_hash": "abc",
+                "test_suite": "integration",
+                "exit_code": 0,
+                "passed": 3,
+                "failed": 1,
+                "ignored": 0,
+                "timestamp": "12"
+            }),
+        )
+        .unwrap();
+        assert_eq!(score.satisfaction_ppm, 750_000);
+        assert!(score.failed);
     }
 }

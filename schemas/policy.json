@@ -4,15 +4,90 @@
   "title": "Playbook policy bundle",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "schema_version", "plays", "rush_budget_fraction_ppm", "conversion_threshold_ppm"],
+  "required": ["version", "schema_version", "first_down_attempt_threshold", "rush_budget_fraction_ppm", "conversion_threshold_ppm", "workload_thresholds", "min_attempt_ppm", "punt_preserve_ppm", "receiver_finish_ppm", "reset_bonus_ppm", "retry_limit", "stall_penalty_ppm", "capability_acquisition_limit", "swarm_min_marginal_milli", "rush_deterministic_bonus_ppm", "budget_weights", "allowed_side_effects", "plays", "routing"],
   "properties": {
     "version": { "type": "string" },
     "schema_version": { "type": "integer" },
-    "plays": { "type": "array" },
+    "plays": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "name", "personnel_kind", "operation", "capability_id", "target_gate", "side_effect", "expected_ytg_reduction_milli", "marginal_cost", "reliability_ppm", "survey", "evidence_class"],
+        "properties": {
+          "kind": { "type": "string" },
+          "name": { "type": "string" },
+          "personnel_kind": { "type": "string" },
+          "operation": { "type": "string" },
+          "capability_id": { "type": "string" },
+          "target_gate": { "type": ["string", "null"] },
+          "side_effect": { "type": "string" },
+          "expected_ytg_reduction_milli": { "type": "integer" },
+          "marginal_cost": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+            "properties": {
+              "tokens": { "type": "integer" },
+              "monetary_cost_micros": { "type": "integer" },
+              "wall_clock_ms": { "type": "integer" },
+              "tool_calls": { "type": "integer" },
+              "inference_calls": { "type": "integer" },
+              "retry_count": { "type": "integer" },
+              "context_capacity": { "type": "integer" },
+              "provider_quota": { "type": "integer" }
+            }
+          },
+          "reliability_ppm": { "type": "integer" },
+          "survey": { "type": "boolean" },
+          "evidence_class": { "type": "string" }
+        }
+      }
+    },
     "rush_budget_fraction_ppm": { "type": "integer" },
     "conversion_threshold_ppm": { "type": "integer" },
+    "workload_thresholds": { "type": "object", "additionalProperties": { "type": "integer" } },
     "first_down_attempt_threshold": { "type": "integer" },
-    "allowed_side_effects": { "type": "array" },
-    "budget_weights": { "type": "object" }
+    "min_attempt_ppm": { "type": "integer" },
+    "punt_preserve_ppm": { "type": "integer" },
+    "receiver_finish_ppm": { "type": "integer" },
+    "reset_bonus_ppm": { "type": "integer" },
+    "retry_limit": { "type": "integer" },
+    "stall_penalty_ppm": { "type": "integer" },
+    "capability_acquisition_limit": { "type": "integer" },
+    "swarm_min_marginal_milli": { "type": "integer" },
+    "rush_deterministic_bonus_ppm": { "type": "integer" },
+    "allowed_side_effects": { "type": "array", "items": { "type": "string" } },
+    "budget_weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+      "properties": {
+        "tokens": { "type": "integer" },
+        "monetary_cost_micros": { "type": "integer" },
+        "wall_clock_ms": { "type": "integer" },
+        "tool_calls": { "type": "integer" },
+        "inference_calls": { "type": "integer" },
+        "retry_count": { "type": "integer" },
+        "context_capacity": { "type": "integer" },
+        "provider_quota": { "type": "integer" }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ytg", "success", "cost", "latency", "capability_fit", "reliability", "quota", "evidence_quality", "prior_min_samples"],
+      "properties": {
+        "ytg": { "type": "integer" },
+        "success": { "type": "integer" },
+        "cost": { "type": "integer" },
+        "latency": { "type": "integer" },
+        "capability_fit": { "type": "integer" },
+        "reliability": { "type": "integer" },
+        "quota": { "type": "integer" },
+        "evidence_quality": { "type": "integer" },
+        "prior_min_samples": { "type": "integer" }
+      }
+    }
   }
 }
