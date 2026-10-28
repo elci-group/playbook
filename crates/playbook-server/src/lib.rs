@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -102,6 +102,11 @@ fn error_of(err: PlaybookError) -> Response {
     error_reply(error_status(code), code, &err.to_string())
 }
 
+fn cleanup_journal(path: &Path, sidecar: &Path) {
+    let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_file(sidecar);
+}
+
 fn error_status(code: &str) -> u16 {
     match code {
         "io" => 500,
@@ -124,6 +129,9 @@ pub struct Service {
     rejected_journals: Mutex<usize>,
 }
 
+/// The newest logical clock reading visible in the log. `ToolInvoked` carries
+/// its dispatch time in `execution.timeout_ms`; outcome events inherit the
+/// same reading through their inner play records.
 fn last_at_ms(events: &[DriveEvent]) -> u64 {
     events
         .iter()
@@ -179,14 +187,17 @@ impl Service {
                 .and_then(|stem| stem.to_str())
                 .unwrap_or_default()
                 .to_string();
-            match Service::recover_drive(&path) {
+            let policy = Service::policy_for(&path);
+            match Service::recover_drive(&path, &policy) {
                 Ok(handle) => {
                     drives.insert(name, handle);
                 }
                 Err(_) => {
                     let quarantined = path.with_extension("jsonl.rejected");
-                    let _ = std::fs::rename(&path, quarantined);
-                    rejected += 1;
+                    match std::fs::rename(&path, quarantined) {
+                        Ok(()) => rejected += 1,
+                        Err(error) => eprintln!("quarantine of {} failed: {error}", path.display()),
+                    }
                 }
             }
         }
@@ -197,24 +208,36 @@ impl Service {
             rejected_journals: Mutex::new(rejected),
         })
     }
-
-    fn recover_drive(path: &Path) -> Result<DriveHandle, PlaybookError> {
-        let recovery = Journal::open(path)?;
-        let policy = Policy::builtin();
-        let state = match playbook_state::fold(&recovery.events, &policy, ApplyMode::Audit) {
-            Ok(state) => state,
-            Err(builtin_error) => {
-                let contrast = Policy::pass_heavy_contrast();
-                match playbook_state::fold(&recovery.events, &contrast, ApplyMode::Audit) {
-                    Ok(state) => state,
-                    Err(_) => return Err(builtin_error),
-                }
+    /// The policy a journal folds under: the sidecar records the choice at
+    /// creation; the fold test breaks ties for journals without one.
+    fn policy_for(path: &Path) -> Policy {
+        let sidecar = path.with_extension("jsonl.policy");
+        if let Ok(text) = std::fs::read_to_string(&sidecar) {
+            match text.trim() {
+                "pass-heavy" => return Policy::pass_heavy_contrast(),
+                "builtin" => return Policy::builtin(),
+                _ => {}
             }
+        }
+        let events = match Journal::open(path) {
+            Ok(recovery) => recovery.events,
+            Err(_) => return Policy::builtin(),
         };
-        let mut authority = Authority::resume(recovery.events, policy, playbook_sim::roster())?;
+        if playbook_state::fold(&events, &Policy::builtin(), ApplyMode::Audit).is_ok() {
+            Policy::builtin()
+        } else {
+            Policy::pass_heavy_contrast()
+        }
+    }
+
+    fn recover_drive(path: &Path, policy: &Policy) -> Result<DriveHandle, PlaybookError> {
+        let recovery = Journal::open(path)?;
+        playbook_state::fold(&recovery.events, policy, ApplyMode::Audit)?;
+        let mut authority =
+            Authority::resume(recovery.events, policy.clone(), playbook_sim::roster())?;
         authority.attach_journal(Box::new(recovery.journal));
         let mut plane = FixturePlane::mvp();
-        plane.resume_generation(state.capability_generation());
+        plane.resume_generation(authority.state().capability_generation());
         Ok(DriveHandle {
             authority,
             plane,
@@ -247,24 +270,29 @@ impl Service {
             .to_string();
         let tokens = parsed["tokens"].as_u64().unwrap_or(1_000);
         let quota = parsed["quota"].as_u64().unwrap_or(1_000);
-        let policy = match parsed["policy"].as_str().unwrap_or("builtin") {
+        let policy_name = parsed["policy"].as_str().unwrap_or("builtin");
+        let policy = match policy_name {
             "builtin" => Policy::builtin(),
             "pass-heavy" => Policy::pass_heavy_contrast(),
             other => return error_reply(400, "bad_request", &format!("unknown policy {other}")),
         };
         let path = self.journal_dir.join(format!("{raw_id}.jsonl"));
-        {
-            let drives = self.drives.lock().expect("drive lock");
-            if drives.contains_key(raw_id) || path.exists() {
-                return error_reply(409, "duplicate_drive", "drive id already exists");
-            }
-            if drives.len() >= MAX_DRIVES {
-                return error_reply(503, "drive_cap", "the drive cap is reached");
-            }
+        let sidecar = self.journal_dir.join(format!("{raw_id}.jsonl.policy"));
+        let mut drives = self.drives.lock().expect("drive lock");
+        if drives.contains_key(raw_id) || path.exists() {
+            return error_reply(409, "duplicate_drive", "drive id already exists");
         }
-        let journal = match Journal::create(&path) {
+        if drives.len() >= MAX_DRIVES {
+            return error_reply(503, "drive_cap", "the drive cap is reached");
+        }
+        let journal = match Journal::create_new(&path) {
             Ok(journal) => journal,
-            Err(err) => return error_of(err),
+            Err(err) => {
+                if path.exists() {
+                    return error_reply(409, "duplicate_drive", "drive id already exists");
+                }
+                return error_of(err);
+            }
         };
         let task = TaskContract {
             statement,
@@ -274,7 +302,10 @@ impl Service {
         };
         let gates = match playbook_sim::standard_gates() {
             Ok(gates) => gates,
-            Err(err) => return error_of(err),
+            Err(err) => {
+                cleanup_journal(&path, &sidecar);
+                return error_of(err);
+            }
         };
         let authority = Authority::start_journaled(
             drive_id,
@@ -288,25 +319,28 @@ impl Service {
         let mut authority = match authority {
             Ok(authority) => authority,
             Err(err) => {
-                let _ = std::fs::remove_file(&path);
+                cleanup_journal(&path, &sidecar);
                 return error_of(err);
             }
         };
         for gate in gates {
             if let Err(err) = authority.declare_gate(gate) {
+                cleanup_journal(&path, &sidecar);
                 return error_of(err);
             }
         }
+        if let Err(error) = std::fs::write(&sidecar, format!("{policy_name}\n")) {
+            eprintln!("policy sidecar for {raw_id} failed: {error}");
+        }
         let snapshot = authority.state().snapshot(authority.policy());
-        let handle = DriveHandle {
-            authority,
-            plane: FixturePlane::mvp(),
-            otlp_exported: false,
-        };
-        self.drives
-            .lock()
-            .expect("drive lock")
-            .insert(raw_id.to_string(), handle);
+        drives.insert(
+            raw_id.to_string(),
+            DriveHandle {
+                authority,
+                plane: FixturePlane::mvp(),
+                otlp_exported: false,
+            },
+        );
         reply(201, &json!({"snapshot": snapshot}))
     }
 
@@ -326,58 +360,75 @@ impl Service {
                 Err(error) => return error_of(PlaybookError::json(error)),
             }
         };
-        let mut drives = self.drives.lock().expect("drive lock");
-        let Some(handle) = drives.get_mut(id) else {
-            return error_reply(404, "unknown_drive", "no such drive");
+        let export_job = {
+            let mut drives = self.drives.lock().expect("drive lock");
+            let Some(handle) = drives.get_mut(id) else {
+                return error_reply(404, "unknown_drive", "no such drive");
+            };
+            let at_ms = parsed["at_ms"].as_u64().unwrap_or_else(|| {
+                last_at_ms(handle.authority.log()).saturating_add(CLOCK_STEP_MS)
+            });
+            let decision = match apply(handle, at_ms) {
+                Ok(decision) => decision,
+                Err(err) => return error_of(err),
+            };
+            let mut payload = json!({"snapshot": Service::snapshot_of(handle)});
+            if let Some(decision) = decision {
+                payload["decision"] = decision;
+            }
+            let export = Service::export_job(handle, id, &self.otlp);
+            (payload, export)
         };
-        let at_ms = parsed["at_ms"]
-            .as_u64()
-            .unwrap_or_else(|| last_at_ms(handle.authority.log()).saturating_add(CLOCK_STEP_MS));
-        let decision = match apply(handle, at_ms) {
-            Ok(decision) => decision,
-            Err(err) => return error_of(err),
-        };
-        Service::export_if_terminal(handle, id, &self.otlp);
-        let mut payload = json!({"snapshot": Service::snapshot_of(handle)});
-        if let Some(decision) = decision {
-            payload["decision"] = decision;
+        let (payload, export) = export_job;
+        if let Some((endpoint, id, spans, window)) = export {
+            let summary = playbook_otlp::export(
+                &playbook_otlp::OtlpConfig {
+                    endpoint,
+                    service_name: "playbook".into(),
+                },
+                &spans,
+                window,
+            );
+            match summary {
+                Ok(summary) => println!("otlp export {id} status {}", summary.status),
+                Err(err) => println!("otlp export {id} failed {err}"),
+            }
         }
         reply(200, &payload)
     }
 
-    fn export_if_terminal(handle: &mut DriveHandle, id: &str, otlp: &Option<String>) {
+    /// Mark a terminal drive as exported and return the network job, so the
+    /// blocking OTLP POST runs without the registry lock held.
+    fn export_job(
+        handle: &mut DriveHandle,
+        id: &str,
+        otlp: &Option<String>,
+    ) -> Option<(String, String, Vec<SpanNode>, playbook_otlp::TimeWindow)> {
         if handle.otlp_exported {
-            return;
+            return None;
         }
-        let Some(endpoint) = otlp else {
-            return;
-        };
+        let endpoint = otlp.clone()?;
         if !matches!(
             handle.authority.state().status(),
             DriveStatus::Completed | DriveStatus::Abandoned
         ) {
-            return;
+            return None;
         }
+        handle.otlp_exported = true;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos() as u64)
             .unwrap_or(0);
-        let summary = playbook_otlp::export(
-            &playbook_otlp::OtlpConfig {
-                endpoint: endpoint.clone(),
-                service_name: "playbook".into(),
-            },
-            &playbook_observability::spans(id, handle.authority.log()),
-            playbook_otlp::TimeWindow {
-                start_unix_nano: now,
-                end_unix_nano: now.saturating_add(handle.authority.log().len() as u64 * 1_000_000),
-            },
-        );
-        handle.otlp_exported = true;
-        match summary {
-            Ok(summary) => println!("otlp export {id} status {}", summary.status),
-            Err(err) => println!("otlp export {id} failed {err}"),
-        }
+        let window = playbook_otlp::TimeWindow {
+            start_unix_nano: now,
+            end_unix_nano: now.saturating_add(handle.authority.log().len() as u64 * 1_000_000),
+        };
+        Some((
+            endpoint,
+            id.to_string(),
+            playbook_observability::spans(id, handle.authority.log()),
+            window,
+        ))
     }
 
     pub fn handle(&self, method: &str, path: &str, body: &str) -> Response {
@@ -483,6 +534,7 @@ pub struct Bound {
     listener: TcpListener,
     service: Arc<Service>,
     stop: Arc<AtomicBool>,
+    live: Arc<AtomicUsize>,
 }
 
 pub fn bind(config: ServerConfig) -> std::io::Result<Bound> {
@@ -497,6 +549,7 @@ pub fn bind(config: ServerConfig) -> std::io::Result<Bound> {
         listener,
         service,
         stop: Arc::new(AtomicBool::new(false)),
+        live: Arc::new(AtomicUsize::new(0)),
     })
 }
 
@@ -514,16 +567,18 @@ impl Bound {
             listener,
             service,
             stop,
+            live,
         } = self;
         listener.set_nonblocking(true)?;
         loop {
             if stop.load(Ordering::Acquire) {
-                return Ok(());
+                break;
             }
             match listener.accept() {
                 Ok((stream, _)) => {
                     let service = Arc::clone(&service);
-                    thread::spawn(move || handle_connection(stream, &service));
+                    let live = Arc::clone(&live);
+                    thread::spawn(move || handle_connection(stream, &service, live));
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(Duration::from_millis(50));
@@ -531,6 +586,11 @@ impl Bound {
                 Err(error) => return Err(error),
             }
         }
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while live.load(Ordering::Acquire) > 0 && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(25));
+        }
+        Ok(())
     }
 }
 
@@ -592,24 +652,39 @@ fn header_end(raw: &[u8]) -> Option<usize> {
 
 fn content_length(head: &[u8]) -> Result<usize, Response> {
     let text = String::from_utf8_lossy(head);
+    let mut declared: Option<usize> = None;
     for line in text.lines().skip(1) {
         if let Some((name, value)) = line.split_once(':') {
             if name.trim().eq_ignore_ascii_case("content-length") {
-                return value
+                let parsed = value
                     .trim()
                     .parse::<usize>()
-                    .map_err(|_| error_reply(400, "bad_request", "bad content-length"));
+                    .map_err(|_| error_reply(400, "bad_request", "bad content-length"))?;
+                if let Some(previous) = declared {
+                    if previous != parsed {
+                        return Err(error_reply(
+                            400,
+                            "bad_request",
+                            "conflicting content-length headers",
+                        ));
+                    }
+                }
+                declared = Some(parsed);
             }
         }
     }
-    Ok(0)
+    Ok(declared.unwrap_or(0))
 }
 
 fn read_request(stream: &mut TcpStream) -> Result<Vec<u8>, Response> {
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
+    let deadline = Instant::now() + READ_TIMEOUT;
     let mut raw = Vec::new();
     let mut buffer = [0u8; 8192];
     loop {
+        if Instant::now() > deadline {
+            return Err(error_reply(408, "timeout", "request timed out"));
+        }
         if let Some(end) = header_end(&raw) {
             if end > MAX_HEADER_BYTES {
                 return Err(error_reply(
@@ -620,6 +695,8 @@ fn read_request(stream: &mut TcpStream) -> Result<Vec<u8>, Response> {
             }
             let length = content_length(&raw[..end])?;
             if length > MAX_BODY_BYTES {
+                let _ = stream.set_read_timeout(Some(Duration::from_millis(250)));
+                drain(stream, length);
                 return Err(error_reply(413, "body_too_large", "body exceeds 1 MiB"));
             }
             if raw.len() >= end + length {
@@ -657,7 +734,8 @@ fn read_request(stream: &mut TcpStream) -> Result<Vec<u8>, Response> {
     }
 }
 
-fn handle_connection(mut stream: TcpStream, service: &Service) {
+fn handle_connection(mut stream: TcpStream, service: &Service, live: Arc<AtomicUsize>) {
+    live.fetch_add(1, Ordering::AcqRel);
     let response = match read_request(&mut stream) {
         Ok(raw) => match parse_request(&raw) {
             Ok(parsed) => {
@@ -674,17 +752,18 @@ fn handle_connection(mut stream: TcpStream, service: &Service) {
             }
             Err(response) => response,
         },
-        Err(response) => {
-            drain(&mut stream);
-            response
-        }
+        Err(response) => response,
     };
     write_response(&mut stream, &response);
+    let _ = stream.shutdown(std::net::Shutdown::Both);
+    live.fetch_sub(1, Ordering::AcqRel);
 }
 
-fn drain(stream: &mut TcpStream) {
+/// Consume a rejected body so the response is not lost to a TCP reset. The
+/// budget bounds the drain; a client still sending past it gets a reset.
+fn drain(stream: &mut TcpStream, remaining: usize) {
     let mut discard = [0u8; 8192];
-    let mut budget = 2 * MAX_BODY_BYTES;
+    let mut budget = remaining.min(2 * MAX_BODY_BYTES);
     while budget > 0 {
         match stream.read(&mut discard) {
             Ok(0) | Err(_) => break,

@@ -118,7 +118,14 @@ is quarantined: it is renamed with a `.rejected` suffix and surfaced on
 
 An open execution after recovery appears in the snapshot as
 `active_capability` and blocks advancement exactly as in-process: the next
-`steps` call returns 409 until `reconcile` closes the key.
+`steps` call returns 409 until `reconcile` closes the key. A key reconciled
+with `occurred: false` is released for re-invocation; a key reconciled with
+`occurred: true` is consumed permanently.
+
+The drive's policy is not part of `DriveStarted`, so it is recorded in a
+sidecar file next to the journal (`{id}.jsonl.policy`) at creation and read
+back at boot; a journal without a sidecar folds under the builtin policy,
+falling back to the contrast policy only when the builtin fold fails.
 
 Known limitation, stated rather than hidden: `FixturePlane` holds its script
 queue in memory, so a recovered drive answers later plays with a fresh plane.
@@ -169,7 +176,8 @@ Each criterion is enforced by an automated test on a real socket.
   events reproduces the live state; a response never precedes its fsync.
 - AC-5 Recovery on boot: restart the process against the same journal
   directory; every drive reappears with an identical snapshot.
-- AC-6 Limits: a 2 MiB body is rejected; the error envelope is stable.
+- AC-6 Limits: a body over 1 MiB is rejected with 413 and the standard
+  envelope; a slow or stalled client is bounded by a per-request deadline.
 
 ## 11. Docs
 

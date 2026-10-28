@@ -195,6 +195,83 @@ fn a_crashed_invocation_reconciles_over_the_api() {
 }
 
 #[test]
+fn a_drive_reaches_fourth_down_pressure_punt_and_refusal() {
+    let dir = temp_dir("fourth");
+    let address = spawn_server(dir.clone());
+    let (status, _) = post(
+        address,
+        "/v1/drives",
+        r#"{"drive_id":"drive-fourth","statement":"fourth down"}"#,
+    );
+    assert_eq!(status, 201);
+    assert_eq!(
+        post(address, "/v1/drives/drive-fourth/preflight", "").0,
+        200
+    );
+    for _ in 0..4 {
+        let (status, body) = post(address, "/v1/drives/drive-fourth/steps", "");
+        assert_eq!(status, 200, "{body}");
+    }
+    let (status, body) = post(address, "/v1/drives/drive-fourth/steps", "");
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = post(
+        address,
+        "/v1/drives/drive-fourth/pressure",
+        r#"{"provider_quota":900}"#,
+    );
+    assert_eq!(status, 200, "{body}");
+    assert!(body.contains("\"fourth_down\""), "{body}");
+    let (status, body) = post(address, "/v1/drives/drive-fourth/punt", "");
+    assert_eq!(status, 200, "{body}");
+    let (status, refused) = post(address, "/v1/drives/drive-fourth/complete", "");
+    assert_eq!(status, 200, "{refused}");
+    assert!(refused.contains("\"status\":\"punted\""), "{refused}");
+
+    let (status, events) = call(address, "GET", "/v1/drives/drive-fourth/events", "");
+    assert_eq!(status, 200);
+    let log: Vec<serde_json::Value> = serde_json::from_str(&events).unwrap();
+    assert!(log
+        .iter()
+        .any(|event| event["type"] == serde_json::json!("punt_issued")));
+    let state = playbook_state::fold(
+        &serde_json::from_value::<Vec<playbook_sim::DriveEvent>>(
+            serde_json::from_str(&events).unwrap(),
+        )
+        .unwrap(),
+        &Policy::builtin(),
+        playbook_state::ApplyMode::Audit,
+    )
+    .unwrap();
+    assert!(state.package().is_some());
+    assert_eq!(state.down(), playbook_sim::Down::FourthDown);
+    std::fs::remove_dir_all(temp_dir("fourth")).ok();
+}
+
+#[test]
+fn a_pass_heavy_drive_recovers_with_its_own_policy() {
+    let dir = temp_dir("policy");
+    let address = spawn_server(dir.clone());
+    let (status, _) = post(
+        address,
+        "/v1/drives",
+        r#"{"drive_id":"drive-ph","statement":"contrast","policy":"pass-heavy"}"#,
+    );
+    assert_eq!(status, 201);
+    assert_eq!(post(address, "/v1/drives/drive-ph/preflight", "").0, 200);
+    assert_eq!(post(address, "/v1/drives/drive-ph/steps", "").0, 200);
+    let (_, before) = call(address, "GET", "/v1/drives/drive-ph", "");
+    assert!(dir.join("drive-ph.jsonl.policy").exists());
+
+    let address = spawn_server(dir);
+    let (status, after) = call(address, "GET", "/v1/drives/drive-ph", "");
+    assert_eq!(status, 200);
+    assert_eq!(before, after);
+    let (_, ready) = call(address, "GET", "/readyz", "");
+    assert!(ready.contains("\"rejected_journals\":0"), "{ready}");
+    std::fs::remove_dir_all(temp_dir("policy")).ok();
+}
+
+#[test]
 fn the_error_contract_and_limits_hold() {
     let dir = temp_dir("errors");
     let address = spawn_server(dir);

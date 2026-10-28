@@ -68,6 +68,23 @@ impl Journal {
             .open(path)
             .map_err(io_error)?;
         file.sync_all().map_err(io_error)?;
+        sync_parent(path)?;
+        Ok(Self {
+            file,
+            offsets: Vec::new(),
+        })
+    }
+
+    /// Create a journal exclusively: the call fails when the file already
+    /// exists, so concurrent creators cannot truncate each other's log.
+    pub fn create_new(path: &Path) -> Result<Self, PlaybookError> {
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(io_error)?;
+        file.sync_all().map_err(io_error)?;
+        sync_parent(path)?;
         Ok(Self {
             file,
             offsets: Vec::new(),
@@ -124,6 +141,17 @@ impl Journal {
         self.offsets.push(end);
         Ok(())
     }
+}
+
+fn sync_parent(path: &Path) -> Result<(), PlaybookError> {
+    let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    else {
+        return Ok(());
+    };
+    let dir = File::open(parent).map_err(io_error)?;
+    dir.sync_all().map_err(io_error)
 }
 
 impl EventSink for Journal {
