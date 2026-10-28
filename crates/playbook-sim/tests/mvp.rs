@@ -1,4 +1,6 @@
-use playbook_sim::{compare_policies, run_mvp, Disposition, Down, DriveStatus, PersonnelKind};
+use playbook_sim::{
+    compare_policies, run_mvp, run_mvp_with_journal, Disposition, Down, DriveStatus, PersonnelKind,
+};
 use playbook_sim::{fold, ApplyMode, HistoricalPriorTable, Policy};
 
 #[test]
@@ -81,6 +83,20 @@ fn the_acceptance_drive_learns_priors_from_measured_outcomes() {
     assert_eq!(resim.priors(), priors);
     // An empty table stays empty.
     assert_eq!(HistoricalPriorTable::empty().samples(), 0);
+}
+
+#[test]
+fn the_journaled_drive_recovers_the_live_log_from_disk() {
+    let path =
+        std::env::temp_dir().join(format!("playbook-mvp-journal-{}.jsonl", std::process::id()));
+    let report = run_mvp_with_journal(&path).expect("journaled mvp drive");
+    assert_eq!(report.journal_replay_match, Some(true));
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(!bytes.is_empty());
+    std::fs::remove_file(&path).unwrap();
+
+    let plain = run_mvp().expect("mvp drive");
+    assert_eq!(plain.journal_replay_match, None);
 }
 
 #[test]

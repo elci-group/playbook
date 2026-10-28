@@ -32,6 +32,18 @@ use playbook_ytg::ytg_milli;
 
 use serde_json::{json, Value};
 
+/// Durable write-ahead sink for committed drive events.
+///
+/// The authority records an event with its sink before committing it to the
+/// in-memory state, so a crash between dispatch and outcome leaves the
+/// invocation recoverable from storage. A sink must make `record` durable
+/// before returning.
+pub trait EventSink {
+    fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError>;
+    fn mark(&self) -> u64;
+    fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError>;
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DriveState {
     pub(crate) drive_id: DriveId,
@@ -180,6 +192,15 @@ impl DriveState {
     /// Learned historical priors recorded from measured play outcomes.
     pub fn priors(&self) -> &HistoricalPriorTable {
         &self.priors
+    }
+    /// The invocation that was dispatched but never committed an outcome.
+    /// A recovering host must reconcile it before further execution.
+    pub fn open_execution(&self) -> Option<&PlayExecution> {
+        self.open_execution.as_ref()
+    }
+    /// Side effects the plane reported without a committed outcome.
+    pub fn unresolved_effects(&self) -> &[SideEffectNote] {
+        &self.unresolved_effects
     }
     pub fn false_completion_claims(&self) -> u32 {
         self.false_completion_claims

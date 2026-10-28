@@ -56,6 +56,8 @@ pub enum PlaybookError {
     PuntNotReady,
     #[error("json: {0}")]
     Json(String),
+    #[error("io: {0}")]
+    Io(String),
 }
 
 impl PlaybookError {

@@ -21,13 +21,16 @@ schemas/    draft-07 contracts
 fixtures/   versioned policy bundles
 ```
 
-`playbook-core` holds the nouns. `playbook-state` folds the event log. `playbook-policy` is data. `playbook-elci` is the `CapabilityPlane` trait plus the deterministic fixture used by tests. `playbook-lastdown` scores fourth-down dispositions and seals a `PLAYBOOK/1` continuation package. That package is not a `LASTDOWN/1` blob.
+`playbook-core` holds the nouns. `playbook-state` folds the event log. `playbook-policy` is data. `playbook-elci` is the `CapabilityPlane` trait plus the deterministic fixture used by tests. `playbook-lastdown` scores fourth-down dispositions and seals a `PLAYBOOK/1` continuation package. That package is not a `LASTDOWN/1` blob. `playbook-journal` is the durable write-ahead store: it fsyncs each committed event to a checksummed log before the authority commits it.
 
 ## Run
 
 ```bash
 cargo test
 cargo run -p playbook-cli -- mvp
+cargo run -p playbook-cli -- mvp --journal /tmp/mvp_drive.jsonl
+cargo run -p playbook-cli -- recover /tmp/mvp_drive.jsonl
+cargo run -p playbook-cli -- otlp http://127.0.0.1:4318/v1/traces
 cargo run -p playbook-cli -- sim --trace mvp --policy playbook-policy-pass-heavy
 cargo run -p playbook-cli -- explain
 cargo run -p playbook-cli -- status
@@ -72,7 +75,13 @@ then exits. There is no continuously running drive service or OTLP exporter.
 The event log supports audit replay, but serialization alone is not durable
 execution recovery. A host must persist an invocation before dispatching a
 real tool, preserve its returned outcome, and reconcile uncertain side effects
-after a crash. This repository does not provide a durable write-ahead store.
+after a crash. When a journal is attached, the authority writes every event to
+disk and fsyncs before committing it, so an invocation is recoverable before
+the plane is called. `Authority::start_journaled` and `Authority::attach_journal`
+wire it. Recovery verifies digests and sequence numbers, truncates a torn or
+tampered tail at the first bad record, and folds the remainder in audit mode.
+`playbook recover <journal>` folds a recovered journal in audit mode and reports
+the open invocation and unresolved effects the host still owes.
 
 `Authority::resume` restores a saved log in audit mode. Once `ToolInvoked` is
 recorded, an execution error does not roll back the invocation. A
@@ -105,7 +114,7 @@ is an event, replays reproduce it exactly, and the drive keeps learning on top
 of the imported rows. Two drives with identical rosters route differently when
 one carries the measured record.
 
-Observability emits an OpenTelemetry-shaped trace: one drive, play spans, tool spans, and the metric names from the directive. An OTLP exporter is not wired.
+Observability emits an OpenTelemetry-shaped trace: one drive, play spans, tool spans, and the metric names from the directive. `playbook-otlp` is that exporter: it encodes the trace as OTLP/HTTP JSON, derives deterministic hex span ids from the logical ids, and POSTs with a hand-rolled HTTP/1.1 client. It has no opentelemetry dependency and speaks plain http.
 
 Tov modules are compile-checked, versioned as source, and failure-isolated. If a module is missing or fails, the Rust normaliser still scores the evidence. The Windows control plane is the Rust crates.
 
@@ -117,4 +126,4 @@ The capability plane in tests is `FixturePlane`. A live ELCI daemon is not requi
 
 ## Invariants the tests hold
 
-Evidence-free claims leave yards-to-go unchanged. Budget remaining does not grow inside a possession. A mandatory failed gate cannot complete the drive. The same measurement and policy classify as the same down. Fourth down records a Lastdown disposition. A tool failure cannot be stored as a tool success. Replay reproduces the state. A tampered witness is a replay divergence. An identical failed play is rejected until the field changes. A waiver needs an authority and a reason. Budget pressure does not authorize deployment. The continuation package omits the athletic-amnesia keys. Priors learn only from measured outcomes, and a personnel's self-report stops moving its routing score once its measured record reaches the policy threshold. A loaded prior table is part of the log, routes by measured record over identical self-reports, and never carries model identity or rankings.
+Evidence-free claims leave yards-to-go unchanged. Budget remaining does not grow inside a possession. A mandatory failed gate cannot complete the drive. The same measurement and policy classify as the same down. Fourth down records a Lastdown disposition. A tool failure cannot be stored as a tool success. Replay reproduces the state. A tampered witness is a replay divergence. An identical failed play is rejected until the field changes. A waiver needs an authority and a reason. Budget pressure does not authorize deployment. The continuation package omits the athletic-amnesia keys. Priors learn only from measured outcomes, and a personnel's self-report stops moving its routing score once its measured record reaches the policy threshold. A loaded prior table is part of the log, routes by measured record over identical self-reports, and never carries model identity or rankings. A journaled drive recovers its event log exactly; recovery truncates at the first torn, tampered, or out-of-sequence record instead of skipping it.

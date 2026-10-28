@@ -87,7 +87,9 @@ version = "0.1.0"
 dependencies = [
  "playbook-core",
  "playbook-events",
+ "playbook-journal",
  "playbook-observability",
+ "playbook-otlp",
  "playbook-policy",
  "playbook-sim",
  "playbook-state",
@@ -139,6 +141,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-journal"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-events",
+ "playbook-policy",
+ "playbook-state",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-lastdown"
 version = "0.1.0"
 dependencies = [
@@ -152,6 +166,15 @@ version = "0.1.0"
 dependencies = [
  "playbook-core",
  "playbook-events",
+]
+
+[[package]]
+name = "playbook-otlp"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-observability",
+ "serde_json",
 ]
 
 [[package]]
@@ -199,6 +222,7 @@ dependencies = [
  "playbook-elci",
  "playbook-events",
  "playbook-evidence",
+ "playbook-journal",
  "playbook-lastdown",
  "playbook-observability",
  "playbook-policy",

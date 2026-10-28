@@ -1,0 +1,19 @@
+[package]
+name = "playbook-otlp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "DIY OTLP/HTTP+JSON trace exporter with a hand-rolled HTTP/1.1 client and no opentelemetry dependency."
+
+[dependencies]
+playbook-core = { path = "../playbook-core" }
+playbook-observability = { path = "../playbook-observability" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

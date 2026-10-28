@@ -11,6 +11,7 @@ use playbook_policy::Policy;
 use playbook_routing::HistoricalPriorTable;
 use playbook_state::{fold, started_budget, trajectory, ApplyMode, Authority};
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::harness::{person, roster, standard_gates, task_contract};
 
@@ -26,6 +27,7 @@ pub struct MvpReport {
     pub false_completion_claims: u32,
     pub package_leaks: bool,
     pub finishing_personnel_kind: Option<PersonnelKind>,
+    pub journal_replay_match: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,15 +65,39 @@ pub fn stage_names(events: &[DriveEvent]) -> Vec<String> {
 }
 
 pub fn run_mvp() -> Result<MvpReport, PlaybookError> {
+    run_mvp_inner(None)
+}
+
+/// Run the acceptance drive through a durable journal, then recover a second
+/// authority from the file. The recovered log must equal the live log.
+pub fn run_mvp_with_journal(journal_path: &Path) -> Result<MvpReport, PlaybookError> {
+    run_mvp_inner(Some(journal_path))
+}
+
+fn run_mvp_inner(journal_path: Option<&Path>) -> Result<MvpReport, PlaybookError> {
     let mut plane = FixturePlane::mvp();
-    let mut authority = Authority::start(
-        playbook_core::DriveId::new("drive-mvp")?,
-        task_contract(TaskIntegrity::Sound),
-        started_budget(1_000, 1_000),
-        Policy::builtin(),
-        roster(),
-        1_000,
-    )?;
+    let mut authority = match journal_path {
+        Some(path) => {
+            let journal = playbook_journal::Journal::create(path)?;
+            Authority::start_journaled(
+                playbook_core::DriveId::new("drive-mvp")?,
+                task_contract(TaskIntegrity::Sound),
+                started_budget(1_000, 1_000),
+                Policy::builtin(),
+                roster(),
+                1_000,
+                Box::new(journal),
+            )?
+        }
+        None => Authority::start(
+            playbook_core::DriveId::new("drive-mvp")?,
+            task_contract(TaskIntegrity::Sound),
+            started_budget(1_000, 1_000),
+            Policy::builtin(),
+            roster(),
+            1_000,
+        )?,
+    };
     for gate in standard_gates()? {
         authority.declare_gate(gate)?;
     }
@@ -224,6 +250,17 @@ pub fn run_mvp() -> Result<MvpReport, PlaybookError> {
 
     let events = authority.log().to_vec();
     let replay = fold(&events, authority.policy(), ApplyMode::Audit)?;
+    let journal_replay_match = match journal_path {
+        Some(path) => {
+            let recovery = playbook_journal::Journal::open(path)?;
+            Some(
+                recovery.events == events
+                    && fold(&recovery.events, authority.policy(), ApplyMode::Audit)?
+                        == *authority.state(),
+            )
+        }
+        None => None,
+    };
     Ok(MvpReport {
         stages: stage_names(&events),
         duplicate_failed_plays: duplicate_failures(&events),
@@ -235,6 +272,7 @@ pub fn run_mvp() -> Result<MvpReport, PlaybookError> {
         replay_match: replay == *authority.state(),
         final_state: authority.state().clone(),
         events,
+        journal_replay_match,
     })
 }
 

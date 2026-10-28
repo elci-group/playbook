@@ -14,10 +14,12 @@ path = "src/main.rs"
 [dependencies]
 playbook-core.workspace = true
 playbook-events.workspace = true
+playbook-journal.workspace = true
 playbook-policy.workspace = true
 playbook-sim.workspace = true
 playbook-state.workspace = true
 playbook-observability.workspace = true
+playbook-otlp.workspace = true
 serde_json.workspace = true
 
 [lints]

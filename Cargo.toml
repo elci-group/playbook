@@ -11,9 +11,11 @@ members = [
     "crates/playbook-policy",
     "crates/playbook-elci",
     "crates/playbook-state",
+    "crates/playbook-journal",
     "crates/playbook-routing",
     "crates/playbook-lastdown",
     "crates/playbook-observability",
+    "crates/playbook-otlp",
     "crates/playbook-sim",
     "crates/playbook-cli",
     "crates/playbook-server",
@@ -41,9 +43,11 @@ playbook-security = { path = "crates/playbook-security" }
 playbook-policy = { path = "crates/playbook-policy" }
 playbook-elci = { path = "crates/playbook-elci" }
 playbook-state = { path = "crates/playbook-state" }
+playbook-journal = { path = "crates/playbook-journal" }
 playbook-routing = { path = "crates/playbook-routing" }
 playbook-lastdown = { path = "crates/playbook-lastdown" }
 playbook-observability = { path = "crates/playbook-observability" }
+playbook-otlp = { path = "crates/playbook-otlp" }
 playbook-sim = { path = "crates/playbook-sim" }
 
 [workspace.lints.rust]

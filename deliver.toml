@@ -25,6 +25,16 @@ required = true
 forbid_regex = ["TODO", "FIXME", "unimplemented!"]
 
 [[file]]
+path = "crates/playbook-journal/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-otlp/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
 path = "fixtures/policy.json"
 required = true
 min_size_bytes = 100

@@ -13,13 +13,14 @@ use playbook_gates::is_complete;
 use playbook_policy::Policy;
 
 use crate::apply::ApplyMode;
-use crate::{apply, DriveState};
+use crate::{apply, DriveState, EventSink};
 
 pub struct Authority {
     state: DriveState,
     events: Vec<DriveEvent>,
     policy: Policy,
     roster: Vec<Personnel>,
+    journal: Option<Box<dyn EventSink>>,
 }
 
 impl Authority {
@@ -43,6 +44,37 @@ impl Authority {
             events: vec![event],
             policy,
             roster,
+            journal: None,
+        };
+        authority.witnesses()?;
+        Ok(authority)
+    }
+
+    /// Start a drive with a durable journal. Every event is journaled before
+    /// it joins the log.
+    pub fn start_journaled(
+        drive_id: DriveId,
+        task: TaskContract,
+        budget: DriveBudget,
+        policy: Policy,
+        roster: Vec<Personnel>,
+        at_ms: u64,
+        mut journal: Box<dyn EventSink>,
+    ) -> Result<Self, PlaybookError> {
+        let event = DriveEvent::DriveStarted {
+            drive_id,
+            task,
+            budget,
+            at_ms,
+        };
+        let state = apply(None, &event, &policy, ApplyMode::Audit)?;
+        journal.record(&event)?;
+        let mut authority = Self {
+            state,
+            events: vec![event],
+            policy,
+            roster,
+            journal: Some(journal),
         };
         authority.witnesses()?;
         Ok(authority)
@@ -50,7 +82,8 @@ impl Authority {
 
     /// Restore an authority from its validated event history. The caller is
     /// responsible for durably saving `ToolInvoked` before calling the plane;
-    /// this in-memory type cannot provide a write-ahead storage guarantee.
+    /// attach a durable sink (see `attach_journal`) to obtain the write-ahead
+    /// guarantee.
     pub fn resume(
         events: Vec<DriveEvent>,
         policy: Policy,
@@ -62,7 +95,14 @@ impl Authority {
             events,
             policy,
             roster,
+            journal: None,
         })
+    }
+
+    /// Attach a durable sink, intended for `Authority::resume`. Events already
+    /// in the log are not retro-journaled.
+    pub fn attach_journal(&mut self, journal: Box<dyn EventSink>) {
+        self.journal = Some(journal);
     }
 
     pub fn state(&self) -> &DriveState {
@@ -297,6 +337,7 @@ impl Authority {
     ) -> Result<DecisionRecord, PlaybookError> {
         self.ensure_no_open_execution()?;
         let mark = self.events.len();
+        let journal_mark = self.journal.as_ref().map(|sink| sink.mark());
         let saved = self.state.clone();
         match self.commit_decision(decision, plane, at_ms) {
             Ok(record) => Ok(record),
@@ -307,6 +348,9 @@ impl Authority {
                 if !invocation_recorded {
                     self.events.truncate(mark);
                     self.state = saved;
+                    if let (Some(sink), Some(mark)) = (self.journal.as_mut(), journal_mark) {
+                        sink.rollback(mark)?;
+                    }
                 }
                 Err(err)
             }
@@ -466,6 +510,9 @@ impl Authority {
 
     fn push(&mut self, event: DriveEvent) -> Result<(), PlaybookError> {
         let next = apply(Some(&self.state), &event, &self.policy, ApplyMode::Audit)?;
+        if let Some(sink) = self.journal.as_mut() {
+            sink.record(&event)?;
+        }
         self.events.push(event);
         self.state = next;
         Ok(())
@@ -495,6 +542,35 @@ mod tests {
     };
     use playbook_elci::{CapabilitySnapshot, FixturePlane};
     use serde_json::json;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    #[derive(Clone, Default)]
+    struct MemorySink {
+        events: Rc<RefCell<Vec<DriveEvent>>>,
+    }
+
+    impl MemorySink {
+        fn recorded(&self) -> Vec<DriveEvent> {
+            self.events.borrow().clone()
+        }
+    }
+
+    impl EventSink for MemorySink {
+        fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
+            self.events.borrow_mut().push(event.clone());
+            Ok(())
+        }
+
+        fn mark(&self) -> u64 {
+            self.events.borrow().len() as u64
+        }
+
+        fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
+            self.events.borrow_mut().truncate(mark as usize);
+            Ok(())
+        }
+    }
 
     #[derive(Clone, Copy)]
     enum ResponseMode {
@@ -637,6 +713,119 @@ mod tests {
 
     fn compile(authority: &mut Authority, plane: &mut MutatingPlane) -> PlaybookError {
         authority.try_operation("compile", plane, 200).unwrap_err()
+    }
+
+    fn journaled_authority() -> (Authority, MutatingPlane, MemorySink) {
+        let sink = MemorySink::default();
+        let personnel = Personnel {
+            id: PersonnelId::new("cargo-toolchain").unwrap(),
+            kind: PersonnelKind::DeterministicProcedure,
+            display_name: "cargo-toolchain".into(),
+            cost_tokens: 40,
+            latency_ms: 20,
+            capability_fit_ppm: playbook_core::PPM_SCALE,
+            reliability_ppm: 900_000,
+            quota_remaining_ppm: playbook_core::PPM_SCALE,
+            evidence_quality_ppm: playbook_core::PPM_SCALE,
+            own_ytg_milli: None,
+        };
+        let mut authority = Authority::start_journaled(
+            playbook_core::DriveId::new("uncertain-execution").unwrap(),
+            TaskContract {
+                statement: "compile implementation".into(),
+                workload_class: "engineering".into(),
+                constraints: Vec::new(),
+                integrity: TaskIntegrity::Sound,
+            },
+            started_budget(1_000, 1_000),
+            Policy::builtin(),
+            vec![personnel],
+            1,
+            Box::new(sink.clone()),
+        )
+        .unwrap();
+        authority
+            .declare_gate(
+                Gate::declare(
+                    GateId::new("implementation").unwrap(),
+                    "compiler accepts the implementation",
+                    1_000_000,
+                    Vec::new(),
+                    vec![EvidenceClass::CompilerResult],
+                    true,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let mut plane = MutatingPlane {
+            inner: FixturePlane::mvp(),
+            mode: ResponseMode::Error,
+            mutations: 0,
+        };
+        authority.preflight(&mut plane).unwrap();
+        authority.step(&mut plane, 100).unwrap();
+        (authority, plane, sink)
+    }
+
+    #[test]
+    fn journaled_drive_records_every_committed_event() {
+        let (authority, _plane, sink) = journaled_authority();
+        assert_eq!(sink.recorded(), authority.log().to_vec());
+    }
+
+    #[test]
+    fn plane_error_keeps_journaled_invocation() {
+        let (mut authority, mut plane, sink) = journaled_authority();
+        assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
+        let recorded = sink.recorded();
+        assert!(recorded
+            .iter()
+            .any(|event| matches!(event, DriveEvent::PlaySelected { .. })));
+        assert!(recorded
+            .iter()
+            .any(|event| matches!(event, DriveEvent::ToolInvoked { .. })));
+        assert!(matches!(
+            recorded.last(),
+            Some(DriveEvent::ToolOutcomeRejected {
+                result: None,
+                failure: None,
+                ..
+            })
+        ));
+        assert_eq!(recorded.len(), authority.log().len());
+    }
+
+    #[test]
+    fn attach_journal_continues_a_resumed_drive() {
+        let (authority, _plane) = ready_authority();
+        let resumed_from = authority.log().len();
+        let events = authority.log().to_vec();
+        let mut resumed =
+            Authority::resume(events, authority.policy.clone(), authority.roster.clone()).unwrap();
+        let sink = MemorySink::default();
+        resumed.attach_journal(Box::new(sink.clone()));
+        resumed.pressure(DriveBudget::zero(), 150).unwrap();
+        assert_eq!(sink.recorded(), resumed.log()[resumed_from..].to_vec());
+        assert!(sink
+            .recorded()
+            .iter()
+            .any(|event| matches!(event, DriveEvent::BudgetConsumed { .. })));
+    }
+
+    #[test]
+    fn invalid_events_never_reach_the_sink() {
+        let (mut authority, _plane, sink) = journaled_authority();
+        let committed = sink.recorded().len();
+        assert!(matches!(
+            authority.waive(
+                GateId::new("unknown-gate").unwrap(),
+                "reviewer",
+                "gate is not required"
+            ),
+            Err(PlaybookError::UnknownGate(_))
+        ));
+        assert_eq!(sink.recorded().len(), committed);
+        assert_eq!(sink.recorded(), authority.log().to_vec());
     }
 
     #[test]
