@@ -8,12 +8,12 @@ use playbook_core::{
     HuddleId, Personnel, PersonnelId, PlayExecution, PlayId, PlaybookError, RetryPolicy,
     TaskContract,
 };
-use playbook_elci::{missing_evidence, CapabilityPlane, PlaneResult};
+use playbook_elci::{missing_evidence, CapabilityPlane, HuddleDispatch, PlaneResult};
 use playbook_events::DriveEvent;
 use playbook_gates::is_complete;
 use playbook_huddle::{
     admission, detect_contradictions, escalation_target, forced_synthesis,
-    participants as huddle_participants, DefaultRegulator, HuddleCost, HuddleOutcome,
+    participants as huddle_participants, Assignment, DefaultRegulator, HuddleCost, HuddleOutcome,
     HuddleParticipant, HuddleRegulator, HuddleReport, HuddleScope, HuddleTrigger,
     HuddleTriggerKind, HuddleValue, ParticipantCandidate,
 };
@@ -37,6 +37,15 @@ pub struct HuddleRequest {
     pub debt: u32,
     /// The caller's estimated rework-avoided value.
     pub rework_avoided: u32,
+}
+
+/// The result of one ELCI-backed collection pass. Failed participants are
+/// isolated: their reports are absent from the journal, deterministically.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CollectionSummary {
+    pub collected: Vec<PersonnelId>,
+    pub failed: Vec<(PersonnelId, String)>,
+    pub synthesized: bool,
 }
 
 impl HuddleRequest {
@@ -610,6 +619,92 @@ impl Authority {
         self.commit_huddle_outcome(huddle_id, outcome)
     }
 
+    /// Phase 4: ELCI-backed participant execution. Dispatch one scoped
+    /// context packet per participant through the plane, journal every
+    /// schema-valid report, and charge the stated cost against the huddle
+    /// envelope. A participant that times out, cancels, or answers with
+    /// malformed output simply leaves no report; the pass continues with
+    /// the rest, deterministically. Budget exhaustion terminates the pass
+    /// and forces synthesis from the accumulated reports.
+    pub fn collect_huddle_reports(
+        &mut self,
+        huddle_id: &HuddleId,
+        plane: &mut dyn HuddleDispatch,
+        report_cost: HuddleCost,
+    ) -> Result<CollectionSummary, PlaybookError> {
+        let mut summary = CollectionSummary {
+            collected: Vec::new(),
+            failed: Vec::new(),
+            synthesized: false,
+        };
+        let participants = self
+            .state
+            .huddles()
+            .active_by_id(huddle_id)
+            .ok_or_else(|| PlaybookError::Inadmissible("huddle".into(), "unknown huddle".into()))?
+            .participants
+            .clone();
+        let task_fragment = self.state.task().statement.clone();
+        let gates = self.state.gates().to_vec();
+        let evidence = self.state.evidence.clone();
+        let assignments = self.state.huddles().assignments().clone();
+        for participant in &participants {
+            let Some(active) = self.state.huddles().active_by_id(huddle_id) else {
+                break;
+            };
+            if active.exhausted {
+                break;
+            }
+            let assignment = assignments
+                .get(participant.personnel_id.as_str())
+                .cloned()
+                .unwrap_or_else(|| Assignment {
+                    personnel_id: participant.personnel_id.clone(),
+                    operation: String::new(),
+                    target_gate: None,
+                });
+            let packet = huddle_participants::build_packet(
+                active,
+                participant,
+                &task_fragment,
+                &gates,
+                &evidence,
+                assignment,
+            );
+            let report = match huddle_participants::dispatch_packet(plane, &packet) {
+                Ok(mut report) => {
+                    report.participant = participant.personnel_id.clone();
+                    report
+                }
+                Err(error) => {
+                    summary
+                        .failed
+                        .push((participant.personnel_id.clone(), error.to_string()));
+                    continue;
+                }
+            };
+            match self.submit_huddle_report(huddle_id, report) {
+                Ok(_) => {
+                    self.consume_huddle_budget(huddle_id, report_cost)?;
+                    summary.collected.push(participant.personnel_id.clone());
+                }
+                Err(error) => summary
+                    .failed
+                    .push((participant.personnel_id.clone(), error.to_string())),
+            }
+        }
+        if self
+            .state
+            .huddles()
+            .active_by_id(huddle_id)
+            .is_some_and(|huddle| huddle.exhausted)
+        {
+            self.force_huddle_synthesis(huddle_id)?;
+            summary.synthesized = true;
+        }
+        Ok(summary)
+    }
+
     /// Escalate one scope up the ladder. Returns the new huddle's id; the
     /// child still owes its own admission event.
     pub fn escalate_huddle(
@@ -898,7 +993,7 @@ mod tests {
         EvidenceClass, Gate, GateId, PersonnelId, PersonnelKind, PlayKind, SideEffectClass,
         SideEffectNote, TaskContract, TaskIntegrity, ToolFailure, ToolFailureKind,
     };
-    use playbook_elci::{CapabilitySnapshot, FixturePlane};
+    use playbook_elci::{CapabilitySnapshot, FixtureHuddlePlane, FixturePlane};
     use playbook_huddle::{
         AssignmentChange, AssumptionDelta, ContradictionResolution, HuddleClosure, HuddleScope,
         PersonnelAction, PlayProposal, ResolutionState, SharedStateDelta,
@@ -2016,6 +2111,155 @@ mod tests {
             .conditions()
             .iter()
             .any(|condition| condition.reason_code == "post_synthesis_review"));
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
+    }
+
+    fn dispatch_report(evidence: &EvidenceId, confidence: u64) -> serde_json::Value {
+        json!({
+            "participant": "dispatched",
+            "verified_progress": [evidence.as_str()],
+            "blockers": [],
+            "changed_assumptions": [],
+            "dependency_changes": [],
+            "contradictions": [],
+            "proposed_action": null,
+            "confidence_milli": confidence
+        })
+    }
+
+    #[test]
+    fn collect_huddle_reports_journals_dispatched_reports_and_charges_the_envelope() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let HuddleAdmission::Open(huddle_id) =
+            authority.open_huddle(huddle_request(), 100).unwrap()
+        else {
+            panic!("huddle should open")
+        };
+        let mut plane = FixtureHuddlePlane::responding(vec![
+            Ok(dispatch_report(&evidence, 9_000)),
+            Ok(dispatch_report(&evidence, 8_000)),
+        ]);
+        let summary = authority
+            .collect_huddle_reports(
+                &huddle_id,
+                &mut plane,
+                HuddleCost {
+                    tokens: 100,
+                    cost_microunits: 10_000,
+                    duration_ms: 50,
+                    rounds: 0,
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            summary
+                .collected
+                .iter()
+                .map(PersonnelId::as_str)
+                .collect::<Vec<_>>(),
+            vec!["worker-a", "worker-b"]
+        );
+        assert!(summary.failed.is_empty());
+        assert!(!summary.synthesized);
+        let active = authority
+            .state()
+            .huddles()
+            .active_by_id(&huddle_id)
+            .unwrap();
+        assert_eq!(active.reports.len(), 2);
+        assert_eq!(active.spent.tokens, 200);
+        // A dispatched report is attributed to the invited participant, not
+        // to whatever the response claimed.
+        assert_eq!(active.reports[0].participant.as_str(), "worker-a");
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
+    }
+
+    #[test]
+    fn collect_huddle_reports_isolates_one_participant_failure() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let HuddleAdmission::Open(huddle_id) =
+            authority.open_huddle(huddle_request(), 100).unwrap()
+        else {
+            panic!("huddle should open")
+        };
+        let mut plane = FixtureHuddlePlane::responding(vec![
+            Ok(dispatch_report(&evidence, 9_000)),
+            Err("participant timed out".into()),
+        ]);
+        let summary = authority
+            .collect_huddle_reports(
+                &huddle_id,
+                &mut plane,
+                HuddleCost {
+                    tokens: 100,
+                    cost_microunits: 10_000,
+                    duration_ms: 50,
+                    rounds: 0,
+                },
+            )
+            .unwrap();
+        assert_eq!(summary.collected.len(), 1);
+        assert_eq!(summary.failed.len(), 1);
+        assert_eq!(summary.failed[0].0.as_str(), "worker-b");
+        assert!(summary.failed[0].1.contains("timed out"));
+        // The huddle is still collecting: the absent report is the failure
+        // mode, not an aborted huddle.
+        let active = authority
+            .state()
+            .huddles()
+            .active_by_id(&huddle_id)
+            .unwrap();
+        assert_eq!(active.phase, playbook_huddle::HuddlePhase::CollectReports);
+        assert_eq!(active.reports.len(), 1);
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
+    }
+
+    #[test]
+    fn collect_huddle_reports_stops_on_exhaustion_and_forces_synthesis() {
+        let mut authority = huddle_authority();
+        drive_evidence(&mut authority, 50);
+        let HuddleAdmission::Open(huddle_id) =
+            authority.open_huddle(huddle_request(), 100).unwrap()
+        else {
+            panic!("huddle should open")
+        };
+        authority
+            .consume_huddle_budget(
+                &huddle_id,
+                HuddleCost {
+                    tokens: 2_000,
+                    cost_microunits: 200_000,
+                    duration_ms: 5_000,
+                    rounds: 1,
+                },
+            )
+            .unwrap();
+        let mut plane = FixtureHuddlePlane::responding(vec![]);
+        let summary = authority
+            .collect_huddle_reports(
+                &huddle_id,
+                &mut plane,
+                HuddleCost {
+                    tokens: 100,
+                    cost_microunits: 10_000,
+                    duration_ms: 50,
+                    rounds: 0,
+                },
+            )
+            .unwrap();
+        assert!(summary.collected.is_empty());
+        assert!(summary.synthesized);
+        let ledger = authority.state().huddles();
+        assert_eq!(ledger.closed()[0].closure, HuddleClosure::ForcedSynthesis);
+        assert!(ledger.active_by_id(&huddle_id).is_none());
         let replay =
             crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
         assert_eq!(&replay, authority.state());

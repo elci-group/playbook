@@ -185,6 +185,36 @@ utility drops to zero and the possession takes the field goal when one is
 banked. This is §17's "can this personnel group realistically convert?"
 answered by the huddle and enforced by Lastdown.
 
+## ELCI participant execution
+
+Phase 4 lets the authority run report collection itself, without the HTTP
+surface, the way it runs the rest of the huddle machine inside the fold.
+
+```text
+Authority::collect_huddle_reports(&mut self, huddle_id, plane, report_cost)
+```
+
+For each invited participant, in roster order, it builds the scoped context
+packet through that participant's disclosure profile, dispatches it through the
+ELCI `HuddleDispatch` plane, normalizes the structured response into a report
+and journals it through the normal submission path, contradiction detection
+included. Each accepted report charges `report_cost` against the huddle
+envelope. Attribution is fixed by the invitation, not the answer: a dispatched
+response is attributed to the participant it was addressed to, never to
+whatever identity the response claimed.
+
+Failure isolation is deterministic. A participant that times out, cancels or
+answers with malformed output simply leaves no report; the pass continues with
+the rest, and `CollectionSummary { collected, failed, synthesized }` reports
+the outcome. Once the envelope flips exhausted the pass stops dispatching and
+the authority forces synthesis from the reports already collected.
+
+Packet scoping is unchanged: minimum sufficient shared state per disclosure
+profile; the plane sees the packet, never the drive transcript. Tests script
+the deterministic `playbook_elci::FixtureHuddlePlane` (scripted responses,
+timeouts); real ELCI planes implement the same two-method seam. Collection,
+like every other huddle rule, is caller-driven through the authority.
+
 ## HTTP surface (on the drive service)
 
 The drive service exposes six huddle routes. They support debugging and
