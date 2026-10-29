@@ -5,7 +5,10 @@
 use playbook_core::PlaybookError;
 use playbook_observability::{audit_text, stage_line};
 use playbook_policy::Policy;
-use playbook_sim::{compare_policies_with, fold, run_mvp, ApplyMode, DriveEvent, MvpReport};
+use playbook_sim::{
+    compare_policies_with, fold, phase_eight_study, run_mvp, study_table, ApplyMode, DriveEvent,
+    HuddleRegime, MvpReport,
+};
 
 pub fn run(args: &[impl AsRef<str>]) -> i32 {
     let args: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
@@ -20,12 +23,14 @@ pub fn run(args: &[impl AsRef<str>]) -> i32 {
         Some("recover") => command(print_recover(args.get(1).copied())),
         Some("otlp") => command(print_otlp(&args[1..])),
         Some("otlp-bench") => command(print_otlp_bench(&args[1..])),
+        Some("huddle-study") => command(print_huddle_study()),
         _ => {
-            eprintln!("usage: playbook <mvp|sim|sprint|priors|explain|status|policy|recover|otlp|otlp-bench>");
+            eprintln!("usage: playbook <mvp|sim|sprint|priors|explain|status|policy|recover|otlp|otlp-bench|huddle-study>");
             eprintln!("  mvp [--journal <path>] runs the acceptance drive, optionally through a durable journal");
             eprintln!("  recover <journal> folds a recovered drive and reports what the host owes");
             eprintln!("  otlp <endpoint> exports the acceptance drive trace over OTLP/HTTP JSON");
             eprintln!("  otlp-bench --spans N [--endpoint url] [--runs R] measures encode and export throughput");
+            eprintln!("  huddle-study runs the Phase 8 comparative huddle programme and reports completion per regime");
             2
         }
     }
@@ -399,6 +404,35 @@ fn print_otlp_bench(args: &[&str]) -> Result<(), PlaybookError> {
     Ok(())
 }
 
+fn print_huddle_study() -> Result<(), PlaybookError> {
+    let regimes = [
+        HuddleRegime::Control,
+        HuddleRegime::Periodic,
+        HuddleRegime::FlatTriggered,
+        HuddleRegime::HierarchicalTriggered,
+    ];
+    let scenarios = phase_eight_study();
+    println!("{}", study_table(&scenarios));
+    for scenario in &scenarios {
+        let completions: Vec<String> = regimes
+            .iter()
+            .map(|regime| {
+                format!(
+                    "{}={}",
+                    regime.name(),
+                    if scenario.run(*regime).completed {
+                        "yes"
+                    } else {
+                        "no"
+                    }
+                )
+            })
+            .collect();
+        println!("{}: {}", scenario.name, completions.join(" "));
+    }
+    Ok(())
+}
+
 fn accepted_report() -> Result<MvpReport, PlaybookError> {
     let report = run_mvp()?;
     let required = [
@@ -524,6 +558,16 @@ mod tests {
     fn otlp_requires_exactly_one_endpoint() {
         assert_eq!(run(&["otlp"]), 1);
         assert_eq!(run(&["otlp", "https://nope"]), 1);
+    }
+
+    #[test]
+    fn huddle_study_is_deterministic_and_labels_regimes() {
+        let first = phase_eight_study();
+        let second = phase_eight_study();
+        assert_eq!(first, second);
+        let table = study_table(&first);
+        assert!(table.contains("A_control"));
+        assert!(table.contains("D_hierarchical_triggered"));
     }
 
     #[test]
