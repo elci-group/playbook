@@ -643,6 +643,36 @@ fn apply_open(
             next.status = DriveStatus::Abandoned;
             next.disposition = Some(Disposition::Abandon);
         }
+        DriveEvent::BenchDecision {
+            personnel_id,
+            benched,
+            reason_code,
+        } => {
+            ensure_active(&next)?;
+            if reason_code.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "bench".into(),
+                    "bench verdict requires a reason code".into(),
+                ));
+            }
+            if *benched {
+                if next
+                    .open_execution
+                    .as_ref()
+                    .is_some_and(|execution| &execution.personnel_id == personnel_id)
+                {
+                    return Err(PlaybookError::Inadmissible(
+                        "bench".into(),
+                        "cannot bench personnel with an open execution".into(),
+                    ));
+                }
+                if !next.benched.contains(personnel_id) {
+                    next.benched.push(personnel_id.clone());
+                }
+            } else {
+                next.benched.retain(|id| id != personnel_id);
+            }
+        }
         DriveEvent::HuddleRequested { .. }
         | DriveEvent::HuddleAdmitted { .. }
         | DriveEvent::HuddleRejected { .. }
@@ -867,7 +897,23 @@ fn doctrine(state: &DriveState, policy: &Policy) -> playbook_lastdown::DoctrineD
         p_finish_after_handoff: policy.receiver_finish_ppm,
         min_attempt: policy.min_attempt_ppm,
         reset_bonus_ppm: policy.reset_bonus_ppm,
+        coaching_contested: coaching_contested(state),
     })
+}
+
+/// The most recent coordinator-scope reconciliation contested the conversion
+/// plan: its outcome carried a strategy change. Fourth-down doctrine then
+/// banks instead of gambling on another convert.
+fn coaching_contested(state: &DriveState) -> bool {
+    state
+        .huddles()
+        .closed()
+        .iter()
+        .rev()
+        .find(|record| record.scope.rank() >= playbook_huddle::HuddleScope::Coordinator.rank())
+        .and_then(|record| record.outcome.as_ref())
+        .and_then(|outcome| outcome.strategy_change.as_ref())
+        .is_some()
 }
 
 fn requirement(state: &DriveState, policy: &Policy) -> Option<CapabilityRequirement> {

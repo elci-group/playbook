@@ -125,6 +125,14 @@ pub enum DriveEvent {
     AbandonIssued {
         reason: String,
     },
+    /// A Bench verdict journaled by the tactical authority. Benching a
+    /// personnel removes them from the selection pool; only a committed
+    /// huddle substitution recommendation authorizes one.
+    BenchDecision {
+        personnel_id: PersonnelId,
+        benched: bool,
+        reason_code: String,
+    },
     HuddleRequested {
         huddle_id: HuddleId,
         scope: HuddleScope,
@@ -212,6 +220,7 @@ impl DriveEvent {
             Self::CompletionRejected { .. } => "completion_rejected",
             Self::DriveCompleted { .. } => "drive_completed",
             Self::AbandonIssued { .. } => "abandon_issued",
+            Self::BenchDecision { .. } => "bench_decision",
             Self::HuddleRequested { .. } => "huddle_requested",
             Self::HuddleAdmitted { .. } => "huddle_admitted",
             Self::HuddleRejected { .. } => "huddle_rejected",

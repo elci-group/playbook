@@ -651,6 +651,34 @@ impl Authority {
         })
     }
 
+    /// Bench review: turn committed substitution recommendations into
+    /// journaled Bench verdicts. Benched personnel leave the selection pool
+    /// until a later reversed verdict returns them. Returns the number of
+    /// new verdicts.
+    pub fn bench_from_review(&mut self) -> Result<usize, PlaybookError> {
+        let pending: Vec<(PersonnelId, String)> = self
+            .state
+            .huddles()
+            .substitutions()
+            .iter()
+            .filter(|change| {
+                change.action == playbook_huddle::PersonnelAction::SubstitutionRecommended
+                    && !self.state.benched().contains(&change.personnel_id)
+            })
+            .map(|change| (change.personnel_id.clone(), change.reason.clone()))
+            .collect();
+        let mut verdicts = 0;
+        for (personnel_id, reason) in pending {
+            self.push(DriveEvent::BenchDecision {
+                personnel_id,
+                benched: true,
+                reason_code: reason,
+            })?;
+            verdicts += 1;
+        }
+        Ok(verdicts)
+    }
+
     fn run_decision(
         &mut self,
         decision: DecisionRecord,
@@ -1876,6 +1904,73 @@ mod tests {
         let replay =
             crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
         assert_eq!(&replay, authority.state());
+    }
+
+    #[test]
+    fn bench_review_follows_committed_huddle_recommendations() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let HuddleAdmission::Open(huddle_id) =
+            authority.open_huddle(huddle_request(), 100).unwrap()
+        else {
+            panic!("huddle should open")
+        };
+        for author in ["worker-a", "worker-b"] {
+            authority
+                .submit_huddle_report(&huddle_id, huddle_report(author, "v1", &evidence))
+                .unwrap();
+        }
+        let committed = outcome_for_bench_test(&huddle_id, authority.state().ytg_milli());
+        authority
+            .commit_huddle_outcome(&huddle_id, committed)
+            .unwrap();
+
+        // The Bench verdict cites the committed recommendation and benches
+        // the flagged personnel.
+        let verdicts = authority.bench_from_review().unwrap();
+        assert_eq!(verdicts, 1);
+        assert!(authority
+            .state()
+            .benched()
+            .iter()
+            .any(|id| id.as_str() == "worker-b"));
+        // Replaying the review does not double-bench.
+        assert_eq!(authority.bench_from_review().unwrap(), 0);
+
+        // The selection pool excludes the benched personnel: the next play
+        // runs through the replacement.
+        let mut plane = FixturePlane::ready();
+        authority.preflight(&mut plane).unwrap();
+        let selection = authority.try_operation("inspect", &mut plane, 400).unwrap();
+        assert_eq!(selection.selected_personnel.unwrap().as_str(), "worker-a");
+
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
+    }
+
+    fn outcome_for_bench_test(huddle_id: &playbook_core::HuddleId, ytg: u32) -> HuddleOutcome {
+        playbook_huddle::HuddleOutcome {
+            huddle_id: huddle_id.clone(),
+            reconciled_state: SharedStateDelta {
+                verified_evidence: Vec::new(),
+                gate_snapshots: Vec::new(),
+                assumptions: Vec::new(),
+            },
+            resolved_contradictions: Vec::new(),
+            unresolved_contradictions: Vec::new(),
+            assignment_changes: Vec::new(),
+            strategy_change: None,
+            personnel_changes: vec![playbook_huddle::PersonnelChange {
+                personnel_id: PersonnelId::new("worker-b").unwrap(),
+                action: PersonnelAction::SubstitutionRecommended,
+                reason: "repeated failures under the fielded contract".into(),
+            }],
+            revised_ytg_milli: Some(ytg),
+            next_play: None,
+            next_huddle_conditions: Vec::new(),
+            escalated_to: None,
+        }
     }
 
     #[test]

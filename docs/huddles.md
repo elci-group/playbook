@@ -165,7 +165,27 @@ personnel kind:
 No authorization, no disclosure: a field the profile does not authorize stays
 empty. The regulator scopes visibility; it must never alter evidence itself.
 
-## HTTP surface
+## Tactical consequences
+
+Phase 6 gives committed outcomes two journaled tactical consequences.
+
+Bench review. `Authority::bench_from_review` walks the ledger's committed
+substitution recommendations and journals a `bench_decision` event for each
+one not yet acted on; the verdict cites the huddle's reason. Benched
+personnel leave the selection pool until a reversed verdict returns them, a
+personnel with an open execution cannot be benched mid-flight, and replaying
+the review never double-benches. The measured routing rule is untouched:
+self-reported capability still never outranks the table — the Bench acts, it
+does not lobby.
+
+Fourth-down coaching. The most recent coordinator-scope reconciliation whose
+outcome carried a strategy change marks the conversion plan contested. On
+fourth down the doctrine then banks instead of gambling: the convert
+utility drops to zero and the possession takes the field goal when one is
+banked. This is §17's "can this personnel group realistically convert?"
+answered by the huddle and enforced by Lastdown.
+
+## HTTP surface (on the drive service)
 
 The drive service exposes six huddle routes. They support debugging and
 external orchestration; autonomous execution does not require them, because

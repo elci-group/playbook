@@ -101,6 +101,7 @@ pub struct DriveState {
     pub(crate) acquisition_count: u32,
     pub(crate) priors: HistoricalPriorTable,
     pub(crate) huddles: playbook_huddle::HuddleLedger,
+    pub(crate) benched: Vec<PersonnelId>,
 }
 
 impl DriveState {
@@ -165,6 +166,7 @@ impl DriveState {
             acquisition_count: 0,
             priors: HistoricalPriorTable::empty(),
             huddles: playbook_huddle::HuddleLedger::empty(),
+            benched: Vec::new(),
         }
     }
 
@@ -208,6 +210,11 @@ impl DriveState {
     /// committed assignments, and substitution recommendations.
     pub fn huddles(&self) -> &playbook_huddle::HuddleLedger {
         &self.huddles
+    }
+    /// Personnel the Bench has benched. They are excluded from the
+    /// selection pool until the verdict is reversed.
+    pub fn benched(&self) -> &[PersonnelId] {
+        &self.benched
     }
     /// The invocation that was dispatched but never committed an outcome.
     /// A recovering host must reconcile it before further execution.
@@ -362,7 +369,11 @@ impl DriveState {
             last_failed_personnel: self.last_failed_personnel.clone(),
             unresolved_effects: !self.unresolved_effects.is_empty(),
             gates: self.gates.clone(),
-            personnel: roster.to_vec(),
+            personnel: roster
+                .iter()
+                .filter(|person| !self.benched.contains(&person.id))
+                .cloned()
+                .collect(),
             evidence_refs: self.evidence.iter().map(|item| item.id.clone()).collect(),
             state_hash: self.state_hash()?,
             policy_version: policy.version.clone(),

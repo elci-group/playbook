@@ -27,6 +27,10 @@ pub struct DoctrineInput {
     pub p_finish_after_handoff: u32,
     pub min_attempt: u32,
     pub reset_bonus_ppm: u32,
+    /// A coordinator-scope huddle contested the conversion plan on this
+    /// possession. The doctrine banks instead of gambling on another
+    /// convert.
+    pub coaching_contested: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,7 +59,7 @@ pub fn evaluate(input: &DoctrineInput) -> DoctrineDecision {
         };
     }
     let score_disqualified = input.p_score < input.min_attempt;
-    let u_convert = if score_disqualified {
+    let u_convert = if score_disqualified || input.coaching_contested {
         0
     } else {
         scale_by_probability(input.p_score, input.full_utility)
@@ -203,6 +207,7 @@ mod tests {
             p_finish_after_handoff: 200_000,
             min_attempt,
             reset_bonus_ppm: reset_bonus,
+            coaching_contested: false,
         }
     }
 
@@ -226,6 +231,7 @@ mod tests {
             p_finish_after_handoff: 0,
             min_attempt: 550_000,
             reset_bonus_ppm: 0,
+            coaching_contested: false,
         });
         assert_eq!(decision.chosen, Disposition::FieldGoal);
         assert_eq!(decision.u_field_goal, 40);
@@ -290,5 +296,26 @@ mod tests {
 
             assert!(leaks_competitive_metadata(&serialized), "missed {key}");
         }
+    }
+
+    #[test]
+    fn a_contested_coaching_plan_banks_instead_of_gambling() {
+        let input = |contested: bool| DoctrineInput {
+            integrity: TaskIntegrity::Sound,
+            full_utility: 10_000,
+            banked_utility: 4_000,
+            p_score: 700_000,
+            p_preserve: 500_000,
+            p_finish_after_handoff: 500_000,
+            min_attempt: 200_000,
+            reset_bonus_ppm: 0,
+            coaching_contested: contested,
+        };
+        let free = evaluate(&input(false));
+        assert_eq!(free.chosen, Disposition::Convert);
+        assert_eq!(free.u_convert, 7_000);
+        let contested = evaluate(&input(true));
+        assert_eq!(contested.u_convert, 0);
+        assert_eq!(contested.chosen, Disposition::FieldGoal);
     }
 }
