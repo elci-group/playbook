@@ -268,6 +268,38 @@ control regime leads — the success-conditioned trigger is the only one that
 fires, and its synchronization cost is pure overhead — which is the expected
 `A` win the hypothesis reserves for drives that never diverge.
 
+The current `playbook huddle-study` output:
+
+| `scenario` | `regime` | `completed` | `terminal` | `steps` | `plays` | `fails` | `rep_fail` | `drive_tok` | `huddle_tok` | `total_tok` | `gain_milli` | `eff_milli` | `roi_pm` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flaky_integration` | `A_control` | false | `step_cap` | 40 | 40 | 19 | 19 | 8580 | 0 | 8580 | 0 | 0 | 0 |
+| `flaky_integration` | `B_periodic` | true | `completed` | 9 | 9 | 3 | 3 | 1960 | 300 | 2260 | 3000 | 10000000 | 20 |
+| `flaky_integration` | `C_flat_triggered` | true | `completed` | 7 | 7 | 2 | 2 | 1540 | 600 | 2140 | 6000 | 10000000 | 20 |
+| `flaky_integration` | `D_hierarchical_triggered` | true | `completed` | 7 | 7 | 2 | 2 | 1540 | 300 | 1840 | 6000 | 20000000 | 40 |
+| `clean_delivery` | `A_control` | true | `completed` | 4 | 4 | 0 | 0 | 720 | 0 | 720 | 0 | 0 | 0 |
+| `clean_delivery` | `B_periodic` | true | `completed` | 4 | 4 | 0 | 0 | 720 | 0 | 720 | 0 | 0 | 0 |
+| `clean_delivery` | `C_flat_triggered` | true | `completed` | 4 | 4 | 0 | 0 | 720 | 300 | 1020 | 6000 | 20000000 | 20 |
+| `clean_delivery` | `D_hierarchical_triggered` | true | `completed` | 4 | 4 | 0 | 0 | 720 | 150 | 870 | 6000 | 40000000 | 40 |
+
+The report gains three measures. `downstream_ytg_gain_milli` is the YTG
+milli removed between the first admitted huddle and the end of the drive —
+the downstream window a synchronization can claim credit for — zero when no
+huddle was admitted, and correlational, not causal.
+`huddle_efficiency_milli` is §24 huddle_efficiency, downstream gain per
+kilo-token of synchronization spend
+(`gain_milli * 1_000_000 / huddle_tokens`), zero with no huddle spend;
+`huddle_roi_per_mille` is §24 huddle_roi, admitted rework-avoided value
+over synchronization cost in per-mille
+(`admitted * predicted_rework_avoided * 1_000 / huddle_cost_microunits`),
+zero with no huddle cost.
+
+Reading the new columns: on `flaky_integration` hierarchical-triggered
+synchronization doubles flat-triggered efficiency at half the
+synchronization tokens (300 versus 600) for the same reconciliation, and
+ROI per-mille tracks admitted huddles against their charged envelope. On
+`clean_delivery` the success-triggered huddles show downstream gain with
+zero failures to fix — a correlational window, not a causal claim.
+
 The result is a simulation finding under fixed deterministic scenarios, not a
 live-drive benchmark; the Live Lucid integration phase re-runs the same
 measures against real drives before any production claim.
