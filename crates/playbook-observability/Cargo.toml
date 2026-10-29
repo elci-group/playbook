@@ -12,5 +12,8 @@ playbook-core.workspace = true
 playbook-events.workspace = true
 playbook-huddle.workspace = true
 
+[dev-dependencies]
+playbook-policy.workspace = true
+
 [lints]
 workspace = true

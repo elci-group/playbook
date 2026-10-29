@@ -207,6 +207,7 @@ dependencies = [
  "playbook-core",
  "playbook-events",
  "playbook-huddle",
+ "playbook-policy",
 ]
 
 [[package]]

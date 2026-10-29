@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use playbook_core::{ppm_percent, HuddleId, TacticalSnapshot, PPM_SCALE};
 use playbook_events::DriveEvent;
-use playbook_huddle::HuddleScope;
+use playbook_huddle::{HuddleLedger, HuddleScope};
 
 pub const METRIC_DRIVE_COMPLETION_RATE: &str = "drive_completion_rate";
 pub const METRIC_MEAN_BUDGET_UTILISATION: &str = "mean_budget_utilisation";
@@ -159,6 +159,107 @@ fn huddle_scope_slug(scope: &HuddleScope) -> &'static str {
         HuddleScope::Team => "team",
         HuddleScope::Franchise => "franchise",
     }
+}
+
+/// §23 huddle metrics over one drive's event log and huddle ledger.
+///
+/// Ledger totals are authoritative for requests, rejections, escalations and
+/// contradiction bookkeeping: the fold only advances them for events that
+/// survived admission, so refused or replayed events cannot inflate them.
+/// Cost sums come from `HuddleBudgetConsumed` events and participants from
+/// admission and invitation events, because closed ledger records drop both
+/// the `spent` accumulator and the roster. Coherence debt, pre/post-huddle
+/// ytg velocity and rework-avoided estimates are recorded on no ledger
+/// record or event, so their keys are omitted rather than proxied.
+pub fn huddle_metrics(
+    events: &[DriveEvent],
+    ledger: &HuddleLedger,
+) -> BTreeMap<String, u64> {
+    let mut metrics = BTreeMap::new();
+    metrics.insert(
+        METRIC_HUDDLES_TOTAL.into(),
+        u64::from(ledger.requested_total()),
+    );
+    metrics.insert(
+        METRIC_HUDDLES_REJECTED_TOTAL.into(),
+        u64::from(ledger.rejected_total()),
+    );
+    metrics.insert(
+        METRIC_HUDDLE_ESCALATIONS.into(),
+        u64::from(ledger.escalated_total()),
+    );
+
+    let mut by_scope: BTreeMap<HuddleScope, u64> = BTreeMap::new();
+    for huddle in ledger.active() {
+        *by_scope.entry(huddle.scope).or_insert(0) += 1;
+    }
+    for record in ledger.closed() {
+        *by_scope.entry(record.scope).or_insert(0) += 1;
+    }
+    for (scope, count) in by_scope {
+        let slug = huddle_scope_slug(&scope);
+        metrics.insert(format!("{slug}_huddles_total"), count);
+    }
+
+    let mut tokens = 0u64;
+    let mut cost = 0u64;
+    let mut duration = 0u64;
+    let mut participants: Vec<&str> = Vec::new();
+    for event in events {
+        match event {
+            DriveEvent::HuddleBudgetConsumed { cost: spent, .. } => {
+                tokens = tokens.saturating_add(spent.tokens);
+                cost = cost.saturating_add(spent.cost_microunits);
+                duration = duration.saturating_add(spent.duration_ms);
+            }
+            DriveEvent::HuddleAdmitted {
+                participants: roster,
+                ..
+            } => {
+                for participant in roster {
+                    let id = participant.personnel_id.as_str();
+                    if !participants.contains(&id) {
+                        participants.push(id);
+                    }
+                }
+            }
+            DriveEvent::HuddleParticipantInvited { participant, .. } => {
+                let id = participant.personnel_id.as_str();
+                if !participants.contains(&id) {
+                    participants.push(id);
+                }
+            }
+            _ => {}
+        }
+    }
+    metrics.insert(METRIC_HUDDLE_TOKENS_TOTAL.into(), tokens);
+    metrics.insert(METRIC_HUDDLE_COST_TOTAL.into(), cost);
+    metrics.insert(METRIC_HUDDLE_DURATION_MS.into(), duration);
+    metrics.insert(
+        METRIC_HUDDLE_PARTICIPANTS.into(),
+        u64::try_from(participants.len()).unwrap_or(u64::MAX),
+    );
+
+    let mut found = 0u64;
+    let mut resolved = 0u64;
+    for huddle in ledger.active() {
+        let counted = u64::try_from(huddle.contradictions.len()).unwrap_or(u64::MAX);
+        found = found.saturating_add(counted);
+    }
+    for record in ledger.closed() {
+        let Some(outcome) = &record.outcome else {
+            continue;
+        };
+        let resolved_count = u64::try_from(outcome.resolved_contradictions.len())
+            .unwrap_or(u64::MAX);
+        let unresolved_count = u64::try_from(outcome.unresolved_contradictions.len())
+            .unwrap_or(u64::MAX);
+        resolved = resolved.saturating_add(resolved_count);
+        found = found.saturating_add(resolved_count.saturating_add(unresolved_count));
+    }
+    metrics.insert(METRIC_HUDDLE_CONTRADICTIONS_FOUND.into(), found);
+    metrics.insert(METRIC_HUDDLE_CONTRADICTIONS_RESOLVED.into(), resolved);
+    metrics
 }
 
 pub fn spans(drive_id: &str, events: &[DriveEvent]) -> Vec<SpanNode> {
