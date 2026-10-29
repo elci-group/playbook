@@ -248,6 +248,8 @@ deterministic programme in `playbook-sim::huddle_study` and asserted by
 `cargo test -p playbook-sim --offline huddle_study`. Two scenarios run under
 all four regimes with an identical policy, plane, roster and drive loop; the
 regimes differ only in when a huddle may run and who attends.
+`playbook huddle-study` runs the full Phase 8 programme and prints the
+comparison table plus per-regime completion.
 
 Results (total synchronization-plus-drive tokens; completion):
 

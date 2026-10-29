@@ -171,10 +171,7 @@ fn huddle_scope_slug(scope: &HuddleScope) -> &'static str {
 /// the `spent` accumulator and the roster. Coherence debt, pre/post-huddle
 /// ytg velocity and rework-avoided estimates are recorded on no ledger
 /// record or event, so their keys are omitted rather than proxied.
-pub fn huddle_metrics(
-    events: &[DriveEvent],
-    ledger: &HuddleLedger,
-) -> BTreeMap<String, u64> {
+pub fn huddle_metrics(events: &[DriveEvent], ledger: &HuddleLedger) -> BTreeMap<String, u64> {
     let mut metrics = BTreeMap::new();
     metrics.insert(
         METRIC_HUDDLES_TOTAL.into(),
@@ -250,10 +247,10 @@ pub fn huddle_metrics(
         let Some(outcome) = &record.outcome else {
             continue;
         };
-        let resolved_count = u64::try_from(outcome.resolved_contradictions.len())
-            .unwrap_or(u64::MAX);
-        let unresolved_count = u64::try_from(outcome.unresolved_contradictions.len())
-            .unwrap_or(u64::MAX);
+        let resolved_count =
+            u64::try_from(outcome.resolved_contradictions.len()).unwrap_or(u64::MAX);
+        let unresolved_count =
+            u64::try_from(outcome.unresolved_contradictions.len()).unwrap_or(u64::MAX);
         resolved = resolved.saturating_add(resolved_count);
         found = found.saturating_add(resolved_count.saturating_add(unresolved_count));
     }
@@ -590,5 +587,266 @@ mod tests {
         assert_eq!(trace[3].name, "huddle_report");
         assert_eq!(trace[3].parent_span_id.as_deref(), Some("drive-1:huddle:2"));
         assert_eq!(trace[3].attributes["participant"], "validator");
+    }
+
+    #[test]
+    fn huddle_metrics_sums_the_event_log_and_is_deterministic() {
+        use playbook_core::{BarrierMode, HuddleBudget, HuddleId, PersonnelId};
+        use playbook_core::{EventId, EvidenceId};
+        use playbook_huddle::{
+            DisclosureProfile, HuddleCost, HuddleParticipant, HuddleRole, HuddleScope,
+            HuddleTrigger, HuddleTriggerKind,
+        };
+        let roster = |personnel: &str| HuddleParticipant {
+            personnel_id: PersonnelId::new(personnel).unwrap(),
+            role: HuddleRole::Contributor,
+            disclosure_profile: DisclosureProfile {
+                include_gates: true,
+                include_peer_reports: true,
+                include_strategic_state: false,
+                max_evidence_refs: 8,
+            },
+        };
+        let events = vec![
+            DriveEvent::HuddleRequested {
+                huddle_id: HuddleId::new("h-1").unwrap(),
+                scope: HuddleScope::Position,
+                trigger: HuddleTrigger {
+                    kind: HuddleTriggerKind::CoherenceDebt,
+                    reason_code: "state_divergence".into(),
+                    evidence_refs: vec![EvidenceId::new("e-1").unwrap()],
+                    originating_event: EventId::new("evt-1").unwrap(),
+                },
+                at_ms: 10,
+            },
+            DriveEvent::HuddleAdmitted {
+                huddle_id: HuddleId::new("h-1").unwrap(),
+                budget: HuddleBudget::zero(),
+                barrier: BarrierMode::Soft,
+                participants: vec![roster("worker"), roster("validator")],
+            },
+            DriveEvent::HuddleBudgetConsumed {
+                huddle_id: HuddleId::new("h-1").unwrap(),
+                cost: HuddleCost {
+                    tokens: 120,
+                    cost_microunits: 4_000,
+                    duration_ms: 250,
+                    rounds: 1,
+                },
+            },
+            DriveEvent::HuddleBudgetConsumed {
+                huddle_id: HuddleId::new("h-1").unwrap(),
+                cost: HuddleCost {
+                    tokens: 80,
+                    cost_microunits: 2_500,
+                    duration_ms: 750,
+                    rounds: 1,
+                },
+            },
+            DriveEvent::HuddleParticipantInvited {
+                huddle_id: HuddleId::new("h-1").unwrap(),
+                participant: roster("watcher"),
+            },
+            DriveEvent::HuddleParticipantInvited {
+                huddle_id: HuddleId::new("h-1").unwrap(),
+                participant: roster("worker"),
+            },
+            DriveEvent::HuddleRejected {
+                huddle_id: HuddleId::new("h-2").unwrap(),
+                reason_code: "budget_exhausted".into(),
+            },
+        ];
+        let first = huddle_metrics(&events, &HuddleLedger::empty());
+        let second = huddle_metrics(&events, &HuddleLedger::empty());
+        assert_eq!(first, second);
+        assert_eq!(first[METRIC_HUDDLES_TOTAL], 0);
+        assert_eq!(first[METRIC_HUDDLES_REJECTED_TOTAL], 0);
+        assert_eq!(first[METRIC_HUDDLE_TOKENS_TOTAL], 200);
+        assert_eq!(first[METRIC_HUDDLE_COST_TOTAL], 6_500);
+        assert_eq!(first[METRIC_HUDDLE_DURATION_MS], 1_000);
+        assert_eq!(first[METRIC_HUDDLE_PARTICIPANTS], 3);
+        assert!(!first.contains_key("position_huddles_total"));
+        for omitted in [
+            METRIC_COHERENCE_DEBT_BEFORE,
+            METRIC_COHERENCE_DEBT_AFTER,
+            METRIC_YTG_VELOCITY_PRE_HUDDLE,
+            METRIC_YTG_VELOCITY_POST_HUDDLE,
+            METRIC_REWORK_AVOIDED_ESTIMATE,
+        ] {
+            assert!(!first.contains_key(omitted));
+        }
+    }
+
+    #[test]
+    fn huddle_metrics_read_ledger_totals_scopes_and_contradictions() {
+        use playbook_core::{BarrierMode, Down, EventId, EvidenceId, HuddleBudget, HuddleId};
+        use playbook_huddle::{
+            fold_huddle, ClaimRef, Contradiction, ContradictionId, ContradictionResolution,
+            ContradictionSeverity, DisclosureProfile, DriveView, HuddleEvent, HuddleOutcome,
+            HuddleParticipant, HuddleRole, HuddleScope, HuddleTrigger, HuddleTriggerKind,
+            ResolutionState, SharedStateDelta,
+        };
+        let policy = playbook_policy::Policy::builtin();
+        let view = DriveView {
+            active: true,
+            down: Down::FirstDown,
+            ytg_milli: 10_000,
+            field_fingerprint: "field-a".into(),
+            evidence_ids: vec![EvidenceId::new("ev-1").unwrap()],
+        };
+        let budget = HuddleBudget {
+            max_tokens: 2_000,
+            max_cost_microunits: 200_000,
+            max_duration_ms: 5_000,
+            max_rounds: 2,
+            max_participants: 3,
+        };
+        let trigger = |origin: &str| HuddleTrigger {
+            kind: HuddleTriggerKind::Failure,
+            reason_code: "repeated_failed_play".into(),
+            evidence_refs: Vec::new(),
+            originating_event: EventId::new(origin).unwrap(),
+        };
+        let participant = |personnel: &str| HuddleParticipant {
+            personnel_id: playbook_core::PersonnelId::new(personnel).unwrap(),
+            role: HuddleRole::Contributor,
+            disclosure_profile: DisclosureProfile {
+                include_gates: true,
+                include_peer_reports: true,
+                include_strategic_state: false,
+                max_evidence_refs: 8,
+            },
+        };
+        let h1 = HuddleId::new("h-1").unwrap();
+        let h2 = HuddleId::new("h-2").unwrap();
+        let h3 = HuddleId::new("h-3").unwrap();
+        let ledger_events = vec![
+            HuddleEvent::Requested {
+                huddle_id: h1.clone(),
+                scope: HuddleScope::Position,
+                trigger: trigger("evt-1"),
+                at_ms: 1,
+            },
+            HuddleEvent::Rejected {
+                huddle_id: h1.clone(),
+                reason_code: "budget_exhausted".into(),
+            },
+            HuddleEvent::Requested {
+                huddle_id: h2.clone(),
+                scope: HuddleScope::Unit,
+                trigger: trigger("evt-2"),
+                at_ms: 2,
+            },
+            HuddleEvent::Admitted {
+                huddle_id: h2.clone(),
+                budget,
+                barrier: BarrierMode::Soft,
+                participants: vec![participant("agent-a")],
+            },
+            HuddleEvent::Opened {
+                huddle_id: h2.clone(),
+            },
+            HuddleEvent::ReportSubmitted {
+                huddle_id: h2.clone(),
+                report: playbook_huddle::HuddleReport {
+                    participant: playbook_core::PersonnelId::new("agent-a").unwrap(),
+                    verified_progress: Vec::new(),
+                    blockers: Vec::new(),
+                    changed_assumptions: Vec::new(),
+                    dependency_changes: Vec::new(),
+                    contradictions: Vec::new(),
+                    proposed_action: None,
+                    confidence_milli: 9_000,
+                },
+            },
+            HuddleEvent::ContradictionDetected {
+                huddle_id: h2.clone(),
+                contradiction: Contradiction {
+                    id: ContradictionId::new("con-1").unwrap(),
+                    subject: "gate readiness".into(),
+                    claims: vec![ClaimRef {
+                        personnel_id: playbook_core::PersonnelId::new("agent-a").unwrap(),
+                        statement: "gate is satisfied".into(),
+                        evidence_ref: None,
+                    }],
+                    severity: ContradictionSeverity::High,
+                },
+            },
+            HuddleEvent::OutcomeCommitted {
+                huddle_id: h2.clone(),
+                outcome: HuddleOutcome {
+                    huddle_id: h2.clone(),
+                    reconciled_state: SharedStateDelta {
+                        verified_evidence: Vec::new(),
+                        gate_snapshots: Vec::new(),
+                        assumptions: Vec::new(),
+                    },
+                    resolved_contradictions: vec![ContradictionResolution {
+                        contradiction_id: ContradictionId::new("con-1").unwrap(),
+                        state: ResolutionState::ResolvedBySupersession,
+                        evidence_ref: None,
+                        authority: None,
+                    }],
+                    unresolved_contradictions: Vec::new(),
+                    assignment_changes: Vec::new(),
+                    strategy_change: None,
+                    personnel_changes: Vec::new(),
+                    revised_ytg_milli: None,
+                    next_play: None,
+                    next_huddle_conditions: Vec::new(),
+                    escalated_to: None,
+                },
+            },
+            HuddleEvent::Requested {
+                huddle_id: h3.clone(),
+                scope: HuddleScope::Coordinator,
+                trigger: trigger("evt-3"),
+                at_ms: 3,
+            },
+            HuddleEvent::Admitted {
+                huddle_id: h3.clone(),
+                budget,
+                barrier: BarrierMode::Soft,
+                participants: vec![participant("agent-c")],
+            },
+            HuddleEvent::Opened {
+                huddle_id: h3.clone(),
+            },
+            HuddleEvent::ContradictionDetected {
+                huddle_id: h3.clone(),
+                contradiction: Contradiction {
+                    id: ContradictionId::new("con-2").unwrap(),
+                    subject: "interface".into(),
+                    claims: vec![ClaimRef {
+                        personnel_id: playbook_core::PersonnelId::new("agent-c").unwrap(),
+                        statement: "v0".into(),
+                        evidence_ref: None,
+                    }],
+                    severity: ContradictionSeverity::Medium,
+                },
+            },
+        ];
+        let mut ledger = HuddleLedger::empty();
+        fold_huddle(&mut ledger, &ledger_events, &view, &policy).unwrap();
+        let metrics = huddle_metrics(&[], &ledger);
+        assert_eq!(metrics, huddle_metrics(&[], &ledger));
+        assert_eq!(metrics[METRIC_HUDDLES_TOTAL], 3);
+        assert_eq!(metrics[METRIC_HUDDLES_REJECTED_TOTAL], 1);
+        assert_eq!(metrics[METRIC_HUDDLE_ESCALATIONS], 0);
+        assert_eq!(metrics["position_huddles_total"], 1);
+        assert_eq!(metrics["unit_huddles_total"], 1);
+        assert_eq!(metrics["coordinator_huddles_total"], 1);
+        assert_eq!(metrics[METRIC_HUDDLE_CONTRADICTIONS_FOUND], 2);
+        assert_eq!(metrics[METRIC_HUDDLE_CONTRADICTIONS_RESOLVED], 1);
+        assert_eq!(metrics[METRIC_HUDDLE_TOKENS_TOTAL], 0);
+        for omitted in [
+            METRIC_COHERENCE_DEBT_BEFORE,
+            METRIC_COHERENCE_DEBT_AFTER,
+            METRIC_YTG_VELOCITY_PRE_HUDDLE,
+            METRIC_YTG_VELOCITY_POST_HUDDLE,
+            METRIC_REWORK_AVOIDED_ESTIMATE,
+        ] {
+            assert!(!metrics.contains_key(omitted));
+        }
     }
 }
