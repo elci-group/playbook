@@ -82,6 +82,18 @@ pub struct RunReport {
     pub huddles_rejected: u32,
     pub contradictions: u32,
     pub coherence_gain: u32,
+    /// YTG milli removed between the first admitted huddle and the end of
+    /// the drive: the downstream gain a synchronization can claim credit
+    /// for. Zero when no huddle was admitted.
+    pub downstream_ytg_gain_milli: u32,
+    /// §24 `huddle_efficiency`: downstream YTG gain per kilo-token of
+    /// synchronization spend, in milli-YTG (`gain_milli * 1_000_000 /
+    /// huddle_tokens`). Zero when no huddle tokens were spent.
+    pub huddle_efficiency_milli: u64,
+    /// §24 `huddle_roi`: requested rework-avoided value over synchronization
+    /// cost, in per-mille (`admitted * predicted_rework_avoided * 1_000 /
+    /// huddle_cost_microunits`). Zero when no huddle cost was charged.
+    pub huddle_roi_per_mille: u64,
 }
 
 const MAX_STEPS: u32 = 40;
@@ -89,6 +101,9 @@ pub const STEP_CAP: u32 = MAX_STEPS;
 const REPORT_TOKENS: u64 = 150;
 const REPORT_COST_MICROUNITS: u64 = 15_000;
 const REPORT_DURATION_MS: u64 = 50;
+/// The request-side rework-avoided value every study huddle claims. The ROI
+/// measure divides its admitted sum by the synchronization cost.
+const REWORK_AVOIDED_PER_HUDDLE: u32 = 600;
 
 /// The scenario plane. `test.integration` fails until the drive executes a
 /// reconciled contract; every other operation succeeds. The plane models the
@@ -302,7 +317,7 @@ fn study_gates() -> Vec<playbook_core::Gate> {
 
 fn scenario_value() -> HuddleValue {
     HuddleValue {
-        predicted_rework_avoided: 600,
+        predicted_rework_avoided: REWORK_AVOIDED_PER_HUDDLE,
         expected_failure_reduction: 400,
         expected_coordination_gain: 100,
         expected_budget_preservation: 100,
@@ -346,6 +361,7 @@ struct HuddleTrackers {
     terminal_gates_before: usize,
     total_failures: u32,
     debt_before_first_huddle: Option<u32>,
+    ytg_at_first_huddle: Option<u32>,
     success_fired: bool,
 }
 
@@ -409,6 +425,9 @@ fn run_huddle(
         playbook_state::HuddleAdmission::Open(huddle_id) => huddle_id,
         playbook_state::HuddleAdmission::Refused { .. } => return false,
     };
+    if trackers.ytg_at_first_huddle.is_none() {
+        trackers.ytg_at_first_huddle = Some(authority.state().ytg_milli());
+    }
     let participants: Vec<_> = authority
         .state()
         .huddles()
@@ -527,6 +546,7 @@ pub fn run_once(config: &StudyConfig) -> RunReport {
         terminal_gates_before: 0,
         total_failures: 0,
         debt_before_first_huddle: None,
+        ytg_at_first_huddle: None,
         success_fired: false,
     };
     let mut pending_proposal: Option<String> = None;
@@ -765,6 +785,32 @@ fn report_of(
         .unwrap_or(0)
         .saturating_sub(debt_after);
     let ytg_removed = 10_000i64 - i64::from(authority.state().ytg_milli());
+    let huddle_cost_micros: u64 = log
+        .iter()
+        .map(|event| match event {
+            DriveEvent::HuddleBudgetConsumed { cost, .. } => cost.cost_microunits,
+            _ => 0,
+        })
+        .sum();
+    let admitted = log
+        .iter()
+        .filter(|event| matches!(event, DriveEvent::HuddleAdmitted { .. }))
+        .count() as u64;
+    let downstream_ytg_gain_milli = trackers
+        .ytg_at_first_huddle
+        .unwrap_or(0)
+        .saturating_sub(authority.state().ytg_milli());
+    let huddle_efficiency_milli = if huddle_tokens == 0 {
+        0
+    } else {
+        (u128::from(downstream_ytg_gain_milli) * 1_000_000 / u128::from(huddle_tokens)) as u64
+    };
+    let huddle_roi_per_mille = if huddle_cost_micros == 0 {
+        0
+    } else {
+        (u128::from(admitted) * u128::from(REWORK_AVOIDED_PER_HUDDLE) * 1_000
+            / u128::from(huddle_cost_micros)) as u64
+    };
     RunReport {
         regime: regime.name(),
         completed,
@@ -783,6 +829,9 @@ fn report_of(
         huddles_rejected: ledger.rejected_total(),
         contradictions,
         coherence_gain,
+        downstream_ytg_gain_milli,
+        huddle_efficiency_milli,
+        huddle_roi_per_mille,
     }
 }
 
@@ -886,12 +935,12 @@ pub fn phase_eight_study() -> Vec<ScenarioReport> {
 /// A fixed-width comparison table over the §24 measures.
 pub fn study_table(scenarios: &[ScenarioReport]) -> String {
     let mut text = String::from(
-        "scenario            regime                   completed terminal          steps plays fails rep_fail drive_tok huddle_tok total_tok\n",
+        "scenario            regime                   completed terminal          steps plays fails rep_fail drive_tok huddle_tok total_tok gain_milli eff_milli roi_pm\n",
     );
     for scenario in scenarios {
         for run in &scenario.runs {
             text.push_str(&format!(
-                "{:<19} {:<24} {:<9} {:<16} {:<5} {:<5} {:<5} {:<8} {:<9} {:<9} {}\n",
+                "{:<19} {:<24} {:<9} {:<16} {:<5} {:<5} {:<5} {:<8} {:<9} {:<9} {:<9} {:<9} {:<9} {}\n",
                 scenario.name,
                 run.regime,
                 run.completed,
@@ -903,6 +952,9 @@ pub fn study_table(scenarios: &[ScenarioReport]) -> String {
                 run.drive_tokens,
                 run.huddle_tokens,
                 run.total_tokens,
+                run.downstream_ytg_gain_milli,
+                run.huddle_efficiency_milli,
+                run.huddle_roi_per_mille,
             ));
         }
     }
@@ -952,6 +1004,21 @@ mod tests {
         assert!(a <= clean.run(HuddleRegime::Periodic).total_tokens);
         assert!(a < clean.run(HuddleRegime::FlatTriggered).total_tokens);
         assert!(a < clean.run(HuddleRegime::HierarchicalTriggered).total_tokens);
+        assert!(
+            flaky.run(HuddleRegime::Control).repeated_failed_plays
+                > flaky
+                    .run(HuddleRegime::HierarchicalTriggered)
+                    .repeated_failed_plays
+        );
+
+        // §24 efficiency and ROI: only regimes that synchronize carry them,
+        // and the steered reconciliation yields downstream gain.
+        assert_eq!(flaky.run(HuddleRegime::Control).huddle_efficiency_milli, 0);
+        assert_eq!(flaky.run(HuddleRegime::Control).huddle_roi_per_mille, 0);
+        let d_run = flaky.run(HuddleRegime::HierarchicalTriggered);
+        assert!(d_run.downstream_ytg_gain_milli > 0);
+        assert!(d_run.huddle_efficiency_milli > 0);
+        assert!(d_run.huddle_roi_per_mille > 0);
         assert!(
             flaky.run(HuddleRegime::Control).repeated_failed_plays
                 > flaky
