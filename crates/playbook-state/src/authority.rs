@@ -33,6 +33,10 @@ pub struct HuddleRequest {
     pub manual: bool,
     pub value: HuddleValue,
     pub candidates: Vec<ParticipantCandidate>,
+    /// The caller's coherence-debt reading at request time.
+    pub debt: u32,
+    /// The caller's estimated rework-avoided value.
+    pub rework_avoided: u32,
 }
 
 impl HuddleRequest {
@@ -47,6 +51,8 @@ impl HuddleRequest {
             evidence_refs: body.evidence_refs,
             manual: body.manual,
             value: body.value,
+            debt: body.debt,
+            rework_avoided: body.rework_avoided,
             candidates: roster
                 .iter()
                 .map(|person| ParticipantCandidate {
@@ -432,6 +438,8 @@ impl Authority {
             scope: request.scope,
             trigger: trigger.clone(),
             at_ms,
+            debt: request.debt,
+            rework_avoided: request.rework_avoided,
         })?;
         match decision {
             admission::AdmissionDecision::Admit { budget, barrier } => {
@@ -1682,6 +1690,8 @@ mod tests {
                 candidate("worker-b", 900),
                 candidate("model-a", 100),
             ],
+            debt: 0,
+            rework_avoided: 600,
         }
     }
 
@@ -1779,6 +1789,7 @@ mod tests {
                 reason: "weakest relevance on the failing play".into(),
             }],
             revised_ytg_milli: Some(authority.state().ytg_milli()),
+            debt_after: None,
             next_play: Some(PlayProposal {
                 operation: "test.unit".into(),
                 rationale: "unit coverage is the open dependency".into(),
@@ -1844,6 +1855,7 @@ mod tests {
             strategy_change: None,
             personnel_changes: Vec::new(),
             revised_ytg_milli: None,
+            debt_after: None,
             next_play: None,
             next_huddle_conditions: Vec::new(),
             escalated_to: None,
@@ -1967,6 +1979,7 @@ mod tests {
                 reason: "repeated failures under the fielded contract".into(),
             }],
             revised_ytg_milli: Some(ytg),
+            debt_after: None,
             next_play: None,
             next_huddle_conditions: Vec::new(),
             escalated_to: None,

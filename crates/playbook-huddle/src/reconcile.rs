@@ -204,6 +204,7 @@ pub fn forced_synthesis(huddle: &ActiveHuddle) -> HuddleOutcome {
         strategy_change: None,
         personnel_changes: Vec::new(),
         revised_ytg_milli: None,
+        debt_after: None,
         next_play: None,
         next_huddle_conditions: vec![crate::domain::HuddleCondition {
             kind: crate::domain::HuddleTriggerKind::CoherenceDebt,

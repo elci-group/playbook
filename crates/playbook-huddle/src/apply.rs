@@ -25,6 +25,8 @@ pub enum HuddleEvent {
         scope: HuddleScope,
         trigger: HuddleTrigger,
         at_ms: u64,
+        debt: u32,
+        rework_avoided: u32,
     },
     Rejected {
         huddle_id: HuddleId,
@@ -120,6 +122,8 @@ pub fn apply_huddle(
             scope,
             trigger,
             at_ms,
+            debt,
+            rework_avoided,
         } => {
             if !view.active {
                 return Err(PlaybookError::Closed);
@@ -146,6 +150,9 @@ pub fn apply_huddle(
                 partition: Vec::new(),
                 field_fingerprint: view.field_fingerprint.clone(),
                 at_ms: *at_ms,
+                debt_before: *debt,
+                ytg_milli_before: view.ytg_milli,
+                rework_avoided: *rework_avoided,
             });
             Ok(())
         }
@@ -391,7 +398,7 @@ pub fn apply_huddle(
             to_scope,
         } => {
             {
-                let (trigger, fingerprint, at_ms) = {
+                let (trigger, fingerprint, at_ms, debt_before, rework_avoided) = {
                     let huddle = ledger.active_mut(huddle_id)?;
                     if huddle.escalation.as_ref().map(|(scope, _)| scope) != Some(to_scope) {
                         return Err(refusal("no pending escalation to this scope"));
@@ -400,6 +407,8 @@ pub fn apply_huddle(
                         huddle.trigger.clone(),
                         huddle.field_fingerprint.clone(),
                         huddle.at_ms,
+                        huddle.debt_before,
+                        huddle.rework_avoided,
                     )
                 };
                 if ledger.known_id(new_huddle_id) {
@@ -433,6 +442,9 @@ pub fn apply_huddle(
                     partition: Vec::new(),
                     field_fingerprint: fingerprint,
                     at_ms,
+                    debt_before,
+                    ytg_milli_before: view.ytg_milli,
+                    rework_avoided,
                 });
             }
             Ok(())
@@ -709,6 +721,7 @@ mod tests {
             strategy_change: None,
             personnel_changes: Vec::new(),
             revised_ytg_milli: None,
+            debt_after: None,
             next_play: None,
             next_huddle_conditions: Vec::new(),
             escalated_to: None,
@@ -725,6 +738,8 @@ mod tests {
                     scope: HuddleScope::Position,
                     trigger: trigger(),
                     at_ms: 1,
+                    debt: 0,
+                    rework_avoided: 0,
                 },
                 HuddleEvent::Admitted {
                     huddle_id: huddle_id.clone(),
@@ -1055,6 +1070,8 @@ mod tests {
             scope: HuddleScope::Unit,
             trigger: bare_trigger,
             at_ms: 2,
+            debt: 0,
+            rework_avoided: 0,
         };
         apply_huddle(&mut ledger, &second, &view(), &policy()).unwrap();
         let admit = HuddleEvent::Admitted {
@@ -1240,6 +1257,8 @@ mod tests {
             scope: HuddleScope::Position,
             trigger: trigger(),
             at_ms: 3,
+            debt: 0,
+            rework_avoided: 0,
         };
         assert_eq!(
             apply_huddle(&mut ledger, &again, &view(), &policy()).unwrap_err(),
@@ -1252,6 +1271,8 @@ mod tests {
             scope: HuddleScope::Unit,
             trigger: trigger(),
             at_ms: 4,
+            debt: 0,
+            rework_avoided: 0,
         };
         apply_huddle(&mut ledger, &other_scope, &view(), &policy()).unwrap();
         assert_eq!(ledger.active().len(), 2);

@@ -291,6 +291,8 @@ fn schemas_name_the_contract_fields() {
             context_cost: 50,
             opportunity_cost: 0,
         },
+        debt: 400,
+        rework_avoided: 600,
     })
     .unwrap();
     let huddle_report = serde_json::to_value(playbook_huddle::HuddleReport {
@@ -366,6 +368,7 @@ fn schemas_name_the_contract_fields() {
             reason: "context exhausted".into(),
         }],
         revised_ytg_milli: Some(3_000),
+        debt_after: Some(320),
         next_play: None,
         next_huddle_conditions: vec![playbook_huddle::HuddleCondition {
             kind: playbook_huddle::HuddleTriggerKind::Failure,

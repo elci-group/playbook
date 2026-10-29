@@ -1155,7 +1155,9 @@ mod tests {
             "reason_code": "repeated_failed_play",
             "evidence_refs": [],
             "manual": false,
-            "value": huddle_value()
+            "value": huddle_value(),
+            "debt": 400,
+            "rework_avoided": 600
         })
     }
 

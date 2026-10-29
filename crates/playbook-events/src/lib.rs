@@ -138,6 +138,8 @@ pub enum DriveEvent {
         scope: HuddleScope,
         trigger: HuddleTrigger,
         at_ms: u64,
+        debt: u32,
+        rework_avoided: u32,
     },
     HuddleAdmitted {
         huddle_id: HuddleId,

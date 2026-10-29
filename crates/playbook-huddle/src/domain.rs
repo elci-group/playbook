@@ -340,6 +340,10 @@ pub struct HuddleRequestBody {
     pub evidence_refs: Vec<EvidenceId>,
     pub manual: bool,
     pub value: crate::admission::HuddleValue,
+    /// The caller's coherence-debt reading at request time.
+    pub debt: u32,
+    /// The caller's estimated rework-avoided value for this huddle.
+    pub rework_avoided: u32,
 }
 
 /// The minimum sufficient shared state a huddle agrees on. It records which
@@ -371,6 +375,9 @@ pub struct HuddleOutcome {
     pub strategy_change: Option<StrategyChange>,
     pub personnel_changes: Vec<PersonnelChange>,
     pub revised_ytg_milli: Option<u32>,
+    /// The requester's coherence-debt reading after reconciliation, when one
+    /// was measured. The authority journals it; it never computes it.
+    pub debt_after: Option<u32>,
     pub next_play: Option<PlayProposal>,
     pub next_huddle_conditions: Vec<HuddleCondition>,
     pub escalated_to: Option<HuddleScope>,
@@ -425,6 +432,12 @@ pub struct ActiveHuddle {
     pub partition: Vec<String>,
     pub field_fingerprint: String,
     pub at_ms: u64,
+    /// The requester's coherence-debt reading at request time.
+    pub debt_before: u32,
+    /// YTG milli at request time, read from the drive view.
+    pub ytg_milli_before: u32,
+    /// The request's estimated rework-avoided value.
+    pub rework_avoided: u32,
 }
 
 impl ActiveHuddle {
@@ -465,6 +478,9 @@ pub struct HuddleRecord {
     pub reason_code: String,
     pub field_fingerprint: String,
     pub outcome: Option<HuddleOutcome>,
+    pub debt_before: u32,
+    pub ytg_milli_before: u32,
+    pub rework_avoided: u32,
 }
 
 /// Event-sourced coherence state for one drive. The fold reconstructs
@@ -582,6 +598,9 @@ impl HuddleLedger {
             reason_code,
             field_fingerprint: huddle.field_fingerprint,
             outcome,
+            debt_before: huddle.debt_before,
+            ytg_milli_before: huddle.ytg_milli_before,
+            rework_avoided: huddle.rework_avoided,
         });
         Ok(())
     }

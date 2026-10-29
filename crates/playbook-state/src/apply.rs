@@ -717,11 +717,15 @@ pub(crate) fn project_huddle(event: &DriveEvent) -> Option<playbook_huddle::Hudd
             scope,
             trigger,
             at_ms,
+            debt,
+            rework_avoided,
         } => playbook_huddle::HuddleEvent::Requested {
             huddle_id: huddle_id.clone(),
             scope: *scope,
             trigger: trigger.clone(),
             at_ms: *at_ms,
+            debt: *debt,
+            rework_avoided: *rework_avoided,
         },
         DriveEvent::HuddleRejected {
             huddle_id,

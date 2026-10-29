@@ -233,6 +233,9 @@ mod tests {
             partition: Vec::new(),
             field_fingerprint: "field-a".into(),
             at_ms: 1,
+            debt_before: 0,
+            ytg_milli_before: 0,
+            rework_avoided: 0,
         });
         book.close_active(
             &playbook_core::HuddleId::new("h-1").unwrap(),

@@ -112,6 +112,8 @@ fn request(scope: HuddleScope, kind: HuddleTriggerKind, reason: &str) -> HuddleR
             candidate("worker-b", 900),
             candidate("model-a", 100),
         ],
+        debt: 0,
+        rework_avoided: 600,
     }
 }
 
@@ -159,6 +161,7 @@ fn empty_outcome(huddle_id: &HuddleId) -> HuddleOutcome {
         strategy_change: None,
         personnel_changes: Vec::new(),
         revised_ytg_milli: None,
+        debt_after: None,
         next_play: None,
         next_huddle_conditions: Vec::new(),
         escalated_to: None,
@@ -321,6 +324,8 @@ fn coordinator_fourth_down() -> Vec<DriveEvent> {
             candidate("worker-b", 700),
             candidate("model-a", 100),
         ],
+        debt: 0,
+        rework_avoided: 600,
     };
     let HuddleAdmission::Open(huddle_id) = authority.open_huddle(huddle_request, 2_000).unwrap()
     else {

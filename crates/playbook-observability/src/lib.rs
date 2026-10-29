@@ -168,9 +168,15 @@ fn huddle_scope_slug(scope: &HuddleScope) -> &'static str {
 /// survived admission, so refused or replayed events cannot inflate them.
 /// Cost sums come from `HuddleBudgetConsumed` events and participants from
 /// admission and invitation events, because closed ledger records drop both
-/// the `spent` accumulator and the roster. Coherence debt, pre/post-huddle
-/// ytg velocity and rework-avoided estimates are recorded on no ledger
-/// record or event, so their keys are omitted rather than proxied.
+/// the `spent` accumulator and the roster. `coherence_debt_before` is the
+/// latest closed record's request-time debt reading and `coherence_debt_after`
+/// its outcome's post-reconciliation reading when one was measured; both keys
+/// are omitted with no closed records. `rework_avoided_estimate` sums the
+/// request-time estimate over closed records: closed records carry the
+/// requested estimate through closure, so the sum covers every closed huddle
+/// rather than only outcome-measured rework. Pre/post-huddle ytg velocity is
+/// still recorded on no ledger record or event, so its keys are omitted
+/// rather than proxied.
 pub fn huddle_metrics(events: &[DriveEvent], ledger: &HuddleLedger) -> BTreeMap<String, u64> {
     let mut metrics = BTreeMap::new();
     metrics.insert(
@@ -256,6 +262,28 @@ pub fn huddle_metrics(events: &[DriveEvent], ledger: &HuddleLedger) -> BTreeMap<
     }
     metrics.insert(METRIC_HUDDLE_CONTRADICTIONS_FOUND.into(), found);
     metrics.insert(METRIC_HUDDLE_CONTRADICTIONS_RESOLVED.into(), resolved);
+
+    let closed = ledger.closed();
+    if let Some(record) = closed.last() {
+        metrics.insert(
+            METRIC_COHERENCE_DEBT_BEFORE.into(),
+            u64::from(record.debt_before),
+        );
+        if let Some(debt_after) = record
+            .outcome
+            .as_ref()
+            .and_then(|outcome| outcome.debt_after)
+        {
+            metrics.insert(METRIC_COHERENCE_DEBT_AFTER.into(), u64::from(debt_after));
+        }
+    }
+    if !closed.is_empty() {
+        let mut rework = 0u64;
+        for record in closed {
+            rework = rework.saturating_add(u64::from(record.rework_avoided));
+        }
+        metrics.insert(METRIC_REWORK_AVOIDED_ESTIMATE.into(), rework);
+    }
     metrics
 }
 
@@ -452,6 +480,8 @@ mod tests {
                 scope: HuddleScope::Position,
                 trigger,
                 at_ms: 10,
+                debt: 0,
+                rework_avoided: 0,
             },
             DriveEvent::HuddleAdmitted {
                 huddle_id: huddle_id.clone(),
@@ -500,6 +530,7 @@ mod tests {
                     strategy_change: None,
                     personnel_changes: Vec::new(),
                     revised_ytg_milli: None,
+                    debt_after: None,
                     next_play: None,
                     next_huddle_conditions: Vec::new(),
                     escalated_to: None,
@@ -554,6 +585,8 @@ mod tests {
                     originating_event: EventId::new("evt-2").unwrap(),
                 },
                 at_ms: 5,
+                debt: 0,
+                rework_avoided: 0,
             },
             DriveEvent::HuddleAdmitted {
                 huddle_id: huddle_id.clone(),
@@ -618,6 +651,8 @@ mod tests {
                     originating_event: EventId::new("evt-1").unwrap(),
                 },
                 at_ms: 10,
+                debt: 0,
+                rework_avoided: 0,
             },
             DriveEvent::HuddleAdmitted {
                 huddle_id: HuddleId::new("h-1").unwrap(),
@@ -726,6 +761,8 @@ mod tests {
                 scope: HuddleScope::Position,
                 trigger: trigger("evt-1"),
                 at_ms: 1,
+                debt: 0,
+                rework_avoided: 0,
             },
             HuddleEvent::Rejected {
                 huddle_id: h1.clone(),
@@ -736,6 +773,8 @@ mod tests {
                 scope: HuddleScope::Unit,
                 trigger: trigger("evt-2"),
                 at_ms: 2,
+                debt: 90,
+                rework_avoided: 45,
             },
             HuddleEvent::Admitted {
                 huddle_id: h2.clone(),
@@ -792,6 +831,7 @@ mod tests {
                     strategy_change: None,
                     personnel_changes: Vec::new(),
                     revised_ytg_milli: None,
+                    debt_after: Some(120),
                     next_play: None,
                     next_huddle_conditions: Vec::new(),
                     escalated_to: None,
@@ -802,6 +842,8 @@ mod tests {
                 scope: HuddleScope::Coordinator,
                 trigger: trigger("evt-3"),
                 at_ms: 3,
+                debt: 0,
+                rework_avoided: 0,
             },
             HuddleEvent::Admitted {
                 huddle_id: h3.clone(),
@@ -839,12 +881,12 @@ mod tests {
         assert_eq!(metrics[METRIC_HUDDLE_CONTRADICTIONS_FOUND], 2);
         assert_eq!(metrics[METRIC_HUDDLE_CONTRADICTIONS_RESOLVED], 1);
         assert_eq!(metrics[METRIC_HUDDLE_TOKENS_TOTAL], 0);
+        assert_eq!(metrics[METRIC_COHERENCE_DEBT_BEFORE], 90);
+        assert_eq!(metrics[METRIC_COHERENCE_DEBT_AFTER], 120);
+        assert_eq!(metrics[METRIC_REWORK_AVOIDED_ESTIMATE], 45);
         for omitted in [
-            METRIC_COHERENCE_DEBT_BEFORE,
-            METRIC_COHERENCE_DEBT_AFTER,
             METRIC_YTG_VELOCITY_PRE_HUDDLE,
             METRIC_YTG_VELOCITY_POST_HUDDLE,
-            METRIC_REWORK_AVOIDED_ESTIMATE,
         ] {
             assert!(!metrics.contains_key(omitted));
         }

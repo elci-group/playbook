@@ -4,26 +4,65 @@
   "title": "Huddle outcome",
   "type": "object",
   "additionalProperties": false,
-  "required": ["huddle_id", "reconciled_state", "resolved_contradictions", "unresolved_contradictions", "assignment_changes", "strategy_change", "personnel_changes", "revised_ytg_milli", "next_play", "next_huddle_conditions", "escalated_to"],
+  "required": [
+    "huddle_id",
+    "reconciled_state",
+    "resolved_contradictions",
+    "unresolved_contradictions",
+    "assignment_changes",
+    "strategy_change",
+    "personnel_changes",
+    "revised_ytg_milli",
+    "debt_after",
+    "next_play",
+    "next_huddle_conditions",
+    "escalated_to"
+  ],
   "properties": {
-    "huddle_id": { "type": "string" },
+    "huddle_id": {
+      "type": "string"
+    },
     "reconciled_state": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["verified_evidence", "gate_snapshots", "assumptions"],
+      "required": [
+        "verified_evidence",
+        "gate_snapshots",
+        "assumptions"
+      ],
       "properties": {
-        "verified_evidence": { "type": "array", "items": { "type": "string" } },
+        "verified_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "gate_snapshots": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["gate_id", "weight_ppm", "satisfaction_ppm", "state"],
+            "required": [
+              "gate_id",
+              "weight_ppm",
+              "satisfaction_ppm",
+              "state"
+            ],
             "properties": {
-              "gate_id": { "type": "string" },
-              "weight_ppm": { "type": "integer", "minimum": 0 },
-              "satisfaction_ppm": { "type": "integer", "minimum": 0 },
-              "state": { "type": "string" }
+              "gate_id": {
+                "type": "string"
+              },
+              "weight_ppm": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "satisfaction_ppm": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "state": {
+                "type": "string"
+              }
             }
           }
         },
@@ -32,12 +71,28 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["subject", "previous", "current", "evidence_ref"],
+            "required": [
+              "subject",
+              "previous",
+              "current",
+              "evidence_ref"
+            ],
             "properties": {
-              "subject": { "type": "string" },
-              "previous": { "type": "string" },
-              "current": { "type": "string" },
-              "evidence_ref": { "type": ["string", "null"] }
+              "subject": {
+                "type": "string"
+              },
+              "previous": {
+                "type": "string"
+              },
+              "current": {
+                "type": "string"
+              },
+              "evidence_ref": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
             }
           }
         }
@@ -48,12 +103,37 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["contradiction_id", "state", "evidence_ref", "authority"],
+        "required": [
+          "contradiction_id",
+          "state",
+          "evidence_ref",
+          "authority"
+        ],
         "properties": {
-          "contradiction_id": { "type": "string" },
-          "state": { "enum": ["resolved_by_evidence", "resolved_by_supersession", "resolved_by_authority", "deferred", "unresolved_blocking"] },
-          "evidence_ref": { "type": ["string", "null"] },
-          "authority": { "type": ["string", "null"] }
+          "contradiction_id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "resolved_by_evidence",
+              "resolved_by_supersession",
+              "resolved_by_authority",
+              "deferred",
+              "unresolved_blocking"
+            ]
+          },
+          "evidence_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "authority": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
@@ -62,24 +142,53 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "subject", "claims", "severity"],
+        "required": [
+          "id",
+          "subject",
+          "claims",
+          "severity"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "subject": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
           "claims": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["personnel_id", "statement", "evidence_ref"],
+              "required": [
+                "personnel_id",
+                "statement",
+                "evidence_ref"
+              ],
               "properties": {
-                "personnel_id": { "type": "string" },
-                "statement": { "type": "string" },
-                "evidence_ref": { "type": ["string", "null"] }
+                "personnel_id": {
+                  "type": "string"
+                },
+                "statement": {
+                  "type": "string"
+                },
+                "evidence_ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
               }
             }
           },
-          "severity": { "enum": ["low", "medium", "high", "critical"] }
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          }
         }
       }
     },
@@ -88,23 +197,52 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["personnel_id", "from", "to"],
+        "required": [
+          "personnel_id",
+          "from",
+          "to"
+        ],
         "properties": {
-          "personnel_id": { "type": "string" },
-          "from": { "type": ["string", "null"] },
-          "to": { "type": "string" }
+          "personnel_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to": {
+            "type": "string"
+          }
         }
       }
     },
     "strategy_change": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": false,
-      "required": ["subject", "from", "to", "justification"],
+      "required": [
+        "subject",
+        "from",
+        "to",
+        "justification"
+      ],
       "properties": {
-        "subject": { "type": "string" },
-        "from": { "type": "string" },
-        "to": { "type": "string" },
-        "justification": { "type": "string" }
+        "subject": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "justification": {
+          "type": "string"
+        }
       }
     },
     "personnel_changes": {
@@ -112,23 +250,59 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["personnel_id", "action", "reason"],
+        "required": [
+          "personnel_id",
+          "action",
+          "reason"
+        ],
         "properties": {
-          "personnel_id": { "type": "string" },
-          "action": { "enum": ["substitution_recommended", "release", "reassign", "rest"] },
-          "reason": { "type": "string" }
+          "personnel_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "substitution_recommended",
+              "release",
+              "reassign",
+              "rest"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
         }
       }
     },
-    "revised_ytg_milli": { "type": ["integer", "null"] },
+    "revised_ytg_milli": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
     "next_play": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": false,
-      "required": ["operation", "rationale", "target_gate"],
+      "required": [
+        "operation",
+        "rationale",
+        "target_gate"
+      ],
       "properties": {
-        "operation": { "type": "string" },
-        "rationale": { "type": "string" },
-        "target_gate": { "type": ["string", "null"] }
+        "operation": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "target_gate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "next_huddle_conditions": {
@@ -136,13 +310,43 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "reason_code"],
+        "required": [
+          "kind",
+          "reason_code"
+        ],
         "properties": {
-          "kind": { "enum": ["success", "failure", "strategic", "coherence_debt", "manual_authority"] },
-          "reason_code": { "type": "string" }
+          "kind": {
+            "enum": [
+              "success",
+              "failure",
+              "strategic",
+              "coherence_debt",
+              "manual_authority"
+            ]
+          },
+          "reason_code": {
+            "type": "string"
+          }
         }
       }
     },
-    "escalated_to": { "enum": ["position", "unit", "coordinator", "team", "franchise", null] }
+    "escalated_to": {
+      "enum": [
+        "position",
+        "unit",
+        "coordinator",
+        "team",
+        "franchise",
+        null
+      ]
+    },
+    "debt_after": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "the requester's coherence-debt reading after reconciliation, when measured",
+      "minimum": 0
+    }
   }
 }

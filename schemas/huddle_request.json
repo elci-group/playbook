@@ -4,27 +4,104 @@
   "title": "Huddle request body",
   "type": "object",
   "additionalProperties": false,
-  "required": ["scope", "trigger_kind", "reason_code", "evidence_refs", "manual", "value"],
+  "required": [
+    "scope",
+    "trigger_kind",
+    "reason_code",
+    "evidence_refs",
+    "manual",
+    "value",
+    "debt",
+    "rework_avoided"
+  ],
   "properties": {
-    "scope": { "enum": ["position", "unit", "coordinator", "team", "franchise"] },
-    "trigger_kind": { "enum": ["success", "failure", "strategic", "coherence_debt", "manual_authority"] },
-    "reason_code": { "type": "string" },
-    "evidence_refs": { "type": "array", "items": { "type": "string" } },
-    "manual": { "type": "boolean" },
+    "scope": {
+      "enum": [
+        "position",
+        "unit",
+        "coordinator",
+        "team",
+        "franchise"
+      ]
+    },
+    "trigger_kind": {
+      "enum": [
+        "success",
+        "failure",
+        "strategic",
+        "coherence_debt",
+        "manual_authority"
+      ]
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "manual": {
+      "type": "boolean"
+    },
     "value": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["predicted_rework_avoided", "expected_failure_reduction", "expected_coordination_gain", "expected_budget_preservation", "inference_cost", "latency_cost", "context_cost", "opportunity_cost"],
+      "required": [
+        "predicted_rework_avoided",
+        "expected_failure_reduction",
+        "expected_coordination_gain",
+        "expected_budget_preservation",
+        "inference_cost",
+        "latency_cost",
+        "context_cost",
+        "opportunity_cost"
+      ],
       "properties": {
-        "predicted_rework_avoided": { "type": "integer", "minimum": 0 },
-        "expected_failure_reduction": { "type": "integer", "minimum": 0 },
-        "expected_coordination_gain": { "type": "integer", "minimum": 0 },
-        "expected_budget_preservation": { "type": "integer", "minimum": 0 },
-        "inference_cost": { "type": "integer", "minimum": 0 },
-        "latency_cost": { "type": "integer", "minimum": 0 },
-        "context_cost": { "type": "integer", "minimum": 0 },
-        "opportunity_cost": { "type": "integer", "minimum": 0 }
+        "predicted_rework_avoided": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_failure_reduction": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_coordination_gain": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_budget_preservation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inference_cost": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latency_cost": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context_cost": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "opportunity_cost": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
+    },
+    "debt": {
+      "type": "integer",
+      "description": "the caller's coherence-debt reading at request time",
+      "minimum": 0
+    },
+    "rework_avoided": {
+      "type": "integer",
+      "description": "the caller's estimated rework-avoided value for this huddle",
+      "minimum": 0
     }
   }
 }

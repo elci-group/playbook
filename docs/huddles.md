@@ -113,7 +113,7 @@ fold time.
 
 | Event tag | Records |
 | --- | --- |
-| `huddle_requested` | huddle id, scope, trigger, timestamp |
+| `huddle_requested` | huddle id, scope, trigger, timestamp, coherence debt, rework-avoided estimate |
 | `huddle_admitted` | budget envelope, barrier mode, participants |
 | `huddle_rejected` | admission refusal reason code |
 | `huddle_opened` | report collection begins |
@@ -121,7 +121,7 @@ fold time.
 | `huddle_report_submitted` | one normalized participant report |
 | `huddle_contradiction_detected` | one explicit contradiction object |
 | `huddle_budget_consumed` | one consumption delta |
-| `huddle_outcome_committed` | the reconciled outcome |
+| `huddle_outcome_committed` | the reconciled outcome, with the measured post-reconciliation debt |
 | `huddle_escalation_requested` | target scope and justification |
 | `huddle_escalated` | new huddle id and target scope |
 | `huddle_closed` | terminal reason code |
@@ -236,11 +236,18 @@ the deterministic Rust scorer.
 
 ## Observability
 
-Huddles report: `huddles_total`, `huddles_rejected_total`,
-`huddle_tokens_total`, `huddle_cost_total`, `huddle_duration_ms`,
-`huddle_participants`, `huddle_escalations`, `huddle_contradictions_found`,
-`huddle_contradictions_resolved`, `coherence_debt_before` and
-`coherence_debt_after`.
+Huddles report: `huddles_total`, `huddles_by_scope` (one `*_huddles_total`
+key per scope), `huddles_rejected_total`, `huddle_tokens_total`,
+`huddle_cost_total`, `huddle_duration_ms`, `huddle_participants`,
+`huddle_escalations`, `huddle_contradictions_found`,
+`huddle_contradictions_resolved`, `coherence_debt_before`,
+`coherence_debt_after` and `rework_avoided_estimate`. The debt and
+rework-avoided measures are recorded at the source — a request journals the
+caller's coherence-debt reading and rework-avoided estimate, the outcome
+journals the measured post-reconciliation debt — so the metrics fold from
+the journal alone. `ytg_velocity_pre_huddle` and `ytg_velocity_post_huddle`
+stay unreported until a velocity window convention exists; they are never
+proxied.
 
 Comparative validation — no-huddle versus periodic versus flat-triggered
 versus hierarchical-triggered synchronization — is implemented as a

@@ -404,6 +404,7 @@ fn run_huddle(
         .collect();
     let failure_refs: Vec<_> = authority.state().failure_refs().to_vec();
     let last_failed_operation = trailing_failure_operation(authority.log());
+    let debt_now = debt_proxy(trackers.total_failures, 0);
     let request = HuddleRequest {
         scope,
         trigger_kind: kind,
@@ -412,8 +413,10 @@ fn run_huddle(
         manual: false,
         value: scenario_value(),
         candidates,
+        debt: debt_now,
+        rework_avoided: REWORK_AVOIDED_PER_HUDDLE,
     };
-    let debt_before = debt_proxy(trackers.total_failures, 0);
+    let debt_before = debt_now;
     if trackers.debt_before_first_huddle.is_none() {
         trackers.debt_before_first_huddle = Some(debt_before);
     }
@@ -485,6 +488,7 @@ fn run_huddle(
         strategy_change: None,
         personnel_changes: Vec::new(),
         revised_ytg_milli: Some(authority.state().ytg_milli()),
+        debt_after: Some(debt_now),
         next_play: None,
         next_huddle_conditions: Vec::new(),
         escalated_to: None,

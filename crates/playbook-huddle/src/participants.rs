@@ -304,6 +304,9 @@ mod tests {
             partition: Vec::new(),
             field_fingerprint: "f".into(),
             at_ms: 1,
+            debt_before: 0,
+            ytg_milli_before: 0,
+            rework_avoided: 0,
         };
         let weak = HuddleParticipant {
             personnel_id: PersonnelId::new("weak-model").unwrap(),
