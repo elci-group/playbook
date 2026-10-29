@@ -199,3 +199,13 @@ Its contract is [franchise.md](franchise.md). Franchise-managed drives belong
 to that registry and use its shared cap, roster and write-ahead store. Legacy
 `/v1/drives` routes continue to describe standalone drives and cannot dispatch
 or mutate a franchise-managed drive.
+
+## Huddle extension
+
+The service also hosts huddles on each drive at `/v1/drives/{id}/huddles`:
+request, list, inspect, report, commit and escalate. Their contract is
+[huddles.md](huddles.md). The six huddle routes live under the drive's own
+scope and serve debugging and external orchestration; autonomous execution
+does not require them. Huddle events journal through the same write-ahead
+sink as every drive event, so a huddle response implies its events are on
+disk. The legacy drive routes cannot touch huddle-managed ledger state.

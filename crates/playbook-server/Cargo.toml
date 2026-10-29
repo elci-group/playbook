@@ -13,19 +13,20 @@ name = "playbook-server"
 path = "src/main.rs"
 
 [dependencies]
+playbook-core.workspace = true
+playbook-elci.workspace = true
+playbook-events.workspace = true
 playbook-front-office.workspace = true
 playbook-franchise.workspace = true
-serde.workspace = true
-playbook-core.workspace = true
-playbook-policy.workspace = true
-playbook-state.workspace = true
-playbook-observability.workspace = true
-serde_json.workspace = true
-playbook-events.workspace = true
-playbook-elci.workspace = true
+playbook-huddle.workspace = true
 playbook-journal.workspace = true
-playbook-sim.workspace = true
+playbook-observability.workspace = true
 playbook-otlp.workspace = true
+playbook-policy.workspace = true
+playbook-sim.workspace = true
+playbook-state.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

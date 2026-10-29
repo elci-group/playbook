@@ -9,6 +9,7 @@ description = "ELCI capability-plane contract and a scripted fixture plane."
 
 [dependencies]
 playbook-core.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 
 [lints]

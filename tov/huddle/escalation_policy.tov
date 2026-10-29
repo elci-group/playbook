@@ -1,0 +1,41 @@
+export function justified(hasHighContradiction: bool, debt: int): bool {
+  if (hasHighContradiction) {
+    return true
+  }
+  return debt >= 600
+}
+
+export function targetRank(rank: int, manual: bool): int {
+  if (rank >= 4) {
+    return -1
+  }
+  const next = rank + 1
+  if (next === 4 && !manual) {
+    return -1
+  }
+  return next
+}
+
+function main(): int {
+  console.log(justified(true, 0))
+  console.log(justified(false, 600))
+  console.log(targetRank(1, false))
+  console.log(targetRank(3, true))
+  console.log(targetRank(4, true))
+  return 0
+}
+
+test("escalation needs a high contradiction or coordinator-band debt", () => {
+  expect(justified(false, 0)).toBe(false)
+  expect(justified(true, 0)).toBe(true)
+  expect(justified(false, 600)).toBe(true)
+  expect(justified(false, 599)).toBe(false)
+})
+
+test("the target is one scope up and franchise needs manual authority", () => {
+  expect(targetRank(0, false)).toBe(1)
+  expect(targetRank(2, false)).toBe(3)
+  expect(targetRank(3, false)).toBe(-1)
+  expect(targetRank(3, true)).toBe(4)
+  expect(targetRank(4, true)).toBe(-1)
+})

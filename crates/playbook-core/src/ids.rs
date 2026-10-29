@@ -45,3 +45,5 @@ id_type!(CapabilityId);
 id_type!(PersonnelId);
 id_type!(EvidenceId);
 id_type!(ArtefactId);
+id_type!(HuddleId);
+id_type!(EventId);

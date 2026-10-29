@@ -9,6 +9,7 @@ description = "Immutable drive events. Current state is a fold of this log."
 
 [dependencies]
 playbook-core.workspace = true
+playbook-huddle.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

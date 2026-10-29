@@ -1,0 +1,77 @@
+export type HuddleValue = {
+  predicted_rework_avoided: int
+  expected_failure_reduction: int
+  expected_coordination_gain: int
+  expected_budget_preservation: int
+  inference_cost: int
+  latency_cost: int
+  context_cost: int
+  opportunity_cost: int
+}
+
+function clampPerMille(value: int): int {
+  let capped = value
+  if (capped > 1000) {
+    capped = 1000
+  }
+  return capped
+}
+
+export function expectedValue(value: HuddleValue): int {
+  const gains = clampPerMille(value.predicted_rework_avoided)
+    + clampPerMille(value.expected_failure_reduction)
+    + clampPerMille(value.expected_coordination_gain)
+    + clampPerMille(value.expected_budget_preservation)
+  const costs = clampPerMille(value.inference_cost)
+    + clampPerMille(value.latency_cost)
+    + clampPerMille(value.context_cost)
+    + clampPerMille(value.opportunity_cost)
+  return gains - costs
+}
+
+export function admitted(ev: int, minimum: int, bypass: bool): bool {
+  if (bypass) {
+    return true
+  }
+  return ev > minimum
+}
+
+function valuable(): HuddleValue {
+  return {
+    predicted_rework_avoided: 600,
+    expected_failure_reduction: 300,
+    expected_coordination_gain: 200,
+    expected_budget_preservation: 100,
+    inference_cost: 100,
+    latency_cost: 50,
+    context_cost: 50,
+    opportunity_cost: 0,
+  }
+}
+
+function main(): int {
+  console.log(expectedValue(valuable()))
+  console.log(admitted(expectedValue(valuable()), 0, false))
+  return 0
+}
+
+test("expected value subtracts clamped costs from clamped gains", () => {
+  expect(expectedValue(valuable())).toBe(1000)
+  const cheap: HuddleValue = {
+    predicted_rework_avoided: 50,
+    expected_failure_reduction: 300,
+    expected_coordination_gain: 200,
+    expected_budget_preservation: 100,
+    inference_cost: 100,
+    latency_cost: 50,
+    context_cost: 50,
+    opportunity_cost: 0,
+  }
+  expect(expectedValue(cheap)).toBe(450)
+})
+
+test("admission needs strictly positive headroom unless bypassed", () => {
+  expect(admitted(1000, 0, false)).toBe(true)
+  expect(admitted(0, 0, false)).toBe(false)
+  expect(admitted(-5, 0, true)).toBe(true)
+})

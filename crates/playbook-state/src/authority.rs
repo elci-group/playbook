@@ -4,16 +4,74 @@
 //! mutate the drive struct themselves.
 
 use playbook_core::{
-    DecisionRecord, Disposition, Down, DriveBudget, DriveId, Evidence, Gate, Personnel,
-    PlayExecution, PlayId, PlaybookError, RetryPolicy, TaskContract,
+    DecisionRecord, Disposition, Down, DriveBudget, DriveId, EventId, Evidence, EvidenceId, Gate,
+    HuddleId, Personnel, PersonnelId, PlayExecution, PlayId, PlaybookError, RetryPolicy,
+    TaskContract,
 };
 use playbook_elci::{missing_evidence, CapabilityPlane, PlaneResult};
 use playbook_events::DriveEvent;
 use playbook_gates::is_complete;
+use playbook_huddle::{
+    admission, detect_contradictions, escalation_target, forced_synthesis,
+    participants as huddle_participants, DefaultRegulator, HuddleCost, HuddleOutcome,
+    HuddleParticipant, HuddleRegulator, HuddleReport, HuddleScope, HuddleTrigger,
+    HuddleTriggerKind, HuddleValue, ParticipantCandidate,
+};
 use playbook_policy::Policy;
 
 use crate::apply::ApplyMode;
 use crate::{apply, DriveState, EventSink};
+
+/// Inputs for opening a huddle through the authority. The authority owns
+/// admission economics and participant selection; callers describe the
+/// trigger and the relevance of the roster.
+pub struct HuddleRequest {
+    pub scope: HuddleScope,
+    pub trigger_kind: HuddleTriggerKind,
+    pub reason_code: String,
+    pub evidence_refs: Vec<EvidenceId>,
+    pub manual: bool,
+    pub value: HuddleValue,
+    pub candidates: Vec<ParticipantCandidate>,
+}
+
+impl HuddleRequest {
+    /// Derive a request from an HTTP body: every roster member becomes a
+    /// candidate with neutral relevance, and selection still applies the
+    /// policy floor, the envelope cap, and measured disclosure profiles.
+    pub fn from_body(body: playbook_huddle::HuddleRequestBody, roster: &[Personnel]) -> Self {
+        Self {
+            scope: body.scope,
+            trigger_kind: body.trigger_kind,
+            reason_code: body.reason_code,
+            evidence_refs: body.evidence_refs,
+            manual: body.manual,
+            value: body.value,
+            candidates: roster
+                .iter()
+                .map(|person| ParticipantCandidate {
+                    personnel_id: person.id.clone(),
+                    dependency_overlap: 500,
+                    contradiction_relevance: 500,
+                    ownership_weight: 500,
+                    downstream_impact: 500,
+                    specialist_value: 500,
+                    context_cost: 10,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// The result of running admission on a requested huddle.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HuddleAdmission {
+    Open(HuddleId),
+    Refused {
+        huddle_id: HuddleId,
+        reason_code: String,
+    },
+}
 
 pub struct Authority {
     state: DriveState,
@@ -329,6 +387,270 @@ impl Authority {
         })
     }
 
+    /// Request, admit, and open a huddle in one tactical step. Admission
+    /// economics and participant selection run here, deterministically; a
+    /// refusal is journaled like any other event.
+    pub fn open_huddle(
+        &mut self,
+        request: HuddleRequest,
+        at_ms: u64,
+    ) -> Result<HuddleAdmission, PlaybookError> {
+        let huddle_id = HuddleId::new(format!(
+            "huddle-{}",
+            self.state.huddles().requested_total().saturating_add(1)
+        ))?;
+        let originating_event = EventId::new(format!("event-{}", self.events.len()))?;
+        let trigger = HuddleTrigger {
+            kind: request.trigger_kind,
+            reason_code: request.reason_code.clone(),
+            evidence_refs: request.evidence_refs.clone(),
+            originating_event,
+        };
+        // Admission runs against the field as it stands, before the request
+        // itself is journaled, so the economics never observe their own
+        // candidate.
+        let field_fingerprint = self.state.fingerprint();
+        let remaining_drive_budget = self
+            .state
+            .budget_initial()
+            .remaining(self.state.budget_consumed());
+        let decision = admission::decide(
+            &admission::AdmissionInputs {
+                scope: request.scope,
+                trigger: &trigger,
+                debt: 0,
+                field_fingerprint: &field_fingerprint,
+                ledger: self.state.huddles(),
+                value: request.value,
+                remaining_drive_budget,
+                manual: request.manual,
+            },
+            &self.policy.huddle,
+        )?;
+        self.push(DriveEvent::HuddleRequested {
+            huddle_id: huddle_id.clone(),
+            scope: request.scope,
+            trigger: trigger.clone(),
+            at_ms,
+        })?;
+        match decision {
+            admission::AdmissionDecision::Admit { budget, barrier } => {
+                let participants =
+                    self.select_huddle_participants(&huddle_id, &trigger, &request.candidates)?;
+                self.push(DriveEvent::HuddleAdmitted {
+                    huddle_id: huddle_id.clone(),
+                    budget,
+                    barrier,
+                    participants,
+                })?;
+                self.push(DriveEvent::HuddleOpened {
+                    huddle_id: huddle_id.clone(),
+                })?;
+                Ok(HuddleAdmission::Open(huddle_id))
+            }
+            admission::AdmissionDecision::Reject { reason_code } => {
+                self.push(DriveEvent::HuddleRejected {
+                    huddle_id: huddle_id.clone(),
+                    reason_code: reason_code.clone(),
+                })?;
+                Ok(HuddleAdmission::Refused {
+                    huddle_id,
+                    reason_code,
+                })
+            }
+        }
+    }
+
+    fn select_huddle_participants(
+        &self,
+        huddle_id: &HuddleId,
+        trigger: &HuddleTrigger,
+        candidates: &[ParticipantCandidate],
+    ) -> Result<Vec<HuddleParticipant>, PlaybookError> {
+        let envelope = self.policy.huddle.budget(admission::scope_key(
+            self.state
+                .huddles()
+                .active_by_id(huddle_id)
+                .ok_or(PlaybookError::NoPlay)?
+                .scope,
+        ));
+        let picked = huddle_participants::select(
+            candidates,
+            &self.policy.huddle.participant_weights,
+            envelope.max_participants,
+            self.policy.huddle.min_participant_score,
+        );
+        let regulator = DefaultRegulator;
+        picked
+            .iter()
+            .map(|personnel_id| {
+                let person = self
+                    .roster
+                    .iter()
+                    .find(|person| &person.id == personnel_id)
+                    .ok_or(PlaybookError::NoPlay)?;
+                Ok(HuddleParticipant {
+                    personnel_id: personnel_id.clone(),
+                    role: huddle_participants::role_for(person),
+                    disclosure_profile: regulator.build_disclosure(person, trigger),
+                })
+            })
+            .collect()
+    }
+
+    /// Invite one roster member into an open huddle.
+    pub fn invite_to_huddle(
+        &mut self,
+        huddle_id: &HuddleId,
+        personnel_id: &PersonnelId,
+    ) -> Result<(), PlaybookError> {
+        let person = self
+            .roster
+            .iter()
+            .find(|person| &person.id == personnel_id)
+            .ok_or(PlaybookError::NoPlay)?
+            .clone();
+        let trigger = self
+            .state
+            .huddles()
+            .active_by_id(huddle_id)
+            .ok_or(PlaybookError::NoPlay)?
+            .trigger
+            .clone();
+        let regulator = DefaultRegulator;
+        let participant = HuddleParticipant {
+            personnel_id: person.id.clone(),
+            role: huddle_participants::role_for(&person),
+            disclosure_profile: regulator.build_disclosure(&person, &trigger),
+        };
+        self.push(DriveEvent::HuddleParticipantInvited {
+            huddle_id: huddle_id.clone(),
+            participant,
+        })
+    }
+
+    /// Submit one schema-valid report, then journal any contradictions the
+    /// accumulated reports expose. Returns the contradictions detected by
+    /// this submission.
+    pub fn submit_huddle_report(
+        &mut self,
+        huddle_id: &HuddleId,
+        report: HuddleReport,
+    ) -> Result<Vec<playbook_huddle::Contradiction>, PlaybookError> {
+        self.push(DriveEvent::HuddleReportSubmitted {
+            huddle_id: huddle_id.clone(),
+            report: Box::new(report),
+        })?;
+        let active = self
+            .state
+            .huddles()
+            .active_by_id(huddle_id)
+            .ok_or_else(|| PlaybookError::Inadmissible("huddle".into(), "unknown huddle".into()))?;
+        let reports = active.reports.clone();
+        let known: Vec<playbook_huddle::Contradiction> = active.contradictions.clone();
+        let mut detected = Vec::new();
+        for contradiction in detect_contradictions(&reports) {
+            match known.iter().find(|item| item.id == contradiction.id) {
+                Some(earlier) if earlier.claims.len() >= contradiction.claims.len() => continue,
+                _ => {}
+            }
+            self.push(DriveEvent::HuddleContradictionDetected {
+                huddle_id: huddle_id.clone(),
+                contradiction: contradiction.clone(),
+            })?;
+            detected.push(contradiction);
+        }
+        Ok(detected)
+    }
+
+    /// Journal huddle-side consumption against the huddle's own envelope.
+    pub fn consume_huddle_budget(
+        &mut self,
+        huddle_id: &HuddleId,
+        cost: HuddleCost,
+    ) -> Result<(), PlaybookError> {
+        self.push(DriveEvent::HuddleBudgetConsumed {
+            huddle_id: huddle_id.clone(),
+            cost,
+        })
+    }
+
+    /// Commit a reconciled outcome. The fold validates every contract:
+    /// evidence-grounded resolutions, no field rewrites, no unsafe
+    /// progression past a blocking contradiction.
+    pub fn commit_huddle_outcome(
+        &mut self,
+        huddle_id: &HuddleId,
+        outcome: HuddleOutcome,
+    ) -> Result<(), PlaybookError> {
+        self.push(DriveEvent::HuddleOutcomeCommitted {
+            huddle_id: huddle_id.clone(),
+            outcome: Box::new(outcome),
+        })
+    }
+
+    /// Synthesize from accumulated reports after budget exhaustion.
+    pub fn force_huddle_synthesis(&mut self, huddle_id: &HuddleId) -> Result<(), PlaybookError> {
+        let active = self
+            .state
+            .huddles()
+            .active_by_id(huddle_id)
+            .ok_or_else(|| PlaybookError::Inadmissible("huddle".into(), "unknown huddle".into()))?
+            .clone();
+        let mut outcome = forced_synthesis(&active);
+        outcome.huddle_id = active.id.clone();
+        self.commit_huddle_outcome(huddle_id, outcome)
+    }
+
+    /// Escalate one scope up the ladder. Returns the new huddle's id; the
+    /// child still owes its own admission event.
+    pub fn escalate_huddle(
+        &mut self,
+        huddle_id: &HuddleId,
+        manual: bool,
+        reason_code: &str,
+    ) -> Result<HuddleId, PlaybookError> {
+        let active = self
+            .state
+            .huddles()
+            .active_by_id(huddle_id)
+            .ok_or_else(|| PlaybookError::Inadmissible("huddle".into(), "unknown huddle".into()))?
+            .clone();
+        let Some(to_scope) = escalation_target(&active, 0, manual, &self.policy.huddle)? else {
+            return Err(PlaybookError::Inadmissible(
+                "huddle".into(),
+                "escalation lacks scope justification".into(),
+            ));
+        };
+        let new_huddle_id = HuddleId::new(format!(
+            "huddle-esc-{}",
+            self.state.huddles().escalated_total().saturating_add(1)
+        ))?;
+        self.push(DriveEvent::HuddleEscalationRequested {
+            huddle_id: huddle_id.clone(),
+            to_scope,
+            reason_code: reason_code.to_string(),
+        })?;
+        self.push(DriveEvent::HuddleEscalated {
+            huddle_id: huddle_id.clone(),
+            new_huddle_id: new_huddle_id.clone(),
+            to_scope,
+        })?;
+        Ok(new_huddle_id)
+    }
+
+    /// Terminate a huddle that cannot reach synthesis.
+    pub fn close_huddle(
+        &mut self,
+        huddle_id: &HuddleId,
+        reason_code: &str,
+    ) -> Result<(), PlaybookError> {
+        self.push(DriveEvent::HuddleClosed {
+            huddle_id: huddle_id.clone(),
+            reason_code: reason_code.to_string(),
+        })
+    }
+
     fn run_decision(
         &mut self,
         decision: DecisionRecord,
@@ -541,6 +863,10 @@ mod tests {
         SideEffectNote, TaskContract, TaskIntegrity, ToolFailure, ToolFailureKind,
     };
     use playbook_elci::{CapabilitySnapshot, FixturePlane};
+    use playbook_huddle::{
+        AssignmentChange, AssumptionDelta, ContradictionResolution, HuddleClosure, HuddleScope,
+        PersonnelAction, PlayProposal, ResolutionState, SharedStateDelta,
+    };
     use serde_json::json;
     use std::sync::{Arc, Mutex};
 
@@ -1238,5 +1564,352 @@ mod tests {
         let mut tampered = original;
         tampered.survey = !tampered.survey;
         rejected(tampered);
+    }
+
+    fn huddle_person(id: &str, kind: PersonnelKind) -> Personnel {
+        Personnel {
+            id: PersonnelId::new(id).unwrap(),
+            kind,
+            display_name: id.into(),
+            cost_tokens: 40,
+            latency_ms: 20,
+            capability_fit_ppm: playbook_core::PPM_SCALE,
+            reliability_ppm: 900_000,
+            quota_remaining_ppm: playbook_core::PPM_SCALE,
+            evidence_quality_ppm: playbook_core::PPM_SCALE,
+            own_ytg_milli: None,
+        }
+    }
+
+    fn huddle_authority() -> Authority {
+        let mut authority = Authority::start(
+            DriveId::new("drive-huddle").unwrap(),
+            TaskContract {
+                statement: "coordinate the huddle".into(),
+                workload_class: "engineering".into(),
+                constraints: Vec::new(),
+                integrity: TaskIntegrity::Sound,
+            },
+            started_budget(10_000, 1_000),
+            Policy::builtin(),
+            vec![
+                huddle_person("worker-a", PersonnelKind::DeterministicProcedure),
+                huddle_person("worker-b", PersonnelKind::DeterministicProcedure),
+                huddle_person("model-a", PersonnelKind::Model),
+            ],
+            1,
+        )
+        .unwrap();
+        authority
+            .declare_gate(
+                Gate::declare(
+                    GateId::new("implementation").unwrap(),
+                    "compiler accepts the implementation",
+                    1_000_000,
+                    Vec::new(),
+                    vec![EvidenceClass::CompilerResult],
+                    true,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        authority
+    }
+
+    fn candidate(id: &str, relevance: u32) -> ParticipantCandidate {
+        ParticipantCandidate {
+            personnel_id: PersonnelId::new(id).unwrap(),
+            dependency_overlap: relevance,
+            contradiction_relevance: relevance,
+            ownership_weight: relevance,
+            downstream_impact: relevance,
+            specialist_value: relevance,
+            context_cost: 10,
+        }
+    }
+
+    fn huddle_value() -> HuddleValue {
+        HuddleValue {
+            predicted_rework_avoided: 600,
+            expected_failure_reduction: 300,
+            expected_coordination_gain: 200,
+            expected_budget_preservation: 100,
+            inference_cost: 100,
+            latency_cost: 50,
+            context_cost: 50,
+            opportunity_cost: 0,
+        }
+    }
+
+    fn huddle_request() -> HuddleRequest {
+        HuddleRequest {
+            scope: HuddleScope::Position,
+            trigger_kind: HuddleTriggerKind::Failure,
+            reason_code: "repeated_failed_play".into(),
+            evidence_refs: Vec::new(),
+            manual: false,
+            value: huddle_value(),
+            candidates: vec![
+                candidate("worker-a", 900),
+                candidate("worker-b", 900),
+                candidate("model-a", 100),
+            ],
+        }
+    }
+
+    fn drive_evidence(authority: &mut Authority, at_ms: u64) -> EvidenceId {
+        let evidence = Evidence::seal(
+            EvidenceClass::EnvironmentSnapshot,
+            json!({"host": "fixture", "note": "huddle observation"}),
+            at_ms,
+        )
+        .unwrap();
+        let id = evidence.id.clone();
+        authority.accept_evidence(evidence).unwrap();
+        id
+    }
+
+    fn huddle_report(participant: &str, current: &str, evidence: &EvidenceId) -> HuddleReport {
+        HuddleReport {
+            participant: PersonnelId::new(participant).unwrap(),
+            verified_progress: vec![evidence.clone()],
+            blockers: Vec::new(),
+            changed_assumptions: vec![AssumptionDelta {
+                subject: "interface".into(),
+                previous: "v1".into(),
+                current: current.into(),
+                evidence_ref: None,
+            }],
+            dependency_changes: Vec::new(),
+            contradictions: Vec::new(),
+            proposed_action: None,
+            confidence_milli: 9_000,
+        }
+    }
+
+    #[test]
+    fn a_huddle_lifecycle_journals_replays_and_moves_assignments() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let admission = authority.open_huddle(huddle_request(), 100).unwrap();
+        let HuddleAdmission::Open(huddle_id) = admission else {
+            panic!("economics should admit this huddle")
+        };
+        // Only the two strong workers clear the policy floor; the weak
+        // model stays out by default exclusion.
+        let active = authority
+            .state()
+            .huddles()
+            .active_by_id(&huddle_id)
+            .unwrap();
+        assert_eq!(active.participants.len(), 2);
+        assert_eq!(active.barrier, playbook_core::BarrierMode::Soft);
+
+        authority
+            .submit_huddle_report(&huddle_id, huddle_report("worker-a", "v1", &evidence))
+            .unwrap();
+        authority
+            .consume_huddle_budget(
+                &huddle_id,
+                HuddleCost {
+                    tokens: 100,
+                    cost_microunits: 10_000,
+                    duration_ms: 100,
+                    rounds: 0,
+                },
+            )
+            .unwrap();
+        let detected = authority
+            .submit_huddle_report(&huddle_id, huddle_report("worker-b", "v2", &evidence))
+            .unwrap();
+        assert_eq!(detected.len(), 1);
+        assert_eq!(detected[0].id.as_str(), "con-000");
+
+        let outcome = HuddleOutcome {
+            huddle_id: huddle_id.clone(),
+            reconciled_state: SharedStateDelta {
+                verified_evidence: vec![evidence.clone()],
+                gate_snapshots: Vec::new(),
+                assumptions: Vec::new(),
+            },
+            resolved_contradictions: vec![ContradictionResolution {
+                contradiction_id: detected[0].id.clone(),
+                state: ResolutionState::ResolvedByEvidence,
+                evidence_ref: Some(evidence.clone()),
+                authority: None,
+            }],
+            unresolved_contradictions: Vec::new(),
+            assignment_changes: vec![AssignmentChange {
+                personnel_id: PersonnelId::new("worker-b").unwrap(),
+                from: Some("inspect".into()),
+                to: "test.unit".into(),
+            }],
+            strategy_change: None,
+            personnel_changes: vec![playbook_huddle::PersonnelChange {
+                personnel_id: PersonnelId::new("model-a").unwrap(),
+                action: PersonnelAction::SubstitutionRecommended,
+                reason: "weakest relevance on the failing play".into(),
+            }],
+            revised_ytg_milli: Some(authority.state().ytg_milli()),
+            next_play: Some(PlayProposal {
+                operation: "test.unit".into(),
+                rationale: "unit coverage is the open dependency".into(),
+                target_gate: Some(GateId::new("unit_tests").unwrap()),
+            }),
+            next_huddle_conditions: Vec::new(),
+            escalated_to: None,
+        };
+        let gates_before = authority.state().gates().to_vec();
+        let evidence_count = authority.state().huddles().requested_total();
+        authority
+            .commit_huddle_outcome(&huddle_id, outcome)
+            .unwrap();
+
+        let ledger = authority.state().huddles();
+        assert!(ledger.active().is_empty());
+        assert_eq!(ledger.committed_total(), 1);
+        assert_eq!(ledger.closed()[0].closure, HuddleClosure::Committed);
+        assert_eq!(ledger.assignments().len(), 1);
+        assert_eq!(ledger.substitutions().len(), 1);
+        assert_eq!(ledger.proposals().len(), 1);
+        // A huddle moves assignments and recommendations; it never touches
+        // gates, evidence, or the measured field.
+        assert_eq!(authority.state().gates(), &gates_before[..]);
+        assert_eq!(
+            authority.state().huddles().requested_total(),
+            evidence_count
+        );
+        assert_eq!(authority.state().ytg_milli(), 10_000);
+
+        // Crash recovery and journal replay reproduce the committed outcome.
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
+    }
+
+    #[test]
+    fn a_second_huddle_on_an_unchanged_field_is_refused() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let admission = authority.open_huddle(huddle_request(), 100).unwrap();
+        let HuddleAdmission::Open(huddle_id) = admission else {
+            panic!("first huddle should open")
+        };
+        // Reports cite evidence the field already held; the field itself
+        // does not move during the huddle.
+        authority
+            .submit_huddle_report(&huddle_id, huddle_report("worker-a", "v1", &evidence))
+            .unwrap();
+        authority
+            .submit_huddle_report(&huddle_id, huddle_report("worker-b", "v1", &evidence))
+            .unwrap();
+        let mut outcome = playbook_huddle::HuddleOutcome {
+            huddle_id: huddle_id.clone(),
+            reconciled_state: SharedStateDelta {
+                verified_evidence: Vec::new(),
+                gate_snapshots: Vec::new(),
+                assumptions: Vec::new(),
+            },
+            resolved_contradictions: Vec::new(),
+            unresolved_contradictions: Vec::new(),
+            assignment_changes: Vec::new(),
+            strategy_change: None,
+            personnel_changes: Vec::new(),
+            revised_ytg_milli: None,
+            next_play: None,
+            next_huddle_conditions: Vec::new(),
+            escalated_to: None,
+        };
+        outcome.reconciled_state.verified_evidence.clear();
+        authority
+            .commit_huddle_outcome(&huddle_id, outcome)
+            .unwrap();
+
+        let second = authority.open_huddle(huddle_request(), 200).unwrap();
+        match second {
+            HuddleAdmission::Refused { reason_code, .. } => {
+                assert_eq!(reason_code, "unchanged_field")
+            }
+            HuddleAdmission::Open(_) => panic!("a huddle storm must be refused"),
+        }
+        assert_eq!(authority.state().huddles().rejected_total(), 1);
+    }
+
+    #[test]
+    fn unresolved_contradictions_escalate_scope_and_spawn_a_child_huddle() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let HuddleAdmission::Open(huddle_id) =
+            authority.open_huddle(huddle_request(), 100).unwrap()
+        else {
+            panic!("huddle should open")
+        };
+        authority
+            .submit_huddle_report(&huddle_id, huddle_report("worker-a", "v1", &evidence))
+            .unwrap();
+        let detected = authority
+            .submit_huddle_report(&huddle_id, huddle_report("worker-b", "v2", &evidence))
+            .unwrap();
+        assert_eq!(detected.len(), 1);
+        // A third voice turns the split into a High-severity contradiction,
+        // which is what justifies a scope escalation.
+        authority
+            .invite_to_huddle(&huddle_id, &PersonnelId::new("model-a").unwrap())
+            .unwrap();
+        let detected = authority
+            .submit_huddle_report(&huddle_id, huddle_report("model-a", "v3", &evidence))
+            .unwrap();
+        assert_eq!(detected.len(), 1);
+        assert_eq!(
+            detected[0].severity,
+            playbook_huddle::ContradictionSeverity::High
+        );
+
+        let child = authority
+            .escalate_huddle(&huddle_id, false, "unresolved_interface_contradiction")
+            .unwrap();
+        let ledger = authority.state().huddles();
+        assert!(ledger.active_by_id(&huddle_id).is_none());
+        let escalated = ledger.active_by_id(&child).unwrap();
+        assert_eq!(escalated.scope, HuddleScope::Unit);
+        assert_eq!(ledger.escalated_total(), 1);
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
+    }
+
+    #[test]
+    fn budget_exhaustion_forces_synthesis_from_accumulated_reports() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let HuddleAdmission::Open(huddle_id) =
+            authority.open_huddle(huddle_request(), 100).unwrap()
+        else {
+            panic!("huddle should open")
+        };
+        authority
+            .submit_huddle_report(&huddle_id, huddle_report("worker-a", "v1", &evidence))
+            .unwrap();
+        authority
+            .consume_huddle_budget(
+                &huddle_id,
+                HuddleCost {
+                    tokens: 2_000,
+                    cost_microunits: 200_000,
+                    duration_ms: 5_000,
+                    rounds: 1,
+                },
+            )
+            .unwrap();
+        authority.force_huddle_synthesis(&huddle_id).unwrap();
+        let ledger = authority.state().huddles();
+        assert_eq!(ledger.closed()[0].closure, HuddleClosure::ForcedSynthesis);
+        assert!(ledger
+            .conditions()
+            .iter()
+            .any(|condition| condition.reason_code == "post_synthesis_review"));
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
     }
 }

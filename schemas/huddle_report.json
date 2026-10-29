@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/huddle_report.json",
+  "title": "Huddle participant report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["participant", "verified_progress", "blockers", "changed_assumptions", "dependency_changes", "contradictions", "proposed_action", "confidence_milli"],
+  "properties": {
+    "participant": { "type": "string" },
+    "verified_progress": { "type": "array", "items": { "type": "string" } },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject", "reason", "evidence_ref"],
+        "properties": {
+          "subject": { "type": "string" },
+          "reason": { "type": "string" },
+          "evidence_ref": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "changed_assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject", "previous", "current", "evidence_ref"],
+        "properties": {
+          "subject": { "type": "string" },
+          "previous": { "type": "string" },
+          "current": { "type": "string" },
+          "evidence_ref": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "dependency_changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dependency", "change", "evidence_ref"],
+        "properties": {
+          "dependency": { "type": "string" },
+          "change": { "type": "string" },
+          "evidence_ref": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "subject", "claims", "severity"],
+        "properties": {
+          "id": { "type": "string" },
+          "subject": { "type": "string" },
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["personnel_id", "statement", "evidence_ref"],
+              "properties": {
+                "personnel_id": { "type": "string" },
+                "statement": { "type": "string" },
+                "evidence_ref": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "severity": { "enum": ["low", "medium", "high", "critical"] }
+        }
+      }
+    },
+    "proposed_action": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["operation", "rationale", "target_gate"],
+      "properties": {
+        "operation": { "type": "string" },
+        "rationale": { "type": "string" },
+        "target_gate": { "type": ["string", "null"] }
+      }
+    },
+    "confidence_milli": { "type": "integer", "minimum": 0 }
+  }
+}

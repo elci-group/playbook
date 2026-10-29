@@ -477,6 +477,98 @@ impl Service {
                 Some(spans) => reply(200, &json!({"spans": spans})),
                 None => error_reply(404, "unknown_drive", "no such drive"),
             },
+            ("GET", ["v1", "drives", id, "huddles"]) => match self.huddles_json(id) {
+                Some(huddles) => reply(200, &huddles),
+                None => error_reply(404, "unknown_drive", "no such drive"),
+            },
+            ("GET", ["v1", "drives", id, "huddles", huddle_id]) => {
+                match self.huddle_json(id, huddle_id) {
+                    Some(huddle) => reply(200, &huddle),
+                    None => error_reply(404, "unknown_huddle", "no such huddle"),
+                }
+            }
+            ("POST", ["v1", "drives", id, "huddles", "request"]) => {
+                self.mutate(id, body, |handle, at_ms| {
+                    let request: playbook_huddle::HuddleRequestBody =
+                        match serde_json::from_str(body) {
+                            Ok(request) => request,
+                            Err(error) => return Err(PlaybookError::json(error)),
+                        };
+                    match handle.authority.open_huddle(
+                        playbook_state::HuddleRequest::from_body(
+                            request,
+                            handle.authority.roster(),
+                        ),
+                        at_ms,
+                    )? {
+                        playbook_state::HuddleAdmission::Open(huddle_id) => Ok(Some(json!({
+                            "admission": "open",
+                            "huddle_id": huddle_id.as_str(),
+                        }))),
+                        playbook_state::HuddleAdmission::Refused {
+                            huddle_id,
+                            reason_code,
+                        } => Ok(Some(json!({
+                            "admission": "refused",
+                            "huddle_id": huddle_id.as_str(),
+                            "reason_code": reason_code,
+                        }))),
+                    }
+                })
+            }
+            ("POST", ["v1", "drives", id, "huddles", huddle_id, action]) => match *action {
+                "reports" => self.mutate(id, body, |handle, _| {
+                    let Ok(huddle_id) = playbook_core::HuddleId::new(*huddle_id) else {
+                        return Err(PlaybookError::InvalidId);
+                    };
+                    let report: playbook_huddle::HuddleReport = match serde_json::from_str(body) {
+                        Ok(report) => report,
+                        Err(error) => return Err(PlaybookError::json(error)),
+                    };
+                    let detected = handle.authority.submit_huddle_report(&huddle_id, report)?;
+                    Ok(Some(json!({
+                        "huddle_id": huddle_id.as_str(),
+                        "contradictions_detected": detected,
+                    })))
+                }),
+                "commit" => self.mutate(id, body, |handle, _| {
+                    let Ok(huddle_id) = playbook_core::HuddleId::new(*huddle_id) else {
+                        return Err(PlaybookError::InvalidId);
+                    };
+                    let outcome: playbook_huddle::HuddleOutcome = match serde_json::from_str(body) {
+                        Ok(outcome) => outcome,
+                        Err(error) => return Err(PlaybookError::json(error)),
+                    };
+                    handle
+                        .authority
+                        .commit_huddle_outcome(&huddle_id, outcome)?;
+                    Ok(Some(
+                        json!({"huddle_id": huddle_id.as_str(), "committed": true}),
+                    ))
+                }),
+                "escalate" => self.mutate(id, body, |handle, _| {
+                    let Ok(huddle_id) = playbook_core::HuddleId::new(*huddle_id) else {
+                        return Err(PlaybookError::InvalidId);
+                    };
+                    let parsed: Value = match serde_json::from_str(body) {
+                        Ok(value) => value,
+                        Err(error) => return Err(PlaybookError::json(error)),
+                    };
+                    let child = handle.authority.escalate_huddle(
+                        &huddle_id,
+                        parsed["manual"].as_bool().unwrap_or(false),
+                        parsed["reason_code"].as_str().unwrap_or("escalated"),
+                    )?;
+                    Ok(Some(json!({
+                        "huddle_id": huddle_id.as_str(),
+                        "child_huddle_id": child.as_str(),
+                    })))
+                }),
+                _ => error_reply(404, "unknown_action", "no such action"),
+            },
+            ("POST", ["v1", "drives", _id, "huddles", ..]) => {
+                error_reply(404, "unknown_action", "no such action")
+            }
             ("POST", ["v1", "drives", id, action]) => match *action {
                 "preflight" => self.mutate(id, body, |handle, _| {
                     handle.authority.preflight(&mut handle.plane)?;
@@ -543,6 +635,28 @@ impl Service {
                 _ => Vec::new(),
             }
         })
+    }
+
+    fn huddles_json(&self, id: &str) -> Option<Value> {
+        let drives = self.drives.lock().expect("drive lock");
+        drives.get(id).map(|handle| {
+            serde_json::to_value(handle.authority.state().huddles()).unwrap_or(Value::Null)
+        })
+    }
+
+    fn huddle_json(&self, id: &str, huddle_id: &str) -> Option<Value> {
+        let drives = self.drives.lock().expect("drive lock");
+        let handle = drives.get(id)?;
+        let ledger = handle.authority.state().huddles();
+        let needle = playbook_core::HuddleId::new(huddle_id).ok()?;
+        if let Some(active) = ledger.active_by_id(&needle) {
+            return serde_json::to_value(active).ok();
+        }
+        ledger
+            .closed()
+            .iter()
+            .find(|record| record.id == needle)
+            .and_then(|record| serde_json::to_value(record).ok())
     }
 }
 
@@ -1018,6 +1132,133 @@ mod tests {
         assert_eq!(service.rejected_journals(), 1);
         assert!(dir.join("broken.jsonl.rejected").exists());
         assert!(!dir.join("broken.jsonl").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn huddle_value() -> Value {
+        json!({
+            "predicted_rework_avoided": 600,
+            "expected_failure_reduction": 300,
+            "expected_coordination_gain": 200,
+            "expected_budget_preservation": 100,
+            "inference_cost": 100,
+            "latency_cost": 50,
+            "context_cost": 50,
+            "opportunity_cost": 0
+        })
+    }
+
+    fn huddle_request_body() -> Value {
+        json!({
+            "scope": "position",
+            "trigger_kind": "failure",
+            "reason_code": "repeated_failed_play",
+            "evidence_refs": [],
+            "manual": false,
+            "value": huddle_value()
+        })
+    }
+
+    fn huddle_report_body(participant: &str) -> Value {
+        json!({
+            "participant": participant,
+            "verified_progress": [],
+            "blockers": [],
+            "changed_assumptions": [],
+            "dependency_changes": [],
+            "contradictions": [],
+            "proposed_action": null,
+            "confidence_milli": 9_000
+        })
+    }
+
+    #[test]
+    fn huddles_open_collect_commit_and_refuse_storms_over_http() {
+        let dir = temp_dir("huddles");
+        let service = Service::open(&config(&dir)).unwrap();
+        let created = service.handle(
+            "POST",
+            "/v1/drives",
+            &json!({"drive_id": "drive-huddle", "tokens": 100_000}).to_string(),
+        );
+        assert_eq!(created.status, 201, "{}", created.body);
+
+        let opened = service.handle(
+            "POST",
+            "/v1/drives/drive-huddle/huddles/request",
+            &huddle_request_body().to_string(),
+        );
+        assert_eq!(opened.status, 200, "{}", opened.body);
+        assert!(opened.body.contains("\"admission\":\"open\""));
+        assert!(opened.body.contains("\"huddle_id\":\"huddle-1\""));
+
+        let list = service.handle("GET", "/v1/drives/drive-huddle/huddles", "");
+        assert_eq!(list.status, 200);
+        assert!(list.body.contains("\"scope\":\"position\""));
+        assert!(list.body.contains("\"phase\":\"collect_reports\""));
+
+        // The roster is the candidate pool; every member clears the policy
+        // floor, so all three are invited and must report before a commit.
+        for participant in ["cargo-toolchain", "coding-specialist", "rust-analyser"] {
+            let response = service.handle(
+                "POST",
+                "/v1/drives/drive-huddle/huddles/huddle-1/reports",
+                &huddle_report_body(participant).to_string(),
+            );
+            assert_eq!(response.status, 200, "{}: {}", participant, response.body);
+        }
+        let duplicate = service.handle(
+            "POST",
+            "/v1/drives/drive-huddle/huddles/huddle-1/reports",
+            &huddle_report_body("cargo-toolchain").to_string(),
+        );
+        assert_eq!(duplicate.status, 409);
+        assert!(duplicate.body.contains("inadmissible"));
+
+        let outcome = json!({
+            "huddle_id": "huddle-1",
+            "reconciled_state": {"verified_evidence": [], "gate_snapshots": [], "assumptions": []},
+            "resolved_contradictions": [],
+            "unresolved_contradictions": [],
+            "assignment_changes": [
+                {"personnel_id": "rust-analyser", "from": null, "to": "test.unit"}
+            ],
+            "strategy_change": null,
+            "personnel_changes": [],
+            "revised_ytg_milli": null,
+            "next_play": null,
+            "next_huddle_conditions": [],
+            "escalated_to": null
+        });
+        let committed = service.handle(
+            "POST",
+            "/v1/drives/drive-huddle/huddles/huddle-1/commit",
+            &outcome.to_string(),
+        );
+        assert_eq!(committed.status, 200, "{}", committed.body);
+
+        let record = service.handle("GET", "/v1/drives/drive-huddle/huddles/huddle-1", "");
+        assert_eq!(record.status, 200);
+        assert!(record.body.contains("\"closure\":\"committed\""));
+        assert!(record
+            .body
+            .contains("\"reason_code\":\"outcome_committed\""));
+
+        // The field did not move, so a repeat request is a refused storm.
+        let again = service.handle(
+            "POST",
+            "/v1/drives/drive-huddle/huddles/request",
+            &huddle_request_body().to_string(),
+        );
+        assert_eq!(again.status, 200, "{}", again.body);
+        assert!(again.body.contains("\"admission\":\"refused\""));
+        assert!(again.body.contains("\"reason_code\":\"unchanged_field\""));
+
+        // The committed assignment survives replay from the journal.
+        let events = service.handle("GET", "/v1/drives/drive-huddle/events", "");
+        let log: Vec<DriveEvent> = serde_json::from_str(&events.body).unwrap();
+        let replay = playbook_state::fold(&log, &Policy::builtin(), ApplyMode::Audit).unwrap();
+        assert!(replay.huddles().assignments().contains_key("rust-analyser"));
         std::fs::remove_dir_all(&dir).ok();
     }
 }

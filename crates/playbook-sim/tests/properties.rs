@@ -275,6 +275,113 @@ fn schemas_name_the_contract_fields() {
         priors: prior_table,
     })
     .unwrap();
+    let huddle_request = serde_json::to_value(playbook_huddle::HuddleRequestBody {
+        scope: playbook_huddle::HuddleScope::Position,
+        trigger_kind: playbook_huddle::HuddleTriggerKind::CoherenceDebt,
+        reason_code: "coherence_debt".into(),
+        evidence_refs: Vec::new(),
+        manual: false,
+        value: playbook_huddle::HuddleValue {
+            predicted_rework_avoided: 600,
+            expected_failure_reduction: 300,
+            expected_coordination_gain: 200,
+            expected_budget_preservation: 100,
+            inference_cost: 100,
+            latency_cost: 50,
+            context_cost: 50,
+            opportunity_cost: 0,
+        },
+    })
+    .unwrap();
+    let huddle_report = serde_json::to_value(playbook_huddle::HuddleReport {
+        participant: playbook_core::PersonnelId::new("agent1").unwrap(),
+        verified_progress: vec![playbook_core::EvidenceId::new("ev-1").unwrap()],
+        blockers: vec![playbook_huddle::Blocker {
+            subject: "implementation".into(),
+            reason: "compiler unavailable".into(),
+            evidence_ref: None,
+        }],
+        changed_assumptions: vec![playbook_huddle::AssumptionDelta {
+            subject: "workload".into(),
+            previous: "engineering".into(),
+            current: "research".into(),
+            evidence_ref: Some(playbook_core::EvidenceId::new("ev-2").unwrap()),
+        }],
+        dependency_changes: vec![playbook_huddle::DependencyDelta {
+            dependency: "crates/playbook-state".into(),
+            change: "fold extended".into(),
+            evidence_ref: None,
+        }],
+        contradictions: vec![playbook_huddle::Contradiction {
+            id: playbook_huddle::ContradictionId::new("c-1").unwrap(),
+            subject: "budget reserve".into(),
+            claims: vec![playbook_huddle::ClaimRef {
+                personnel_id: playbook_core::PersonnelId::new("agent1").unwrap(),
+                statement: "reserve exhausted".into(),
+                evidence_ref: None,
+            }],
+            severity: playbook_huddle::ContradictionSeverity::High,
+        }],
+        proposed_action: Some(playbook_huddle::PlayProposal {
+            operation: "test.unit".into(),
+            rationale: "re-verify the reopened gate".into(),
+            target_gate: Some(playbook_core::GateId::new("unit_tests").unwrap()),
+        }),
+        confidence_milli: 800,
+    })
+    .unwrap();
+    let huddle_outcome = serde_json::to_value(playbook_huddle::HuddleOutcome {
+        huddle_id: playbook_core::HuddleId::new("huddle-1").unwrap(),
+        reconciled_state: playbook_huddle::SharedStateDelta {
+            verified_evidence: vec![playbook_core::EvidenceId::new("ev-1").unwrap()],
+            gate_snapshots: vec![playbook_huddle::GateSnapshot {
+                gate_id: playbook_core::GateId::new("unit_tests").unwrap(),
+                weight_ppm: 500_000,
+                satisfaction_ppm: 1_000_000,
+                state: playbook_core::GateState::Satisfied,
+            }],
+            assumptions: Vec::new(),
+        },
+        resolved_contradictions: vec![playbook_huddle::ContradictionResolution {
+            contradiction_id: playbook_huddle::ContradictionId::new("c-1").unwrap(),
+            state: playbook_huddle::ResolutionState::ResolvedByEvidence,
+            evidence_ref: Some(playbook_core::EvidenceId::new("ev-1").unwrap()),
+            authority: None,
+        }],
+        unresolved_contradictions: Vec::new(),
+        assignment_changes: vec![playbook_huddle::AssignmentChange {
+            personnel_id: playbook_core::PersonnelId::new("agent2").unwrap(),
+            from: None,
+            to: "test.unit".into(),
+        }],
+        strategy_change: Some(playbook_huddle::StrategyChange {
+            subject: "rush tendency".into(),
+            from: "balanced".into(),
+            to: "pass_heavy".into(),
+            justification: "reserve stays above the rush line".into(),
+        }),
+        personnel_changes: vec![playbook_huddle::PersonnelChange {
+            personnel_id: playbook_core::PersonnelId::new("agent3").unwrap(),
+            action: playbook_huddle::PersonnelAction::Rest,
+            reason: "context exhausted".into(),
+        }],
+        revised_ytg_milli: Some(3_000),
+        next_play: None,
+        next_huddle_conditions: vec![playbook_huddle::HuddleCondition {
+            kind: playbook_huddle::HuddleTriggerKind::Failure,
+            reason_code: "gate_regression".into(),
+        }],
+        escalated_to: None,
+    })
+    .unwrap();
+    let coherence_state = serde_json::to_value(playbook_huddle::CoherenceState {
+        debt: 450,
+        band: playbook_huddle::DebtBand::HuddleEligible,
+        active_huddles: 1,
+        closed_huddles: 2,
+        unresolved_contradictions: 0,
+    })
+    .unwrap();
 
     for (file, record) in [
         ("policy.json", policy),
@@ -283,6 +390,10 @@ fn schemas_name_the_contract_fields() {
         ("continuation.json", continuation),
         ("play_execution.json", execution.clone()),
         ("prior_table.json", prior_bundle),
+        ("huddle_request.json", huddle_request),
+        ("huddle_report.json", huddle_report.clone()),
+        ("huddle_outcome.json", huddle_outcome),
+        ("coherence_state.json", coherence_state),
     ] {
         let schema: Value =
             serde_json::from_str(&std::fs::read_to_string(root.join(file)).unwrap()).unwrap();
@@ -326,6 +437,13 @@ fn schemas_name_the_contract_fields() {
     .unwrap();
     negative_count["priors"]["rows"]["agent1"]["samples"] = json!(-1);
     assert!(validate_schema_subset(&prior_schema, &negative_count).is_err());
+
+    let huddle_report_schema: Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("huddle_report.json")).unwrap())
+            .unwrap();
+    let mut missing_blockers = huddle_report.clone();
+    missing_blockers.as_object_mut().unwrap().remove("blockers");
+    assert!(validate_schema_subset(&huddle_report_schema, &missing_blockers).is_err());
 }
 
 // These contracts use only this small JSON Schema subset. Keeping the test

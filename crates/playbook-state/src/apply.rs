@@ -643,8 +643,136 @@ fn apply_open(
             next.status = DriveStatus::Abandoned;
             next.disposition = Some(Disposition::Abandon);
         }
+        DriveEvent::HuddleRequested { .. }
+        | DriveEvent::HuddleAdmitted { .. }
+        | DriveEvent::HuddleRejected { .. }
+        | DriveEvent::HuddleOpened { .. }
+        | DriveEvent::HuddleParticipantInvited { .. }
+        | DriveEvent::HuddleReportSubmitted { .. }
+        | DriveEvent::HuddleContradictionDetected { .. }
+        | DriveEvent::HuddleBudgetConsumed { .. }
+        | DriveEvent::HuddleOutcomeCommitted { .. }
+        | DriveEvent::HuddleEscalationRequested { .. }
+        | DriveEvent::HuddleEscalated { .. }
+        | DriveEvent::HuddleClosed { .. } => {
+            let huddle_event =
+                project_huddle(event).expect("huddle projection covers huddle events");
+            let view = playbook_huddle::DriveView {
+                active: !matches!(
+                    next.status,
+                    DriveStatus::Completed
+                        | DriveStatus::Abandoned
+                        | DriveStatus::FieldGoalScored
+                        | DriveStatus::Punted
+                ),
+                down: next.down,
+                ytg_milli: next.ytg_milli,
+                field_fingerprint: next.fingerprint(),
+                evidence_ids: next.evidence.iter().map(|item| item.id.clone()).collect(),
+            };
+            playbook_huddle::apply_huddle(&mut next.huddles, &huddle_event, &view, policy)?;
+            if let DriveEvent::HuddleRequested { at_ms, .. } = event {
+                next.at_ms = *at_ms;
+            }
+        }
     }
     Ok(next)
+}
+
+/// One-to-one projection from journal events onto the huddle fold.
+pub(crate) fn project_huddle(event: &DriveEvent) -> Option<playbook_huddle::HuddleEvent> {
+    Some(match event {
+        DriveEvent::HuddleRequested {
+            huddle_id,
+            scope,
+            trigger,
+            at_ms,
+        } => playbook_huddle::HuddleEvent::Requested {
+            huddle_id: huddle_id.clone(),
+            scope: *scope,
+            trigger: trigger.clone(),
+            at_ms: *at_ms,
+        },
+        DriveEvent::HuddleRejected {
+            huddle_id,
+            reason_code,
+        } => playbook_huddle::HuddleEvent::Rejected {
+            huddle_id: huddle_id.clone(),
+            reason_code: reason_code.clone(),
+        },
+        DriveEvent::HuddleAdmitted {
+            huddle_id,
+            budget,
+            barrier,
+            participants,
+        } => playbook_huddle::HuddleEvent::Admitted {
+            huddle_id: huddle_id.clone(),
+            budget: *budget,
+            barrier: *barrier,
+            participants: participants.clone(),
+        },
+        DriveEvent::HuddleOpened { huddle_id } => playbook_huddle::HuddleEvent::Opened {
+            huddle_id: huddle_id.clone(),
+        },
+        DriveEvent::HuddleParticipantInvited {
+            huddle_id,
+            participant,
+        } => playbook_huddle::HuddleEvent::ParticipantInvited {
+            huddle_id: huddle_id.clone(),
+            participant: participant.clone(),
+        },
+        DriveEvent::HuddleReportSubmitted { huddle_id, report } => {
+            playbook_huddle::HuddleEvent::ReportSubmitted {
+                huddle_id: huddle_id.clone(),
+                report: (**report).clone(),
+            }
+        }
+        DriveEvent::HuddleContradictionDetected {
+            huddle_id,
+            contradiction,
+        } => playbook_huddle::HuddleEvent::ContradictionDetected {
+            huddle_id: huddle_id.clone(),
+            contradiction: contradiction.clone(),
+        },
+        DriveEvent::HuddleBudgetConsumed { huddle_id, cost } => {
+            playbook_huddle::HuddleEvent::BudgetConsumed {
+                huddle_id: huddle_id.clone(),
+                cost: *cost,
+            }
+        }
+        DriveEvent::HuddleOutcomeCommitted { huddle_id, outcome } => {
+            playbook_huddle::HuddleEvent::OutcomeCommitted {
+                huddle_id: huddle_id.clone(),
+                outcome: (**outcome).clone(),
+            }
+        }
+        DriveEvent::HuddleEscalationRequested {
+            huddle_id,
+            to_scope,
+            reason_code,
+        } => playbook_huddle::HuddleEvent::EscalationRequested {
+            huddle_id: huddle_id.clone(),
+            to_scope: *to_scope,
+            reason_code: reason_code.clone(),
+        },
+        DriveEvent::HuddleEscalated {
+            huddle_id,
+            new_huddle_id,
+            to_scope,
+        } => playbook_huddle::HuddleEvent::Escalated {
+            huddle_id: huddle_id.clone(),
+            new_huddle_id: new_huddle_id.clone(),
+            to_scope: *to_scope,
+        },
+        DriveEvent::HuddleClosed {
+            huddle_id,
+            reason_code,
+        } => playbook_huddle::HuddleEvent::Closed {
+            huddle_id: huddle_id.clone(),
+            reason_code: reason_code.clone(),
+        },
+        _ => return None,
+    })
 }
 
 fn close_cycle(before: &DriveState, next: &mut DriveState, policy: &Policy) {

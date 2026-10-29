@@ -28,6 +28,10 @@ window; membership freezes at kickoff and survives punts and recovery. Bench
 readiness and Playbook deployment remain live coaching decisions. See
 [Front Office](docs/front-office.md) for its restricted inputs, scoring and API.
 
+## Huddles
+
+`playbook-huddle` adds budgeted, policy-admitted synchronization barriers above the drive authority: scoped, evidence-bound coordination between concurrently operating personnel. A huddle runs only when the expected cost of team-state divergence exceeds the expected cost of reconciliation, and its outcome can reassign work without ever moving gates, evidence or the measured field. Journal events, admission economics and the state machine are specified in [the huddle contract](docs/huddles.md).
+
 ## Layout
 
 ```text

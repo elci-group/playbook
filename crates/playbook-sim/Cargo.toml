@@ -12,6 +12,7 @@ playbook-core.workspace = true
 playbook-events.workspace = true
 playbook-evidence.workspace = true
 playbook-elci.workspace = true
+playbook-huddle.workspace = true
 playbook-policy.workspace = true
 playbook-routing.workspace = true
 playbook-security.workspace = true

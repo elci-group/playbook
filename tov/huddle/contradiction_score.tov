@@ -1,0 +1,24 @@
+export function severity(distinctClaims: int): string {
+  if (distinctClaims >= 3) {
+    return "high"
+  }
+  if (distinctClaims === 2) {
+    return "medium"
+  }
+  return "low"
+}
+
+function main(): int {
+  console.log(severity(1))
+  console.log(severity(2))
+  console.log(severity(3))
+  return 0
+}
+
+test("contradiction severity follows distinct claim counts", () => {
+  expect(severity(0)).toBe("low")
+  expect(severity(1)).toBe("low")
+  expect(severity(2)).toBe("medium")
+  expect(severity(3)).toBe("high")
+  expect(severity(4)).toBe("high")
+})

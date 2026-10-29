@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/huddle_request.json",
+  "title": "Huddle request body",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "trigger_kind", "reason_code", "evidence_refs", "manual", "value"],
+  "properties": {
+    "scope": { "enum": ["position", "unit", "coordinator", "team", "franchise"] },
+    "trigger_kind": { "enum": ["success", "failure", "strategic", "coherence_debt", "manual_authority"] },
+    "reason_code": { "type": "string" },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "manual": { "type": "boolean" },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predicted_rework_avoided", "expected_failure_reduction", "expected_coordination_gain", "expected_budget_preservation", "inference_cost", "latency_cost", "context_cost", "opportunity_cost"],
+      "properties": {
+        "predicted_rework_avoided": { "type": "integer", "minimum": 0 },
+        "expected_failure_reduction": { "type": "integer", "minimum": 0 },
+        "expected_coordination_gain": { "type": "integer", "minimum": 0 },
+        "expected_budget_preservation": { "type": "integer", "minimum": 0 },
+        "inference_cost": { "type": "integer", "minimum": 0 },
+        "latency_cost": { "type": "integer", "minimum": 0 },
+        "context_cost": { "type": "integer", "minimum": 0 },
+        "opportunity_cost": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

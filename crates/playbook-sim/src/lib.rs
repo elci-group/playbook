@@ -5,12 +5,16 @@
 #![forbid(unsafe_code)]
 
 mod harness;
+mod huddle_study;
 mod mvp;
 mod normalise;
 
 pub use harness::{
     gate_one, open_drive, open_with, person, quota_pressure, roster, standard_gates, task_contract,
     weighted_gate,
+};
+pub use huddle_study::{
+    phase_eight_study, run_once, study_table, HuddleRegime, RunReport, StudyConfig, STEP_CAP,
 };
 pub use mvp::{
     compare_policies, compare_policies_with, control_duplicate_failures, run_mvp,

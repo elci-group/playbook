@@ -8,6 +8,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use playbook_core::{
@@ -31,6 +32,79 @@ pub enum PlaneResult {
 pub trait CapabilityPlane {
     fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError>;
     fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError>;
+}
+
+/// ELCI metadata for huddle-capable personnel. A plane that cannot hold a
+/// structured huddle exchange reports `can_participate: false`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HuddleCapability {
+    pub can_participate: bool,
+    pub max_context_tokens: u64,
+    pub structured_response: bool,
+    pub latency_class: LatencyClass,
+    pub cost_class: CostClass,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LatencyClass {
+    Interactive,
+    Batch,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CostClass {
+    Economy,
+    Standard,
+    Premium,
+}
+
+/// Dispatch seam for huddle context packets. A packet goes out as JSON; a
+/// schema-valid report body comes back. Timeouts, cancellation, and malformed
+/// output are the plane's to report.
+pub trait HuddleDispatch {
+    fn huddle_dispatch(
+        &mut self,
+        packet: &serde_json::Value,
+    ) -> Result<serde_json::Value, PlaybookError>;
+}
+
+/// Deterministic scripted huddle plane for simulation, tests, and failure
+/// injection.
+#[derive(Clone, Debug, Default)]
+pub struct FixtureHuddlePlane {
+    responses: VecDeque<Result<Value, String>>,
+}
+
+impl FixtureHuddlePlane {
+    pub fn responding(responses: Vec<Result<Value, String>>) -> Self {
+        Self {
+            responses: responses.into(),
+        }
+    }
+
+    pub fn push_ok(&mut self, response: Value) {
+        self.responses.push_back(Ok(response));
+    }
+
+    pub fn push_timeout(&mut self) {
+        self.responses
+            .push_back(Err("participant timed out".into()));
+    }
+}
+
+impl HuddleDispatch for FixtureHuddlePlane {
+    fn huddle_dispatch(&mut self, _packet: &Value) -> Result<Value, PlaybookError> {
+        match self.responses.pop_front() {
+            Some(Ok(response)) => Ok(response),
+            Some(Err(reason)) => Err(PlaybookError::Reconcile(reason)),
+            None => Err(PlaybookError::Reconcile(
+                "no scripted huddle response remains".into(),
+            )),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

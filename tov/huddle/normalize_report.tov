@@ -1,0 +1,81 @@
+export type RawReport = {
+  participant: string
+  confidence_milli: int
+  verified_progress: string[]
+  blockers: string[]
+  changed_assumptions: string[]
+  dependency_changes: string[]
+  contradictions: string[]
+}
+
+export type NormalisedReport = {
+  accepted: bool
+  confidence: int
+}
+
+export function normaliseReport(report: RawReport): string {
+  const participantOk = report.participant.byteLength > 0
+  const confidenceOk = report.confidence_milli >= 0 && report.confidence_milli <= 10000
+  const arraysOk = report.verified_progress.length <= 64
+    && report.blockers.length <= 64
+    && report.changed_assumptions.length <= 64
+    && report.dependency_changes.length <= 64
+    && report.contradictions.length <= 64
+  let confidence = report.confidence_milli
+  if (confidence > 10000) {
+    confidence = 10000
+  }
+  const body: NormalisedReport = {
+    accepted: participantOk && confidenceOk && arraysOk,
+    confidence: confidence,
+  }
+  return JSON.stringify(body)
+}
+
+function sample(): RawReport {
+  return {
+    participant: "worker",
+    confidence_milli: 9500,
+    verified_progress: [],
+    blockers: [],
+    changed_assumptions: [],
+    dependency_changes: [],
+    contradictions: [],
+  }
+}
+
+function main(): int {
+  console.log(normaliseReport(sample()))
+  return 0
+}
+
+test("a well-formed report is accepted verbatim", () => {
+  const line = normaliseReport(sample())
+  expect(line.includes("\"accepted\":true")).toBe(true)
+  expect(line.includes("\"confidence\":9500")).toBe(true)
+})
+
+test("scalar and array bounds are enforced and confidence clamps at 10000", () => {
+  const anonymous: RawReport = {
+    participant: "",
+    confidence_milli: 100,
+    verified_progress: [],
+    blockers: [],
+    changed_assumptions: [],
+    dependency_changes: [],
+    contradictions: [],
+  }
+  expect(normaliseReport(anonymous).includes("\"accepted\":false")).toBe(true)
+  const overconfident: RawReport = {
+    participant: "worker",
+    confidence_milli: 70000,
+    verified_progress: [],
+    blockers: [],
+    changed_assumptions: [],
+    dependency_changes: [],
+    contradictions: [],
+  }
+  const line = normaliseReport(overconfident)
+  expect(line.includes("\"accepted\":false")).toBe(true)
+  expect(line.includes("\"confidence\":10000")).toBe(true)
+})

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://playbook.local/schemas/coherence_state.json",
+  "title": "Derived coherence state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["debt", "band", "active_huddles", "closed_huddles", "unresolved_contradictions"],
+  "properties": {
+    "debt": { "type": "integer", "minimum": 0 },
+    "band": { "enum": ["healthy", "monitor", "huddle_eligible", "coordinator_recommended", "mandatory_reconciliation"] },
+    "active_huddles": { "type": "integer", "minimum": 0 },
+    "closed_huddles": { "type": "integer", "minimum": 0 },
+    "unresolved_contradictions": { "type": "integer", "minimum": 0 }
+  }
+}

@@ -111,6 +111,7 @@ name = "playbook-elci"
 version = "0.1.0"
 dependencies = [
  "playbook-core",
+ "serde",
  "serde_json",
 ]
 
@@ -119,6 +120,7 @@ name = "playbook-events"
 version = "0.1.0"
 dependencies = [
  "playbook-core",
+ "playbook-huddle",
  "serde",
  "serde_json",
 ]
@@ -165,6 +167,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-huddle"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-elci",
+ "playbook-events",
+ "playbook-policy",
+ "playbook-sim",
+ "playbook-state",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-journal"
 version = "0.1.0"
 dependencies = [
@@ -190,6 +206,7 @@ version = "0.1.0"
 dependencies = [
  "playbook-core",
  "playbook-events",
+ "playbook-huddle",
 ]
 
 [[package]]
@@ -236,6 +253,7 @@ dependencies = [
  "playbook-events",
  "playbook-franchise",
  "playbook-front-office",
+ "playbook-huddle",
  "playbook-journal",
  "playbook-observability",
  "playbook-otlp",
@@ -254,6 +272,7 @@ dependencies = [
  "playbook-elci",
  "playbook-events",
  "playbook-evidence",
+ "playbook-huddle",
  "playbook-journal",
  "playbook-lastdown",
  "playbook-observability",
@@ -274,10 +293,12 @@ dependencies = [
  "playbook-events",
  "playbook-evidence",
  "playbook-gates",
+ "playbook-huddle",
  "playbook-lastdown",
  "playbook-policy",
  "playbook-routing",
  "playbook-security",
+ "playbook-sim",
  "playbook-ytg",
  "serde",
  "serde_json",

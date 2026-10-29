@@ -430,6 +430,40 @@ fn add_dim(left: u64, right: u64) -> Result<u64, PlaybookError> {
         .ok_or(PlaybookError::BudgetExhausted)
 }
 
+/// Hard envelope for one huddle synchronization. Every dimension is a
+/// ceiling; exhausting any of them terminates discussion and forces
+/// synthesis from the accumulated reports. A huddle may never extend itself.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HuddleBudget {
+    pub max_tokens: u64,
+    pub max_cost_microunits: u64,
+    pub max_duration_ms: u64,
+    pub max_rounds: u16,
+    pub max_participants: u16,
+}
+
+impl HuddleBudget {
+    pub fn zero() -> Self {
+        Self::default()
+    }
+
+    pub fn fits(&self, tokens: u64, cost_microunits: u64, duration_ms: u64, rounds: u16) -> bool {
+        tokens <= self.max_tokens
+            && cost_microunits <= self.max_cost_microunits
+            && duration_ms <= self.max_duration_ms
+            && rounds <= self.max_rounds
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BarrierMode {
+    Soft,
+    Scope,
+    Hard,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BudgetWeights {

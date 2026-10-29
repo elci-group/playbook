@@ -4,7 +4,7 @@
   "title": "Playbook policy bundle",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "schema_version", "first_down_attempt_threshold", "rush_budget_fraction_ppm", "conversion_threshold_ppm", "workload_thresholds", "min_attempt_ppm", "punt_preserve_ppm", "receiver_finish_ppm", "reset_bonus_ppm", "retry_limit", "stall_penalty_ppm", "capability_acquisition_limit", "swarm_min_marginal_milli", "rush_deterministic_bonus_ppm", "budget_weights", "allowed_side_effects", "plays", "routing"],
+  "required": ["version", "schema_version", "first_down_attempt_threshold", "rush_budget_fraction_ppm", "conversion_threshold_ppm", "workload_thresholds", "min_attempt_ppm", "punt_preserve_ppm", "receiver_finish_ppm", "reset_bonus_ppm", "retry_limit", "stall_penalty_ppm", "capability_acquisition_limit", "swarm_min_marginal_milli", "rush_deterministic_bonus_ppm", "budget_weights", "allowed_side_effects", "plays", "routing", "huddle"],
   "properties": {
     "version": { "type": "string" },
     "schema_version": { "type": "integer" },
@@ -87,6 +87,114 @@
         "quota": { "type": "integer" },
         "evidence_quality": { "type": "integer" },
         "prior_min_samples": { "type": "integer" }
+      }
+    },
+    "huddle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_threshold", "minimum_expected_value", "debt_monitor", "debt_eligible", "debt_coordinator", "debt_mandatory", "min_participant_score", "debt_weights", "participant_weights", "budgets"],
+      "properties": {
+        "failure_threshold": { "type": "integer" },
+        "minimum_expected_value": { "type": "integer" },
+        "debt_monitor": { "type": "integer" },
+        "debt_eligible": { "type": "integer" },
+        "debt_coordinator": { "type": "integer" },
+        "debt_mandatory": { "type": "integer" },
+        "min_participant_score": { "type": "integer" },
+        "debt_weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["assumption", "dependency", "contradiction", "turnover", "cross_impact", "blocker", "context_age"],
+          "properties": {
+            "assumption": { "type": "integer" },
+            "dependency": { "type": "integer" },
+            "contradiction": { "type": "integer" },
+            "turnover": { "type": "integer" },
+            "cross_impact": { "type": "integer" },
+            "blocker": { "type": "integer" },
+            "context_age": { "type": "integer" }
+          }
+        },
+        "participant_weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dependency_overlap", "contradiction_relevance", "ownership", "downstream_impact", "specialist_value", "context_cost"],
+          "properties": {
+            "dependency_overlap": { "type": "integer" },
+            "contradiction_relevance": { "type": "integer" },
+            "ownership": { "type": "integer" },
+            "downstream_impact": { "type": "integer" },
+            "specialist_value": { "type": "integer" },
+            "context_cost": { "type": "integer" }
+          }
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["position", "unit", "coordinator", "team", "franchise"],
+          "properties": {
+            "position": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "properties": {
+                "max_tokens": { "type": "integer" },
+                "max_cost_microunits": { "type": "integer" },
+                "max_duration_ms": { "type": "integer" },
+                "max_rounds": { "type": "integer" },
+                "max_participants": { "type": "integer" }
+              }
+            },
+            "unit": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "properties": {
+                "max_tokens": { "type": "integer" },
+                "max_cost_microunits": { "type": "integer" },
+                "max_duration_ms": { "type": "integer" },
+                "max_rounds": { "type": "integer" },
+                "max_participants": { "type": "integer" }
+              }
+            },
+            "coordinator": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "properties": {
+                "max_tokens": { "type": "integer" },
+                "max_cost_microunits": { "type": "integer" },
+                "max_duration_ms": { "type": "integer" },
+                "max_rounds": { "type": "integer" },
+                "max_participants": { "type": "integer" }
+              }
+            },
+            "team": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "properties": {
+                "max_tokens": { "type": "integer" },
+                "max_cost_microunits": { "type": "integer" },
+                "max_duration_ms": { "type": "integer" },
+                "max_rounds": { "type": "integer" },
+                "max_participants": { "type": "integer" }
+              }
+            },
+            "franchise": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "properties": {
+                "max_tokens": { "type": "integer" },
+                "max_cost_microunits": { "type": "integer" },
+                "max_duration_ms": { "type": "integer" },
+                "max_rounds": { "type": "integer" },
+                "max_participants": { "type": "integer" }
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -7,6 +7,10 @@
 use serde::{Deserialize, Serialize};
 
 use playbook_core::*;
+use playbook_huddle::{
+    Contradiction, HuddleCost, HuddleOutcome, HuddleParticipant, HuddleReport, HuddleScope,
+    HuddleTrigger,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -121,6 +125,59 @@ pub enum DriveEvent {
     AbandonIssued {
         reason: String,
     },
+    HuddleRequested {
+        huddle_id: HuddleId,
+        scope: HuddleScope,
+        trigger: HuddleTrigger,
+        at_ms: u64,
+    },
+    HuddleAdmitted {
+        huddle_id: HuddleId,
+        budget: HuddleBudget,
+        barrier: BarrierMode,
+        participants: Vec<HuddleParticipant>,
+    },
+    HuddleRejected {
+        huddle_id: HuddleId,
+        reason_code: String,
+    },
+    HuddleOpened {
+        huddle_id: HuddleId,
+    },
+    HuddleParticipantInvited {
+        huddle_id: HuddleId,
+        participant: HuddleParticipant,
+    },
+    HuddleReportSubmitted {
+        huddle_id: HuddleId,
+        report: Box<HuddleReport>,
+    },
+    HuddleContradictionDetected {
+        huddle_id: HuddleId,
+        contradiction: Contradiction,
+    },
+    HuddleBudgetConsumed {
+        huddle_id: HuddleId,
+        cost: HuddleCost,
+    },
+    HuddleOutcomeCommitted {
+        huddle_id: HuddleId,
+        outcome: Box<HuddleOutcome>,
+    },
+    HuddleEscalationRequested {
+        huddle_id: HuddleId,
+        to_scope: HuddleScope,
+        reason_code: String,
+    },
+    HuddleEscalated {
+        huddle_id: HuddleId,
+        new_huddle_id: HuddleId,
+        to_scope: HuddleScope,
+    },
+    HuddleClosed {
+        huddle_id: HuddleId,
+        reason_code: String,
+    },
 }
 
 impl DriveEvent {
@@ -155,6 +212,18 @@ impl DriveEvent {
             Self::CompletionRejected { .. } => "completion_rejected",
             Self::DriveCompleted { .. } => "drive_completed",
             Self::AbandonIssued { .. } => "abandon_issued",
+            Self::HuddleRequested { .. } => "huddle_requested",
+            Self::HuddleAdmitted { .. } => "huddle_admitted",
+            Self::HuddleRejected { .. } => "huddle_rejected",
+            Self::HuddleOpened { .. } => "huddle_opened",
+            Self::HuddleParticipantInvited { .. } => "huddle_participant_invited",
+            Self::HuddleReportSubmitted { .. } => "huddle_report_submitted",
+            Self::HuddleContradictionDetected { .. } => "huddle_contradiction_detected",
+            Self::HuddleBudgetConsumed { .. } => "huddle_budget_consumed",
+            Self::HuddleOutcomeCommitted { .. } => "huddle_outcome_committed",
+            Self::HuddleEscalationRequested { .. } => "huddle_escalation_requested",
+            Self::HuddleEscalated { .. } => "huddle_escalated",
+            Self::HuddleClosed { .. } => "huddle_closed",
         }
     }
 }

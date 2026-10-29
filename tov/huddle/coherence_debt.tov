@@ -1,0 +1,116 @@
+export type CoherenceInputs = {
+  assumption_divergence: int
+  dependency_staleness: int
+  contradiction_load: int
+  personnel_turnover: int
+  cross_unit_change_impact: int
+  unresolved_blockers: int
+  context_age: int
+}
+
+export type DebtWeights = {
+  assumption: int
+  dependency: int
+  contradiction: int
+  turnover: int
+  cross_impact: int
+  blocker: int
+  context_age: int
+}
+
+export const defaultDebtWeights: DebtWeights = {
+  assumption: 300,
+  dependency: 200,
+  contradiction: 400,
+  turnover: 100,
+  cross_impact: 200,
+  blocker: 300,
+  context_age: 50,
+}
+
+function clampPerMille(value: int): int {
+  let capped = value
+  if (capped > 1000) {
+    capped = 1000
+  }
+  return capped
+}
+
+export function coherenceDebt(inputs: CoherenceInputs, weights: DebtWeights): int {
+  const assumption = clampPerMille(inputs.assumption_divergence) * weights.assumption
+  const dependency = clampPerMille(inputs.dependency_staleness) * weights.dependency
+  const contradiction = clampPerMille(inputs.contradiction_load) * weights.contradiction
+  const turnover = clampPerMille(inputs.personnel_turnover) * weights.turnover
+  const crossImpact = clampPerMille(inputs.cross_unit_change_impact) * weights.cross_impact
+  const blockers = clampPerMille(inputs.unresolved_blockers) * weights.blocker
+  const contextAge = clampPerMille(inputs.context_age) * weights.context_age
+  const raw = assumption + dependency + contradiction + turnover + crossImpact + blockers + contextAge
+  let debt = Math.trunc(raw / 1000)
+  if (debt > 1000) {
+    debt = 1000
+  }
+  return debt
+}
+
+export function debtBand(debt: int): string {
+  if (debt >= 800) {
+    return "mandatory_reconciliation"
+  }
+  if (debt >= 600) {
+    return "coordinator_recommended"
+  }
+  if (debt >= 400) {
+    return "huddle_eligible"
+  }
+  if (debt >= 200) {
+    return "monitor"
+  }
+  return "healthy"
+}
+
+function main(): int {
+  const inputs: CoherenceInputs = {
+    assumption_divergence: 0,
+    dependency_staleness: 0,
+    contradiction_load: 500,
+    personnel_turnover: 0,
+    cross_unit_change_impact: 0,
+    unresolved_blockers: 0,
+    context_age: 0,
+  }
+  const debt = coherenceDebt(inputs, defaultDebtWeights)
+  console.log(debt)
+  console.log(debtBand(debt))
+  return 0
+}
+
+test("debt is a clamped weighted sum over the builtin weights", () => {
+  const inputs: CoherenceInputs = {
+    assumption_divergence: 0,
+    dependency_staleness: 0,
+    contradiction_load: 500,
+    personnel_turnover: 0,
+    cross_unit_change_impact: 0,
+    unresolved_blockers: 0,
+    context_age: 0,
+  }
+  expect(coherenceDebt(inputs, defaultDebtWeights)).toBe(200)
+  const full: CoherenceInputs = {
+    assumption_divergence: 1000,
+    dependency_staleness: 1000,
+    contradiction_load: 1000,
+    personnel_turnover: 1000,
+    cross_unit_change_impact: 1000,
+    unresolved_blockers: 1000,
+    context_age: 1000,
+  }
+  expect(coherenceDebt(full, defaultDebtWeights)).toBe(1000)
+})
+
+test("bands follow the builtin thresholds 200/400/600/800", () => {
+  expect(debtBand(0)).toBe("healthy")
+  expect(debtBand(200)).toBe("monitor")
+  expect(debtBand(400)).toBe("huddle_eligible")
+  expect(debtBand(600)).toBe("coordinator_recommended")
+  expect(debtBand(800)).toBe("mandatory_reconciliation")
+})

@@ -17,10 +17,14 @@ playbook-budget.workspace = true
 playbook-policy.workspace = true
 playbook-security.workspace = true
 playbook-elci.workspace = true
+playbook-huddle.workspace = true
 playbook-routing.workspace = true
 playbook-lastdown.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+playbook-sim.workspace = true
 
 [lints]
 workspace = true

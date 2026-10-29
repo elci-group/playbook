@@ -1,0 +1,47 @@
+function clampPerMille(value: int): int {
+  let capped = value
+  if (capped > 1000) {
+    capped = 1000
+  }
+  return capped
+}
+
+export function participationScore(overlap: int, relevance: int, ownership: int, downstream: int, specialist: int, contextCost: int): int {
+  const overlapScore = clampPerMille(overlap) * 3
+  const relevanceScore = clampPerMille(relevance) * 4
+  const ownershipScore = clampPerMille(ownership) * 2
+  const downstreamScore = clampPerMille(downstream) * 3
+  const specialistScore = clampPerMille(specialist) * 2
+  const costScore = clampPerMille(contextCost) * 1
+  return overlapScore + relevanceScore + ownershipScore + downstreamScore + specialistScore - costScore
+}
+
+export function preferLeft(leftScore: int, leftId: string, rightScore: int, rightId: string): bool {
+  if (leftScore > rightScore) {
+    return true
+  }
+  if (leftScore === rightScore && leftId < rightId) {
+    return true
+  }
+  return false
+}
+
+function main(): int {
+  console.log(participationScore(900, 900, 900, 900, 900, 10))
+  console.log(participationScore(200, 200, 200, 200, 200, 10))
+  console.log(preferLeft(12590, "agent-a", 12590, "agent-c"))
+  return 0
+}
+
+test("participation score uses the builtin weights", () => {
+  expect(participationScore(900, 900, 900, 900, 900, 10)).toBe(12590)
+  expect(participationScore(200, 200, 200, 200, 200, 10)).toBe(2790)
+  expect(participationScore(0, 0, 0, 0, 0, 0)).toBe(0)
+})
+
+test("ranking prefers higher score then the smaller id", () => {
+  expect(preferLeft(12590, "agent-a", 2790, "agent-b")).toBe(true)
+  expect(preferLeft(2790, "agent-b", 12590, "agent-a")).toBe(false)
+  expect(preferLeft(12590, "agent-a", 12590, "agent-c")).toBe(true)
+  expect(preferLeft(12590, "agent-c", 12590, "agent-a")).toBe(false)
+})

@@ -140,7 +140,90 @@ expect_exit = 0
 timeout_secs = 120
 
 [[command]]
+name = "tov check huddle coherence debt"
+cmd = ["tov", "check", "--json", "tov/huddle/coherence_debt.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check huddle trigger score"
+cmd = ["tov", "check", "--json", "tov/huddle/trigger_score.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check huddle admission score"
+cmd = ["tov", "check", "--json", "tov/huddle/admission_score.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check huddle participant rank"
+cmd = ["tov", "check", "--json", "tov/huddle/participant_rank.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check huddle normalize report"
+cmd = ["tov", "check", "--json", "tov/huddle/normalize_report.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check huddle contradiction score"
+cmd = ["tov", "check", "--json", "tov/huddle/contradiction_score.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check huddle escalation policy"
+cmd = ["tov", "check", "--json", "tov/huddle/escalation_policy.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check huddle disclosure filter"
+cmd = ["tov", "check", "--json", "tov/huddle/disclosure_filter.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
 name = "tov tests"
 cmd = ["tov", "test", "tov"]
 expect_exit = 0
 timeout_secs = 120
+
+[[file]]
+path = "crates/playbook-huddle/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/huddles.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "fixtures/huddles/position_success.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/huddles/position_failure.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/huddles/unit_contradiction.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/huddles/coordinator_fourth_down.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/huddles/budget_exhausted.json"
+required = true
+min_size_bytes = 100

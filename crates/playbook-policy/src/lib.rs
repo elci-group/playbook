@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use playbook_core::{
-    accept_schema, BudgetWeights, DriveBudget, EvidenceClass, PersonnelKind, PlayDefinition,
-    PlayKind, PlaybookError, SideEffectClass, SCHEMA_VERSION,
+    accept_schema, BudgetWeights, DriveBudget, EvidenceClass, HuddleBudget, PersonnelKind,
+    PlayDefinition, PlayKind, PlaybookError, SideEffectClass, SCHEMA_VERSION,
 };
 
 fn default_prior_min_samples() -> u32 {
@@ -31,6 +31,72 @@ pub struct RoutingWeights {
     pub evidence_quality: u32,
     #[serde(default = "default_prior_min_samples")]
     pub prior_min_samples: u32,
+}
+
+/// Coherence-debt component weights. Components are 0..=1000 per-mille; the
+/// weighted sum is divided by 1000 and clamped to 1000.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HuddleDebtWeights {
+    pub assumption: u32,
+    pub dependency: u32,
+    pub contradiction: u32,
+    pub turnover: u32,
+    pub cross_impact: u32,
+    pub blocker: u32,
+    pub context_age: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ParticipantWeights {
+    pub dependency_overlap: u32,
+    pub contradiction_relevance: u32,
+    pub ownership: u32,
+    pub downstream_impact: u32,
+    pub specialist_value: u32,
+    pub context_cost: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HuddleBudgets {
+    pub position: HuddleBudget,
+    pub unit: HuddleBudget,
+    pub coordinator: HuddleBudget,
+    pub team: HuddleBudget,
+    pub franchise: HuddleBudget,
+}
+
+/// Huddle thresholds. Exact bands, budgets, and admission floors live here,
+/// never in compiled business logic.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HuddlePolicy {
+    pub failure_threshold: u32,
+    pub minimum_expected_value: i64,
+    pub debt_monitor: u32,
+    pub debt_eligible: u32,
+    pub debt_coordinator: u32,
+    pub debt_mandatory: u32,
+    pub min_participant_score: i64,
+    pub debt_weights: HuddleDebtWeights,
+    pub participant_weights: ParticipantWeights,
+    pub budgets: HuddleBudgets,
+}
+
+impl HuddlePolicy {
+    /// The envelope for a scope key: position, unit, coordinator, team, or
+    /// franchise.
+    pub fn budget(&self, scope: &str) -> HuddleBudget {
+        match scope {
+            "position" => self.budgets.position,
+            "unit" => self.budgets.unit,
+            "coordinator" => self.budgets.coordinator,
+            "team" => self.budgets.team,
+            _ => self.budgets.franchise,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,6 +121,7 @@ pub struct Policy {
     pub allowed_side_effects: Vec<SideEffectClass>,
     pub plays: Vec<PlayDefinition>,
     pub routing: RoutingWeights,
+    pub huddle: HuddlePolicy,
 }
 
 impl Policy {
@@ -111,6 +178,69 @@ impl Policy {
                 evidence_quality: 1,
                 prior_min_samples: default_prior_min_samples(),
             },
+            huddle: HuddlePolicy {
+                failure_threshold: 2,
+                minimum_expected_value: 0,
+                debt_monitor: 200,
+                debt_eligible: 400,
+                debt_coordinator: 600,
+                debt_mandatory: 800,
+                min_participant_score: 2_000,
+                debt_weights: HuddleDebtWeights {
+                    assumption: 300,
+                    dependency: 200,
+                    contradiction: 400,
+                    turnover: 100,
+                    cross_impact: 200,
+                    blocker: 300,
+                    context_age: 50,
+                },
+                participant_weights: ParticipantWeights {
+                    dependency_overlap: 3,
+                    contradiction_relevance: 4,
+                    ownership: 2,
+                    downstream_impact: 3,
+                    specialist_value: 2,
+                    context_cost: 1,
+                },
+                budgets: HuddleBudgets {
+                    position: HuddleBudget {
+                        max_tokens: 2_000,
+                        max_cost_microunits: 200_000,
+                        max_duration_ms: 5_000,
+                        max_rounds: 1,
+                        max_participants: 3,
+                    },
+                    unit: HuddleBudget {
+                        max_tokens: 6_000,
+                        max_cost_microunits: 600_000,
+                        max_duration_ms: 15_000,
+                        max_rounds: 2,
+                        max_participants: 5,
+                    },
+                    coordinator: HuddleBudget {
+                        max_tokens: 8_000,
+                        max_cost_microunits: 800_000,
+                        max_duration_ms: 20_000,
+                        max_rounds: 2,
+                        max_participants: 6,
+                    },
+                    team: HuddleBudget {
+                        max_tokens: 16_000,
+                        max_cost_microunits: 1_600_000,
+                        max_duration_ms: 60_000,
+                        max_rounds: 3,
+                        max_participants: 12,
+                    },
+                    franchise: HuddleBudget {
+                        max_tokens: 32_000,
+                        max_cost_microunits: 3_200_000,
+                        max_duration_ms: 120_000,
+                        max_rounds: 3,
+                        max_participants: 24,
+                    },
+                },
+            },
         }
     }
 
@@ -133,6 +263,15 @@ pub fn from_str(text: &str) -> Result<Policy, PlaybookError> {
         || policy.conversion_threshold_ppm > playbook_core::PPM_SCALE
     {
         return Err(PlaybookError::Probability(policy.rush_budget_fraction_ppm));
+    }
+    if !(policy.huddle.debt_monitor < policy.huddle.debt_eligible
+        && policy.huddle.debt_eligible < policy.huddle.debt_coordinator
+        && policy.huddle.debt_coordinator < policy.huddle.debt_mandatory
+        && policy.huddle.debt_mandatory <= 1_000)
+    {
+        return Err(PlaybookError::Evidence(
+            "huddle coherence-debt bands must ascend below 1000".into(),
+        ));
     }
     Ok(policy)
 }
@@ -269,5 +408,20 @@ mod tests {
         let text = serde_json::to_string(&Policy::builtin()).unwrap();
         let loaded = from_str(&text).unwrap();
         assert_eq!(loaded, Policy::builtin());
+    }
+
+    /// Deterministic regeneration for the policy fixtures. Run explicitly:
+    /// cargo test -p playbook-policy --offline -- --ignored regenerate_policy_fixtures
+    #[test]
+    #[ignore]
+    fn regenerate_policy_fixtures() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for (name, policy) in [
+            ("policy.json", Policy::builtin()),
+            ("policy_pass_heavy.json", Policy::pass_heavy_contrast()),
+        ] {
+            let text = serde_json::to_string_pretty(&policy).unwrap();
+            std::fs::write(root.join("fixtures").join(name), text).unwrap();
+        }
     }
 }

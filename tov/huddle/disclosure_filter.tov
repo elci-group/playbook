@@ -1,0 +1,27 @@
+export function disclosure(kindIsModel: bool, kindIsHuman: bool, kindIsSpecialist: bool): string {
+  if (kindIsModel) {
+    return "model"
+  }
+  if (kindIsHuman) {
+    return "human"
+  }
+  if (kindIsSpecialist) {
+    return "specialist"
+  }
+  return "deterministic"
+}
+
+function main(): int {
+  console.log(disclosure(true, false, false))
+  console.log(disclosure(false, false, true))
+  console.log(disclosure(false, true, false))
+  console.log(disclosure(false, false, false))
+  return 0
+}
+
+test("the default regulator maps each personnel kind to a profile", () => {
+  expect(disclosure(true, false, false)).toBe("model")
+  expect(disclosure(false, true, false)).toBe("human")
+  expect(disclosure(false, false, true)).toBe("specialist")
+  expect(disclosure(false, false, false)).toBe("deterministic")
+})

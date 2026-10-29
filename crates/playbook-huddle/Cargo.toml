@@ -1,0 +1,23 @@
+[package]
+name = "playbook-huddle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "Budgeted, condition-triggered coherence barriers between concurrently operating personnel."
+
+[dependencies]
+playbook-core.workspace = true
+playbook-policy.workspace = true
+playbook-elci.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+playbook-events.workspace = true
+playbook-state.workspace = true
+playbook-sim.workspace = true
+
+[lints]
+workspace = true

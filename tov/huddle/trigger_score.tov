@@ -1,0 +1,39 @@
+export function triggerReason(failedAttempts: int, fieldChanged: bool, mandatoryGateCompleted: bool, dependents: int, isFourthDown: bool, debt: int): string {
+  if (failedAttempts >= 2 && !fieldChanged) {
+    return "repeated_failed_play"
+  }
+  if (mandatoryGateCompleted && dependents >= 2) {
+    return "gate_unlocked_dependents"
+  }
+  if (isFourthDown) {
+    return "fourth_down_disposition"
+  }
+  if (debt >= 400) {
+    return "coherence_debt"
+  }
+  return "none"
+}
+
+function main(): int {
+  console.log(triggerReason(2, false, false, 0, false, 0))
+  console.log(triggerReason(0, true, true, 2, false, 0))
+  console.log(triggerReason(0, true, false, 0, true, 0))
+  console.log(triggerReason(0, true, false, 0, false, 400))
+  console.log(triggerReason(0, true, false, 0, false, 0))
+  return 0
+}
+
+test("triggers fire in severity order", () => {
+  expect(triggerReason(2, false, true, 2, true, 800)).toBe("repeated_failed_play")
+  expect(triggerReason(2, true, true, 2, true, 800)).toBe("gate_unlocked_dependents")
+  expect(triggerReason(0, true, false, 2, true, 800)).toBe("fourth_down_disposition")
+  expect(triggerReason(0, true, false, 0, false, 400)).toBe("coherence_debt")
+  expect(triggerReason(1, false, false, 0, false, 200)).toBe("none")
+})
+
+test("builtin thresholds gate each trigger", () => {
+  expect(triggerReason(2, false, false, 0, false, 0)).toBe("repeated_failed_play")
+  expect(triggerReason(1, false, false, 0, false, 0)).toBe("none")
+  expect(triggerReason(0, true, true, 2, false, 0)).toBe("gate_unlocked_dependents")
+  expect(triggerReason(0, true, true, 1, false, 0)).toBe("none")
+})

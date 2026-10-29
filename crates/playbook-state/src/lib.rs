@@ -10,7 +10,7 @@ mod authority;
 mod classify;
 
 pub use apply::{apply, export_log, fold, import_log, trajectory, ApplyMode, TrajectoryPoint};
-pub use authority::{started_budget, Authority};
+pub use authority::{started_budget, Authority, HuddleAdmission, HuddleRequest};
 pub use classify::{classify_measurement, estimate_completion_ppm};
 
 use std::collections::BTreeMap;
@@ -100,6 +100,7 @@ pub struct DriveState {
     pub(crate) missing_evidence: Vec<EvidenceClass>,
     pub(crate) acquisition_count: u32,
     pub(crate) priors: HistoricalPriorTable,
+    pub(crate) huddles: playbook_huddle::HuddleLedger,
 }
 
 impl DriveState {
@@ -163,6 +164,7 @@ impl DriveState {
             missing_evidence: Vec::new(),
             acquisition_count: 0,
             priors: HistoricalPriorTable::empty(),
+            huddles: playbook_huddle::HuddleLedger::empty(),
         }
     }
 
@@ -197,6 +199,15 @@ impl DriveState {
     /// Learned historical priors recorded from measured play outcomes.
     pub fn priors(&self) -> &HistoricalPriorTable {
         &self.priors
+    }
+    /// Evidence ids sealed by failed plays, oldest first.
+    pub fn failure_refs(&self) -> &[EvidenceId] {
+        &self.failure_refs
+    }
+    /// Event-sourced huddle ledger: active barriers, closed records,
+    /// committed assignments, and substitution recommendations.
+    pub fn huddles(&self) -> &playbook_huddle::HuddleLedger {
+        &self.huddles
     }
     /// The invocation that was dispatched but never committed an outcome.
     /// A recovering host must reconcile it before further execution.
