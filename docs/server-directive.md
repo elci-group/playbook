@@ -151,8 +151,16 @@ created at drive creation.
 ## 9. Configuration
 
 ```
-playbook-server [--bind ADDR] [--port PORT] [--journal-dir DIR] [--otlp URL]
+playbook-server [--bind ADDR] [--port PORT] [--journal-dir DIR] [--otlp URL] [--auto-update --update-remote URL [--update-ref REF]]
 ```
+
+Automatic updates are opt-in. When `--auto-update` is set, the server invokes
+Theosis before binding and hands off to the installed binary if an update was
+applied. `PLAYBOOK_UPDATE_REMOTE` may provide the remote instead of
+`--update-remote`; `THEOSIS_BIN` selects a nonstandard Theosis executable.
+The server reports the workspace `VERSION` through `--version`, allowing
+Theosis to compare installed and remote builds. An update failure exits before
+the service starts.
 
 Defaults: bind `127.0.0.1`, port `8088`, journal dir `./playbook-journals`,
 OTLP off. The listening address is printed to stdout as

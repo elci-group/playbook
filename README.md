@@ -54,6 +54,24 @@ cargo run -p playbook-cli -- status
 cargo run -p playbook-cli -- sprint
 ```
 
+For an installed server, Theosis can check and apply updates before the service
+binds its port. Start it with an explicit update source:
+
+```sh
+playbook-server --auto-update \
+  --update-remote https://github.com/OWNER/playbook.git \
+  --update-ref main --port 8088
+```
+
+`--auto-update` is opt-in. `PLAYBOOK_UPDATE_REMOTE` can supply the remote, and
+`THEOSIS_BIN` can point to a nonstandard Theosis executable. On startup the
+server runs `theosis update`, then replaces its process if Theosis installed a
+new version. If the installed binary is newer than the selected remote, the
+server continues with its current version. Update errors stop startup so a
+service manager can report or retry the failure. The server's `--version`
+comes from the repository `VERSION` file, which Theosis uses for update
+decisions.
+
 `playbook sprint` writes the acceptance drive's event log as JSON. The checked-in
 `fixtures/sprint_transcript.json` is replayed by the simulation tests. Applications
 can persist logs with `playbook_state::export_log`, load them with `import_log`,
