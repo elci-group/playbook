@@ -72,6 +72,36 @@ impl HistoricalPriorTable {
     pub fn rows(&self) -> impl Iterator<Item = (&String, &PriorRow)> {
         self.rows.iter()
     }
+
+    /// Combine only the observations learned after a drive's imported seed.
+    /// This prevents cross-drive history from being counted again on recovery.
+    pub fn merge_observations(&mut self, learned: &Self, seed: &Self) -> Result<(), PlaybookError> {
+        let mut next = self.clone();
+        for (id, base) in seed.rows() {
+            let row = learned.rows.get(id).copied().unwrap_or_default();
+            if row.samples < base.samples
+                || row.realized_reduction_sum_milli < base.realized_reduction_sum_milli
+            {
+                return Err(PlaybookError::ReplayDivergence(
+                    "prior seed regressed".into(),
+                ));
+            }
+        }
+        for (id, row) in learned.rows() {
+            let base = seed.rows.get(id).copied().unwrap_or_default();
+            let target = next.rows.entry(id.clone()).or_default();
+            target.samples = target
+                .samples
+                .checked_add(row.samples - base.samples)
+                .ok_or(PlaybookError::BudgetExhausted)?;
+            target.realized_reduction_sum_milli = target
+                .realized_reduction_sum_milli
+                .checked_add(row.realized_reduction_sum_milli - base.realized_reduction_sum_milli)
+                .ok_or(PlaybookError::BudgetExhausted)?;
+        }
+        *self = next;
+        Ok(())
+    }
 }
 
 /// A versioned, persistable prior table.

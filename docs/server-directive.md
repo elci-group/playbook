@@ -183,3 +183,11 @@ Each criterion is enforced by an automated test on a real socket.
 
 The README delivery status must stop claiming the server serves one fixed
 snapshot. This directive is the server's contract of record.
+
+## Franchise extension
+
+The service also hosts persistent franchise management at `/v1/franchises`.
+Its contract is [franchise.md](franchise.md). Franchise-managed drives belong
+to that registry and use its shared cap, roster and write-ahead store. Legacy
+`/v1/drives` routes continue to describe standalone drives and cannot dispatch
+or mutate a franchise-managed drive.

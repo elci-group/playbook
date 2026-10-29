@@ -1,4 +1,29 @@
 [[file]]
+path = "crates/playbook-front-office/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/front-office.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "fixtures/front_office.json"
+required = true
+min_size_bytes = 500
+
+[[file]]
+path = "crates/playbook-franchise/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/franchise.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
 path = "README.md"
 required = true
 min_size_bytes = 400

@@ -12,6 +12,9 @@ name = "playbook-server"
 path = "src/main.rs"
 
 [dependencies]
+playbook-front-office.workspace = true
+playbook-franchise.workspace = true
+serde.workspace = true
 playbook-core.workspace = true
 playbook-policy.workspace = true
 playbook-state.workspace = true

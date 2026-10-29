@@ -1,0 +1,50 @@
+{
+  "effective_season": 2,
+  "evidence_through_season": 1,
+  "currency": "gbp",
+  "budget_micros_per_workload": 200,
+  "maximum_members": 2,
+  "minimum_depth": 2,
+  "minimum_providers": 2,
+  "minimum_reliability_ppm": 800000,
+  "minimum_samples": 10,
+  "maximum_latency_ms": 5000,
+  "require_offline_fallback": false,
+  "workloads": [
+    {"task_class":"code_repair", "weight_ppm":500000, "novelty_ppm":200000,
+     "context_tokens":32000, "tool_intensity_ppm":800000, "reasoning_depth_ppm":700000,
+     "coding_requirement_ppm":800000, "required_tools":["compiler","test_runner"]},
+    {"task_class":"technical_research", "weight_ppm":500000, "novelty_ppm":400000,
+     "context_tokens":64000, "tool_intensity_ppm":400000, "reasoning_depth_ppm":900000,
+     "coding_requirement_ppm":0, "required_tools":["search"]}
+  ],
+  "candidates": [
+    {"personnel_id":"cargo-toolchain", "provider":"cargo-toolchain", "failure_domains":["upstream-a"],
+     "cost_micros_per_workload":100, "quota_workloads":1000, "latency_ms":500,
+     "reliability_ppm":990000, "price_volatility_ppm":10000, "context_tokens":128000,
+     "reasoning_ppm":950000, "coding_ppm":950000, "tool_use_ppm":950000,
+     "tools":["compiler","test_runner","search"], "offline":false,
+     "history":[
+       {"task_class":"code_repair","through_season":1,"samples":100,"success_ppm":950000,"divcon_upset_ppm":700000},
+       {"task_class":"technical_research","through_season":1,"samples":100,"success_ppm":900000,"divcon_upset_ppm":700000}
+     ]},
+    {"personnel_id":"rust-analyser", "provider":"rust-analyser", "failure_domains":["upstream-a"],
+     "cost_micros_per_workload":100, "quota_workloads":1000, "latency_ms":500,
+     "reliability_ppm":980000, "price_volatility_ppm":10000, "context_tokens":128000,
+     "reasoning_ppm":950000, "coding_ppm":950000, "tool_use_ppm":950000,
+     "tools":["compiler","test_runner","search"], "offline":false,
+     "history":[
+       {"task_class":"code_repair","through_season":1,"samples":100,"success_ppm":940000,"divcon_upset_ppm":700000},
+       {"task_class":"technical_research","through_season":1,"samples":100,"success_ppm":890000,"divcon_upset_ppm":700000}
+     ]},
+    {"personnel_id":"coding-specialist", "provider":"coding-specialist", "failure_domains":["upstream-b"],
+     "cost_micros_per_workload":20, "quota_workloads":1000, "latency_ms":600,
+     "reliability_ppm":990000, "price_volatility_ppm":10000, "context_tokens":128000,
+     "reasoning_ppm":950000, "coding_ppm":950000, "tool_use_ppm":950000,
+     "tools":["compiler","test_runner","search"], "offline":true,
+     "history":[
+       {"task_class":"code_repair","through_season":1,"samples":100,"success_ppm":900000,"divcon_upset_ppm":800000},
+       {"task_class":"technical_research","through_season":1,"samples":100,"success_ppm":950000,"divcon_upset_ppm":800000}
+     ]}
+  ]
+}

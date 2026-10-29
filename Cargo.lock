@@ -132,6 +132,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-franchise"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-elci",
+ "playbook-events",
+ "playbook-front-office",
+ "playbook-policy",
+ "playbook-sim",
+ "playbook-state",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "playbook-front-office"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-gates"
 version = "0.1.0"
 dependencies = [
@@ -210,12 +234,15 @@ dependencies = [
  "playbook-core",
  "playbook-elci",
  "playbook-events",
+ "playbook-franchise",
+ "playbook-front-office",
  "playbook-journal",
  "playbook-observability",
  "playbook-otlp",
  "playbook-policy",
  "playbook-sim",
  "playbook-state",
+ "serde",
  "serde_json",
 ]
 

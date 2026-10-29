@@ -1,6 +1,6 @@
 # Playbook
 
-Playbook is Lucid's tactical control plane. It classifies the state of an agentic work cycle and selects the next admissible intervention.
+Playbook is Lucid's franchise and tactical control plane. A persistent franchise owns objectives, roster, resource allocations and measured history; disposable players execute bounded assignments. Playbook classifies each drive's state and selects the next admissible intervention.
 
 The football words are presentation metadata. The machine state is:
 
@@ -11,6 +11,22 @@ S_t = (Y_t, ΔY_t, B_t, G_t, A_t, T_t, C_t, P_t, E_t)
 Models may propose progress. Only evidence establishes it. Yards-to-go is the weighted, evidence-backed distance across deliver gates. Budget is multidimensional. Fourth down hands the drive to the Lastdown doctrine: convert, field goal, punt, reset, or abandon.
 
 Lucid remains the orchestrator. Playbook issues an execution contract. ELCI is the capability plane. This repository does not call a model.
+
+`playbook-franchise` adds durable ownership above drive authorities: roster
+acquisition and availability, independent objectives, a shared multidimensional
+salary cap, player substitution, Lastdown possession renewal and scouting across
+drives. The HTTP service exposes it under `/v1/franchises`. Drive events reach
+durable franchise storage before dispatch, and recovery preserves accepted
+progress and unreconciled invocations. See [the franchise contract](docs/franchise.md)
+for the API, budget semantics and operating limits. The HTTP executor remains a
+fixture; hosts supply live execution through `CapabilityPlane`.
+
+`playbook-front-office` builds an offline roster portfolio from closed-season
+history, economic constraints and abstract workload features. It emits a static
+`ROSTER/1` contract. Future contracts stay staged until an explicit transaction
+window; membership freezes at kickoff and survives punts and recovery. Bench
+readiness and Playbook deployment remain live coaching decisions. See
+[Front Office](docs/front-office.md) for its restricted inputs, scoring and API.
 
 ## Layout
 

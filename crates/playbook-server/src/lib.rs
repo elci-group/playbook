@@ -8,6 +8,8 @@
 
 #![forbid(unsafe_code)]
 
+mod franchise;
+
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -123,6 +125,7 @@ struct DriveHandle {
 }
 
 pub struct Service {
+    franchises: franchise::FranchiseApi,
     journal_dir: PathBuf,
     otlp: Option<String>,
     drives: Mutex<BTreeMap<String, DriveHandle>>,
@@ -202,6 +205,7 @@ impl Service {
             }
         }
         Ok(Service {
+            franchises: franchise::FranchiseApi::open(&config.journal_dir.join("franchises"))?,
             journal_dir: config.journal_dir.clone(),
             otlp: config.otlp.clone(),
             drives: Mutex::new(drives),
@@ -433,6 +437,18 @@ impl Service {
 
     pub fn handle(&self, method: &str, path: &str, body: &str) -> Response {
         let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
+        if method == "POST" && segments == ["v1", "front-office", "rosters"] {
+            return match serde_json::from_str::<playbook_front_office::PortfolioInput>(body)
+                .map_err(PlaybookError::json)
+                .and_then(|input| playbook_front_office::construct(&input))
+            {
+                Ok(contract) => reply(200, &json!(contract)),
+                Err(error) => error_of(error),
+            };
+        }
+        if segments.get(1) == Some(&"franchises") && segments.first() == Some(&"v1") {
+            return self.franchises.handle(method, &segments[2..], body);
+        }
         match (method, segments.as_slice()) {
             ("GET", ["healthz"]) => reply(200, &json!({"ok": true})),
             ("GET", ["readyz"]) => reply(

@@ -37,6 +37,8 @@ macro_rules! id_type {
 }
 
 id_type!(DriveId);
+id_type!(FranchiseId);
+id_type!(ObjectiveId);
 id_type!(GateId);
 id_type!(PlayId);
 id_type!(CapabilityId);
