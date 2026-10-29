@@ -48,6 +48,14 @@ pub struct CollectionSummary {
     pub synthesized: bool,
 }
 
+/// The live coherence reading an orchestrator monitors: the measured debt
+/// state and the trigger currently firing on it, if any.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CoherenceReading {
+    pub state: playbook_huddle::CoherenceState,
+    pub condition: Option<(HuddleScope, HuddleTriggerKind, String)>,
+}
+
 impl HuddleRequest {
     /// Derive a request from an HTTP body: every roster member becomes a
     /// candidate with neutral relevance, and selection still applies the
@@ -703,6 +711,140 @@ impl Authority {
             summary.synthesized = true;
         }
         Ok(summary)
+    }
+
+    /// Live coherence measurement for a hosted drive: the deterministic
+    /// debt score with its band, the ledger counters, and the trigger the
+    /// engine currently fires on this exact state, if any. This is the
+    /// Phase 7 seam an orchestrator monitors. Every component is measured
+    /// from the journal and the fold, never reported by callers:
+    /// assumption divergence counts subjects whose active reports disagree,
+    /// contradiction load counts live contradiction objects, turnover
+    /// counts benched personnel, blockers count active report blockers, and
+    /// context age counts journal events since the last committed
+    /// reconciliation. Components the drive does not yet track (dependency
+    /// staleness, cross-unit change impact) read zero; they are never
+    /// guessed.
+    pub fn coherence(&self) -> CoherenceReading {
+        let ledger = self.state.huddles();
+        let mut divergent_subjects: Vec<&str> = Vec::new();
+        let mut blockers = 0u32;
+        for huddle in ledger.active() {
+            let mut per_subject: std::collections::BTreeMap<&str, Vec<&str>> =
+                std::collections::BTreeMap::new();
+            for report in &huddle.reports {
+                for delta in &report.changed_assumptions {
+                    let values = per_subject.entry(delta.subject.as_str()).or_default();
+                    if !values.contains(&delta.current.as_str()) {
+                        values.push(delta.current.as_str());
+                    }
+                }
+                blockers += report.blockers.len() as u32;
+            }
+            divergent_subjects.extend(
+                per_subject
+                    .into_values()
+                    .filter(|values| values.len() > 1)
+                    .map(|values| values[0]),
+            );
+        }
+        let unresolved: u32 = ledger
+            .active()
+            .iter()
+            .map(|huddle| huddle.contradictions.len() as u32)
+            .sum::<u32>()
+            + ledger
+                .closed()
+                .iter()
+                .filter_map(|record| record.outcome.as_ref())
+                .map(|outcome| outcome.unresolved_contradictions.len() as u32)
+                .sum::<u32>();
+        let last_reconciliation = self
+            .log()
+            .iter()
+            .rposition(|event| matches!(event, DriveEvent::HuddleOutcomeCommitted { .. }))
+            .map(|index| index + 1)
+            .unwrap_or(0);
+        let inputs = playbook_huddle::CoherenceInputs {
+            assumption_divergence: (divergent_subjects.len() as u32 * 500).min(1_000),
+            dependency_staleness: 0,
+            contradiction_load: (unresolved * 250).min(1_000),
+            personnel_turnover: (self.state.benched().len() as u32 * 500).min(1_000),
+            cross_unit_change_impact: 0,
+            unresolved_blockers: (blockers * 250).min(1_000),
+            context_age: (self.log().len() as u32 - last_reconciliation as u32).min(1_000),
+        };
+        let debt = playbook_huddle::coherence_debt(&inputs, &self.policy.huddle.debt_weights);
+        CoherenceReading {
+            state: playbook_huddle::coherence_state(ledger, &inputs, &self.policy),
+            condition: self.huddle_condition(debt),
+        }
+    }
+
+    /// The huddle trigger the engine currently fires on this live state.
+    fn huddle_condition(&self, debt: u32) -> Option<(HuddleScope, HuddleTriggerKind, String)> {
+        let log = self.log();
+        let last_failure = log
+            .iter()
+            .rposition(|event| matches!(event, DriveEvent::ToolFailed { .. }));
+        let (failed_attempts, field_changed, gate_completed) = match last_failure {
+            None => (0, true, false),
+            Some(index) => {
+                let after = &log[index + 1..];
+                let moved = |event: &DriveEvent| {
+                    matches!(
+                        event,
+                        DriveEvent::YtgRecalculated { .. }
+                            | DriveEvent::DownChanged { .. }
+                            | DriveEvent::FourthDownDeclared { .. }
+                            | DriveEvent::FieldGoalSelected { .. }
+                            | DriveEvent::PuntIssued { .. }
+                            | DriveEvent::PossessionStarted { .. }
+                            | DriveEvent::GateDeclared { .. }
+                            | DriveEvent::EvidenceAccepted { .. }
+                            | DriveEvent::DriveCompleted { .. }
+                            | DriveEvent::AbandonIssued { .. }
+                    )
+                };
+                let mut attempts = 0u32;
+                for event in log.iter().rev() {
+                    match event {
+                        DriveEvent::ToolFailed { .. } => attempts += 1,
+                        DriveEvent::YtgRecalculated { .. }
+                        | DriveEvent::DownChanged { .. }
+                        | DriveEvent::FourthDownDeclared { .. } => continue,
+                        _ => break,
+                    }
+                }
+                (
+                    attempts,
+                    after.iter().any(moved),
+                    after
+                        .iter()
+                        .any(|event| matches!(event, DriveEvent::EvidenceAccepted { .. })),
+                )
+            }
+        };
+        let trigger = playbook_huddle::evaluate_triggers(
+            &playbook_huddle::TriggerInputs {
+                failed_attempts,
+                field_changed_since_failure: field_changed,
+                mandatory_gate_completed: gate_completed,
+                dependent_active_personnel: self.roster.len() as u32,
+                down: self.state.down(),
+                debt,
+                evidence_refs: self
+                    .state
+                    .failure_refs()
+                    .last()
+                    .cloned()
+                    .into_iter()
+                    .collect(),
+                originating_event: EventId::new(format!("event-{}", log.len())).expect("event id"),
+            },
+            &self.policy.huddle,
+        )?;
+        Some((trigger.0, trigger.1.kind, trigger.1.reason_code))
     }
 
     /// Escalate one scope up the ladder. Returns the new huddle's id; the
@@ -2111,6 +2253,106 @@ mod tests {
             .conditions()
             .iter()
             .any(|condition| condition.reason_code == "post_synthesis_review"));
+        let replay =
+            crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
+        assert_eq!(&replay, authority.state());
+    }
+
+    #[test]
+    fn coherence_reads_healthy_before_any_huddle() {
+        let authority = huddle_authority();
+        let reading = authority.coherence();
+        assert_eq!(reading.state.debt, 0);
+        assert_eq!(reading.state.band, playbook_huddle::DebtBand::Healthy);
+        assert_eq!(reading.state.active_huddles, 0);
+        assert!(reading.condition.is_none());
+    }
+
+    #[test]
+    fn coherence_withholds_the_failure_trigger_while_the_field_moves() {
+        let mut authority = huddle_authority();
+        let mut plane = FixturePlane::ready();
+        plane.push_success(
+            "inspect",
+            Evidence::seal(
+                EvidenceClass::EnvironmentSnapshot,
+                json!({"host": "lab"}),
+                10,
+            )
+            .unwrap(),
+            DriveBudget {
+                tokens: 1,
+                monetary_cost_micros: 100,
+                tool_calls: 1,
+                ..DriveBudget::zero()
+            },
+        );
+        plane.push_failure("compile", ToolFailureKind::Timeout);
+        plane.push_failure("compile", ToolFailureKind::Timeout);
+        authority.preflight(&mut plane).unwrap();
+        authority.step(&mut plane, 100).unwrap();
+        authority.step(&mut plane, 200).unwrap();
+        authority.step(&mut plane, 300).unwrap();
+        // Two trailing failures, but each moved the down: the unchanged-field
+        // guard withholds the failure trigger at the live seam.
+        assert!(authority.coherence().condition.is_none());
+    }
+
+    #[test]
+    fn coherence_debt_climbs_with_unresolved_contradictions() {
+        let mut authority = huddle_authority();
+        let evidence = drive_evidence(&mut authority, 50);
+        let HuddleAdmission::Open(huddle_id) =
+            authority.open_huddle(huddle_request(), 100).unwrap()
+        else {
+            panic!("huddle should open")
+        };
+        let contradictory = |participant: &str, interface: &str, contract: &str| HuddleReport {
+            participant: PersonnelId::new(participant).unwrap(),
+            verified_progress: vec![evidence.clone()],
+            blockers: Vec::new(),
+            changed_assumptions: vec![
+                AssumptionDelta {
+                    subject: "interface".into(),
+                    previous: "v1".into(),
+                    current: interface.into(),
+                    evidence_ref: None,
+                },
+                AssumptionDelta {
+                    subject: "contract".into(),
+                    previous: "v1".into(),
+                    current: contract.into(),
+                    evidence_ref: None,
+                },
+            ],
+            dependency_changes: Vec::new(),
+            contradictions: Vec::new(),
+            proposed_action: None,
+            confidence_milli: 9_000,
+        };
+        for (participant, interface, contract) in
+            [("worker-a", "v1", "v1"), ("worker-b", "v2", "v2")]
+        {
+            authority
+                .submit_huddle_report(&huddle_id, contradictory(participant, interface, contract))
+                .unwrap();
+        }
+        authority
+            .invite_to_huddle(&huddle_id, &PersonnelId::new("model-a").unwrap())
+            .unwrap();
+        authority
+            .submit_huddle_report(&huddle_id, contradictory("model-a", "v3", "v3"))
+            .unwrap();
+        let reading = authority.coherence();
+        assert_eq!(reading.state.unresolved_contradictions, 2);
+        // Two contradictions (load 500) plus two diverging assumption
+        // subjects (divergence 1000) land the drive in the eligible band:
+        // a position or unit huddle is now economically justified.
+        assert_eq!(
+            reading.state.band,
+            playbook_huddle::DebtBand::HuddleEligible
+        );
+        assert!(reading.state.debt >= 500);
         let replay =
             crate::fold(authority.log(), authority.policy(), crate::ApplyMode::Audit).unwrap();
         assert_eq!(&replay, authority.state());

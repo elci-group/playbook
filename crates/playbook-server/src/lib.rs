@@ -22,10 +22,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use playbook_core::{
     DriveBudget, DriveId, DriveStatus, PlaybookError, TaskContract, TaskIntegrity,
 };
-use playbook_elci::FixturePlane;
+use playbook_elci::{FixtureHuddlePlane, FixturePlane, HuddleDispatch};
 use playbook_events::DriveEvent;
 use playbook_journal::Journal;
-use playbook_observability::SpanNode;
+use playbook_observability::{huddle_metrics, SpanNode};
 use playbook_policy::Policy;
 use playbook_state::{started_budget, ApplyMode, Authority};
 use serde_json::{json, Value};
@@ -130,6 +130,10 @@ pub struct Service {
     otlp: Option<String>,
     drives: Mutex<BTreeMap<String, DriveHandle>>,
     rejected_journals: Mutex<usize>,
+    /// The seam a live ELCI huddle plane plugs into. The scripted default
+    /// answers nothing, so an unscripted collection fails deterministically
+    /// per participant and the pass continues without it.
+    huddle_plane: Mutex<Box<dyn HuddleDispatch + Send>>,
 }
 
 /// The newest logical clock reading visible in the log. `ToolInvoked` carries
@@ -210,7 +214,15 @@ impl Service {
             otlp: config.otlp.clone(),
             drives: Mutex::new(drives),
             rejected_journals: Mutex::new(rejected),
+            huddle_plane: Mutex::new(Box::new(FixtureHuddlePlane::responding(Vec::new()))),
         })
+    }
+
+    /// Install a huddle dispatch plane. The scripted fixture serves tests;
+    /// a live embedding installs its ELCI-backed implementation here.
+    pub fn script_huddles(&self, responses: Vec<Result<Value, String>>) {
+        *self.huddle_plane.lock().expect("huddle plane lock") =
+            Box::new(FixtureHuddlePlane::responding(responses));
     }
     /// The policy a journal folds under: the sidecar records the choice at
     /// creation; the fold test breaks ties for journals without one.
@@ -477,6 +489,10 @@ impl Service {
                 Some(spans) => reply(200, &json!({"spans": spans})),
                 None => error_reply(404, "unknown_drive", "no such drive"),
             },
+            ("GET", ["v1", "drives", id, "coherence"]) => match self.coherence_json(id) {
+                Some(reading) => reply(200, &reading),
+                None => error_reply(404, "unknown_drive", "no such drive"),
+            },
             ("GET", ["v1", "drives", id, "huddles"]) => match self.huddles_json(id) {
                 Some(huddles) => reply(200, &huddles),
                 None => error_reply(404, "unknown_drive", "no such drive"),
@@ -514,6 +530,53 @@ impl Service {
                             "reason_code": reason_code,
                         }))),
                     }
+                })
+            }
+            ("POST", ["v1", "drives", id, "huddles", huddle_id, "collect"]) => {
+                let mut plane = self.huddle_plane.lock().expect("huddle plane lock");
+                self.mutate(id, body, |handle, _| {
+                    let Ok(huddle_id) = playbook_core::HuddleId::new(*huddle_id) else {
+                        return Err(PlaybookError::InvalidId);
+                    };
+                    let parsed: Value = if body.trim().is_empty() {
+                        json!({})
+                    } else {
+                        match serde_json::from_str(body) {
+                            Ok(value) => value,
+                            Err(error) => return Err(PlaybookError::json(error)),
+                        }
+                    };
+                    let cost = parsed["report_cost"].as_object();
+                    let field = |name: &str, fallback: u64| -> u64 {
+                        cost.and_then(|cost| cost.get(name))
+                            .and_then(Value::as_u64)
+                            .unwrap_or(fallback)
+                    };
+                    let report_cost = playbook_huddle::HuddleCost {
+                        tokens: field("tokens", 100),
+                        cost_microunits: field("cost_microunits", 10_000),
+                        duration_ms: field("duration_ms", 50),
+                        rounds: u16::try_from(field("rounds", 0)).unwrap_or(0),
+                    };
+                    let summary = handle.authority.collect_huddle_reports(
+                        &huddle_id,
+                        &mut **plane,
+                        report_cost,
+                    )?;
+                    Ok(Some(json!({
+                        "huddle_id": huddle_id.as_str(),
+                        "collected": summary
+                            .collected
+                            .iter()
+                            .map(playbook_core::PersonnelId::as_str)
+                            .collect::<Vec<_>>(),
+                        "failed": summary
+                            .failed
+                            .iter()
+                            .map(|(id, error)| json!({"participant": id.as_str(), "error": error}))
+                            .collect::<Vec<_>>(),
+                        "synthesized": summary.synthesized,
+                    })))
                 })
             }
             ("POST", ["v1", "drives", id, "huddles", huddle_id, action]) => match *action {
@@ -642,6 +705,27 @@ impl Service {
         drives.get(id).map(|handle| {
             serde_json::to_value(handle.authority.state().huddles()).unwrap_or(Value::Null)
         })
+    }
+
+    /// The Phase 7 seam: the live coherence reading plus the huddle metrics
+    /// an orchestrator monitors over a hosted drive.
+    fn coherence_json(&self, id: &str) -> Option<Value> {
+        let drives = self.drives.lock().expect("drive lock");
+        let handle = drives.get(id)?;
+        let reading = handle.authority.coherence();
+        let condition = reading.condition.as_ref().map(|(scope, kind, reason)| {
+            json!({
+                "scope": scope,
+                "trigger_kind": kind,
+                "reason_code": reason,
+            })
+        });
+        let metrics = huddle_metrics(handle.authority.log(), handle.authority.state().huddles());
+        Some(json!({
+            "coherence": reading.state,
+            "condition": condition,
+            "metrics": metrics,
+        }))
     }
 
     fn huddle_json(&self, id: &str, huddle_id: &str) -> Option<Value> {
@@ -1261,6 +1345,147 @@ mod tests {
         let log: Vec<DriveEvent> = serde_json::from_str(&events.body).unwrap();
         let replay = playbook_state::fold(&log, &Policy::builtin(), ApplyMode::Audit).unwrap();
         assert!(replay.huddles().assignments().contains_key("rust-analyser"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn coherence_route_and_elci_collection_run_over_http() {
+        let dir = temp_dir("coherence");
+        let service = Service::open(&config(&dir)).unwrap();
+        let created = service.handle(
+            "POST",
+            "/v1/drives",
+            &json!({"drive_id": "drive-live", "tokens": 100_000}).to_string(),
+        );
+        assert_eq!(created.status, 201, "{}", created.body);
+
+        // A fresh drive reads healthy with no firing condition.
+        let reading = service.handle("GET", "/v1/drives/drive-live/coherence", "");
+        assert_eq!(reading.status, 200, "{}", reading.body);
+        assert!(reading.body.contains("\"band\":\"healthy\""));
+        assert!(reading.body.contains("\"condition\":null"));
+        assert!(reading.body.contains("\"huddles_total\":0"));
+
+        let opened = service.handle(
+            "POST",
+            "/v1/drives/drive-live/huddles/request",
+            &huddle_request_body().to_string(),
+        );
+        assert_eq!(opened.status, 200, "{}", opened.body);
+
+        // The live seam collects through the plane: one participant answers,
+        // one times out, one answers malformed. Isolation is visible in the
+        // summary and every accepted report is journaled.
+        service.script_huddles(vec![
+            Ok(json!({
+                "participant": "cargo-toolchain",
+                "verified_progress": [],
+                "blockers": [],
+                "changed_assumptions": [],
+                "dependency_changes": [],
+                "contradictions": [],
+                "proposed_action": null,
+                "confidence_milli": 9_000
+            })),
+            Err("participant timed out".into()),
+            Ok(json!({"participant": "rust-analyser"})),
+        ]);
+        let collected =
+            service.handle("POST", "/v1/drives/drive-live/huddles/huddle-1/collect", "");
+        assert_eq!(collected.status, 200, "{}", collected.body);
+        assert!(collected
+            .body
+            .contains("\"collected\":[\"cargo-toolchain\"]"));
+        assert!(collected
+            .body
+            .contains("\"participant\":\"coding-specialist\""));
+        assert!(collected.body.contains("timed out"));
+        assert!(collected.body.contains("\"participant\":\"rust-analyser\""));
+        assert!(
+            collected.body.contains("must be a JSON object") || collected.body.contains("missing")
+        );
+
+        // The coherence reading reflects the collected report.
+        let reading = service.handle("GET", "/v1/drives/drive-live/coherence", "");
+        assert!(reading.body.contains("\"huddles_total\":1"));
+        assert!(reading.body.contains("\"huddle_tokens_total\":100"));
+
+        // Close huddle-1 cleanly: the absent reports arrive by hand, then
+        // the outcome commits.
+        for participant in ["coding-specialist", "rust-analyser"] {
+            let response = service.handle(
+                "POST",
+                "/v1/drives/drive-live/huddles/huddle-1/reports",
+                &huddle_report_body(participant).to_string(),
+            );
+            assert_eq!(response.status, 200, "{}", response.body);
+        }
+        let outcome = json!({
+            "huddle_id": "huddle-1",
+            "reconciled_state": {"verified_evidence": [], "gate_snapshots": [], "assumptions": []},
+            "resolved_contradictions": [],
+            "unresolved_contradictions": [],
+            "assignment_changes": [],
+            "strategy_change": null,
+            "personnel_changes": [],
+            "revised_ytg_milli": null,
+            "debt_after": null,
+            "next_play": null,
+            "next_huddle_conditions": [],
+            "escalated_to": null
+        });
+        let committed = service.handle(
+            "POST",
+            "/v1/drives/drive-live/huddles/huddle-1/commit",
+            &outcome.to_string(),
+        );
+        assert_eq!(committed.status, 200, "{}", committed.body);
+
+        // Repeating the identical request on an unchanged field is the
+        // huddle storm the admission economics refuse.
+        let storm_setup = service.handle(
+            "POST",
+            "/v1/drives/drive-live/huddles/request",
+            &huddle_request_body().to_string(),
+        );
+        // Repeating the identical request on an unchanged field is the
+        // huddle storm the admission economics refuse.
+        assert_eq!(storm_setup.status, 200, "{}", storm_setup.body);
+        assert!(storm_setup.body.contains("\"admission\":\"refused\""));
+        assert!(storm_setup.body.contains("unchanged_field"));
+
+        // On a fresh drive the unscripted plane fails every participant
+        // deterministically, and one drive's scripting never leaks into
+        // another's.
+        service.script_huddles(vec![]);
+        let second = service.handle(
+            "POST",
+            "/v1/drives",
+            &json!({"drive_id": "drive-storm", "tokens": 100_000}).to_string(),
+        );
+        assert_eq!(second.status, 201, "{}", second.body);
+        let opened = service.handle(
+            "POST",
+            "/v1/drives/drive-storm/huddles/request",
+            &huddle_request_body().to_string(),
+        );
+        assert_eq!(opened.status, 200, "{}", opened.body);
+        assert!(opened.body.contains("\"admission\":\"open\""));
+        let collected = service.handle(
+            "POST",
+            "/v1/drives/drive-storm/huddles/huddle-1/collect",
+            "",
+        );
+        assert_eq!(collected.status, 200, "{}", collected.body);
+        assert!(collected.body.contains("\"collected\":[]"));
+        assert_eq!(
+            collected
+                .body
+                .matches("no scripted huddle response remains")
+                .count(),
+            3
+        );
+
         std::fs::remove_dir_all(&dir).ok();
     }
 }
