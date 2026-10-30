@@ -1,0 +1,51 @@
+export function blitzReason(criticalCve: bool, componentPresent: bool, patchVerified: bool, outage: bool, rollbackFailed: bool, batteryPpm: int, quotaPpm: int, connectivity: bool): string {
+  if (criticalCve && componentPresent && !patchVerified) {
+    return "critical_cve_unpatched"
+  }
+  if (outage && rollbackFailed) {
+    return "outage_rollback_failed"
+  }
+  if (batteryPpm < 150000) {
+    return "power_critical"
+  }
+  if (quotaPpm < 100000) {
+    return "quota_exhaustion_imminent"
+  }
+  if (!connectivity) {
+    return "connectivity_loss_imminent"
+  }
+  return "none"
+}
+
+function main(): int {
+  console.log(blitzReason(true, true, false, false, false, 500000, 500000, true))
+  console.log(blitzReason(false, true, false, true, true, 500000, 500000, true))
+  console.log(blitzReason(false, true, false, false, false, 100000, 500000, true))
+  console.log(blitzReason(false, true, false, false, false, 500000, 50000, true))
+  console.log(blitzReason(false, true, false, false, false, 500000, 500000, false))
+  console.log(blitzReason(false, true, false, false, false, 500000, 500000, true))
+  return 0
+}
+
+test("instinctive reasons fire in severity order", () => {
+  expect(blitzReason(true, true, false, true, true, 0, 0, false)).toBe("critical_cve_unpatched")
+  expect(blitzReason(false, true, false, true, true, 0, 0, false)).toBe("outage_rollback_failed")
+  expect(blitzReason(false, true, false, true, true, 0, 0, true)).toBe("outage_rollback_failed")
+  expect(blitzReason(false, true, false, false, true, 0, 0, false)).toBe("power_critical")
+  expect(blitzReason(false, true, false, false, false, 500000, 0, false)).toBe("quota_exhaustion_imminent")
+  expect(blitzReason(false, true, false, false, false, 500000, 500000, false)).toBe("connectivity_loss_imminent")
+  expect(blitzReason(false, true, false, false, false, 500000, 500000, true)).toBe("none")
+})
+
+test("builtin thresholds gate power and quota", () => {
+  expect(blitzReason(false, true, false, false, false, 149999, 500000, true)).toBe("power_critical")
+  expect(blitzReason(false, true, false, false, false, 150000, 500000, true)).toBe("none")
+  expect(blitzReason(false, true, false, false, false, 500000, 99999, true)).toBe("quota_exhaustion_imminent")
+  expect(blitzReason(false, true, false, false, false, 500000, 100000, true)).toBe("none")
+})
+
+test("a patched or absent critical cve is not an instinctive trigger", () => {
+  expect(blitzReason(true, true, true, false, false, 500000, 500000, true)).toBe("none")
+  expect(blitzReason(true, false, false, false, false, 500000, 500000, true)).toBe("none")
+  expect(blitzReason(false, true, true, true, true, 500000, 500000, true)).toBe("outage_rollback_failed")
+})

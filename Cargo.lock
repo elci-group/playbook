@@ -75,6 +75,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "playbook-blitz"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-events",
+ "playbook-policy",
+ "playbook-state",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-budget"
 version = "0.1.0"
 dependencies = [
@@ -119,6 +131,7 @@ dependencies = [
 name = "playbook-events"
 version = "0.1.0"
 dependencies = [
+ "playbook-blitz",
  "playbook-core",
  "playbook-huddle",
  "serde",
@@ -288,6 +301,7 @@ dependencies = [
 name = "playbook-state"
 version = "0.1.0"
 dependencies = [
+ "playbook-blitz",
  "playbook-budget",
  "playbook-core",
  "playbook-elci",

@@ -705,6 +705,50 @@ fn apply_open(
                 next.at_ms = *at_ms;
             }
         }
+        DriveEvent::BlitzProposed { .. }
+        | DriveEvent::BlitzAuthorised { .. }
+        | DriveEvent::BlitzRejected { .. }
+        | DriveEvent::BlitzTargetFrozen { .. }
+        | DriveEvent::BlitzWorkerDispatched { .. }
+        | DriveEvent::BlitzWorkerStarted { .. }
+        | DriveEvent::BlitzWorkerExited { .. }
+        | DriveEvent::BlitzWorkerSpent { .. }
+        | DriveEvent::BlitzWaveClosed { .. }
+        | DriveEvent::BlitzCandidateReceived { .. }
+        | DriveEvent::BlitzVerificationStarted { .. }
+        | DriveEvent::BlitzCandidateRejected { .. }
+        | DriveEvent::BlitzCandidateVerified { .. }
+        | DriveEvent::BlitzVerificationUnavailable { .. }
+        | DriveEvent::BlitzHumanConfirmed { .. }
+        | DriveEvent::BlitzWinnerSelected { .. }
+        | DriveEvent::BlitzCancelStarted { .. }
+        | DriveEvent::BlitzWorkerCancelled { .. }
+        | DriveEvent::BlitzCancelComplete { .. }
+        | DriveEvent::BlitzRecoveryConfirmed { .. }
+        | DriveEvent::BlitzBudgetConsumed { .. }
+        | DriveEvent::BlitzExhausted { .. }
+        | DriveEvent::BlitzEscalated { .. }
+        | DriveEvent::BlitzSuperseded { .. }
+        | DriveEvent::BlitzFailed { .. }
+        | DriveEvent::BlitzAborted { .. } => {
+            let blitz_event = project_blitz(event).expect("blitz projection covers blitz events");
+            let remaining = next.budget_initial.remaining(next.budget_consumed);
+            let view = playbook_blitz::BlitzView {
+                active: !matches!(
+                    next.status,
+                    DriveStatus::Completed
+                        | DriveStatus::Abandoned
+                        | DriveStatus::FieldGoalScored
+                        | DriveStatus::Punted
+                ),
+                remaining_tokens: remaining.tokens,
+                remaining_cost_microunits: remaining.monetary_cost_micros,
+            };
+            playbook_blitz::apply_blitz(&mut next.blitzes, &blitz_event, &view, policy)?;
+            if let DriveEvent::BlitzProposed { at_ms, .. } = event {
+                next.at_ms = *at_ms;
+            }
+        }
     }
     Ok(next)
 }
@@ -803,6 +847,235 @@ pub(crate) fn project_huddle(event: &DriveEvent) -> Option<playbook_huddle::Hudd
             reason_code,
         } => playbook_huddle::HuddleEvent::Closed {
             huddle_id: huddle_id.clone(),
+            reason_code: reason_code.clone(),
+        },
+        _ => return None,
+    })
+}
+
+/// One-to-one projection from journal events onto the blitz fold.
+pub(crate) fn project_blitz(event: &DriveEvent) -> Option<playbook_blitz::BlitzEvent> {
+    Some(match event {
+        DriveEvent::BlitzProposed {
+            blitz_id,
+            trigger,
+            target,
+            pressure,
+            at_ms,
+        } => playbook_blitz::BlitzEvent::Proposed {
+            blitz_id: blitz_id.clone(),
+            trigger: trigger.clone(),
+            target: Box::new(target.clone()),
+            pressure: pressure.clone(),
+            at_ms: *at_ms,
+        },
+        DriveEvent::BlitzAuthorised {
+            blitz_id,
+            budget,
+            corroboration,
+            resource_mode,
+            at_ms,
+        } => playbook_blitz::BlitzEvent::Authorised {
+            blitz_id: blitz_id.clone(),
+            budget: *budget,
+            corroboration: *corroboration,
+            resource_mode: *resource_mode,
+            at_ms: *at_ms,
+        },
+        DriveEvent::BlitzRejected {
+            blitz_id,
+            reason_code,
+        } => playbook_blitz::BlitzEvent::Rejected {
+            blitz_id: blitz_id.clone(),
+            reason_code: reason_code.clone(),
+        },
+        DriveEvent::BlitzTargetFrozen {
+            blitz_id,
+            target_hash,
+        } => playbook_blitz::BlitzEvent::TargetFrozen {
+            blitz_id: blitz_id.clone(),
+            target_hash: target_hash.clone(),
+        },
+        DriveEvent::BlitzWorkerDispatched {
+            blitz_id,
+            worker,
+            effective_parallelism_milli,
+        } => playbook_blitz::BlitzEvent::WorkerDispatched {
+            blitz_id: blitz_id.clone(),
+            worker: worker.clone(),
+            effective_parallelism_milli: *effective_parallelism_milli,
+        },
+        DriveEvent::BlitzWorkerStarted {
+            blitz_id,
+            worker_id,
+            at_ms,
+        } => playbook_blitz::BlitzEvent::WorkerStarted {
+            blitz_id: blitz_id.clone(),
+            worker_id: worker_id.clone(),
+            at_ms: *at_ms,
+        },
+        DriveEvent::BlitzWorkerExited {
+            blitz_id,
+            worker_id,
+            kind,
+            at_ms,
+        } => playbook_blitz::BlitzEvent::WorkerExited {
+            blitz_id: blitz_id.clone(),
+            worker_id: worker_id.clone(),
+            kind: *kind,
+            at_ms: *at_ms,
+        },
+        DriveEvent::BlitzWorkerSpent { blitz_id, spent } => {
+            playbook_blitz::BlitzEvent::WorkerSpent {
+                blitz_id: blitz_id.clone(),
+                spent: spent.clone(),
+            }
+        }
+        DriveEvent::BlitzWaveClosed {
+            blitz_id,
+            wave,
+            diagnostics,
+        } => playbook_blitz::BlitzEvent::WaveClosed {
+            blitz_id: blitz_id.clone(),
+            wave: *wave,
+            diagnostics: diagnostics.clone(),
+        },
+        DriveEvent::BlitzCandidateReceived {
+            blitz_id,
+            candidate,
+        } => playbook_blitz::BlitzEvent::CandidateReceived {
+            blitz_id: blitz_id.clone(),
+            candidate: candidate.clone(),
+        },
+        DriveEvent::BlitzVerificationStarted {
+            blitz_id,
+            candidate_id,
+        } => playbook_blitz::BlitzEvent::VerificationStarted {
+            blitz_id: blitz_id.clone(),
+            candidate_id: candidate_id.clone(),
+        },
+        DriveEvent::BlitzCandidateRejected {
+            blitz_id,
+            candidate_id,
+            gate,
+            reason_code,
+        } => playbook_blitz::BlitzEvent::CandidateRejected {
+            blitz_id: blitz_id.clone(),
+            candidate_id: candidate_id.clone(),
+            gate: *gate,
+            reason_code: reason_code.clone(),
+        },
+        DriveEvent::BlitzCandidateVerified {
+            blitz_id,
+            candidate_id,
+            passed,
+        } => playbook_blitz::BlitzEvent::CandidateVerified {
+            blitz_id: blitz_id.clone(),
+            candidate_id: candidate_id.clone(),
+            passed: passed.clone(),
+        },
+        DriveEvent::BlitzVerificationUnavailable {
+            blitz_id,
+            candidate_id,
+        } => playbook_blitz::BlitzEvent::VerificationUnavailable {
+            blitz_id: blitz_id.clone(),
+            candidate_id: candidate_id.clone(),
+        },
+        DriveEvent::BlitzHumanConfirmed {
+            blitz_id,
+            candidate_id,
+            authority,
+        } => playbook_blitz::BlitzEvent::HumanConfirmed {
+            blitz_id: blitz_id.clone(),
+            candidate_id: candidate_id.clone(),
+            authority: authority.clone(),
+        },
+        DriveEvent::BlitzWinnerSelected {
+            blitz_id,
+            candidate_id,
+            worker_id,
+            at_ms,
+        } => playbook_blitz::BlitzEvent::WinnerSelected {
+            blitz_id: blitz_id.clone(),
+            candidate_id: candidate_id.clone(),
+            worker_id: worker_id.clone(),
+            at_ms: *at_ms,
+        },
+        DriveEvent::BlitzCancelStarted { blitz_id, at_ms } => {
+            playbook_blitz::BlitzEvent::CancelStarted {
+                blitz_id: blitz_id.clone(),
+                at_ms: *at_ms,
+            }
+        }
+        DriveEvent::BlitzWorkerCancelled {
+            blitz_id,
+            worker_id,
+            avoided_tokens,
+            avoided_cost_microunits,
+        } => playbook_blitz::BlitzEvent::WorkerCancelled {
+            blitz_id: blitz_id.clone(),
+            worker_id: worker_id.clone(),
+            avoided_tokens: *avoided_tokens,
+            avoided_cost_microunits: *avoided_cost_microunits,
+        },
+        DriveEvent::BlitzCancelComplete {
+            blitz_id,
+            cancelled,
+            latency_ms,
+            avoided_tokens,
+            avoided_cost_microunits,
+        } => playbook_blitz::BlitzEvent::CancelComplete {
+            blitz_id: blitz_id.clone(),
+            cancelled: *cancelled,
+            latency_ms: *latency_ms,
+            avoided_tokens: *avoided_tokens,
+            avoided_cost_microunits: *avoided_cost_microunits,
+        },
+        DriveEvent::BlitzRecoveryConfirmed {
+            blitz_id,
+            evidence_refs,
+            at_ms,
+        } => playbook_blitz::BlitzEvent::RecoveryConfirmed {
+            blitz_id: blitz_id.clone(),
+            evidence_refs: evidence_refs.clone(),
+            at_ms: *at_ms,
+        },
+        DriveEvent::BlitzBudgetConsumed { blitz_id, cost } => {
+            playbook_blitz::BlitzEvent::BudgetConsumed {
+                blitz_id: blitz_id.clone(),
+                cost: *cost,
+            }
+        }
+        DriveEvent::BlitzExhausted { blitz_id, failure } => playbook_blitz::BlitzEvent::Exhausted {
+            blitz_id: blitz_id.clone(),
+            failure: *failure,
+        },
+        DriveEvent::BlitzEscalated {
+            blitz_id,
+            recommendation,
+        } => playbook_blitz::BlitzEvent::Escalated {
+            blitz_id: blitz_id.clone(),
+            recommendation: recommendation.clone(),
+        },
+        DriveEvent::BlitzSuperseded {
+            blitz_id,
+            successor_id,
+        } => playbook_blitz::BlitzEvent::Superseded {
+            blitz_id: blitz_id.clone(),
+            successor_id: successor_id.clone(),
+        },
+        DriveEvent::BlitzFailed {
+            blitz_id,
+            reason_code,
+        } => playbook_blitz::BlitzEvent::Failed {
+            blitz_id: blitz_id.clone(),
+            reason_code: reason_code.clone(),
+        },
+        DriveEvent::BlitzAborted {
+            blitz_id,
+            reason_code,
+        } => playbook_blitz::BlitzEvent::Aborted {
+            blitz_id: blitz_id.clone(),
             reason_code: reason_code.clone(),
         },
         _ => return None,

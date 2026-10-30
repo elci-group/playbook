@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use playbook_core::{
-    accept_schema, BudgetWeights, DriveBudget, EvidenceClass, HuddleBudget, PersonnelKind,
-    PlayDefinition, PlayKind, PlaybookError, SideEffectClass, SCHEMA_VERSION,
+    accept_schema, BlitzBudget, BudgetWeights, DriveBudget, EvidenceClass, HuddleBudget,
+    PersonnelKind, PlayDefinition, PlayKind, PlaybookError, SideEffectClass, SCHEMA_VERSION,
 };
 
 fn default_prior_min_samples() -> u32 {
@@ -99,6 +99,100 @@ impl HuddlePolicy {
     }
 }
 
+/// How many independent verified passes a defensive recovery requires before
+/// a winner may be committed. The first response never wins by default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlitzCorroboration {
+    FirstPass,
+    TwoIndependentPasses,
+    NOfM { n: u32, m: u32 },
+    HeterogeneousConfirmation,
+    DeterministicOnly,
+    HumanConfirmation,
+}
+
+/// Per-mille weights for the strategic defensive-pressure score. Components
+/// are 0..=1000; the weighted sum is divided by 1000 and clamped to 1000.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlitzPressureWeights {
+    pub severity: u32,
+    pub deadline_pressure: u32,
+    pub deterioration: u32,
+    pub blast_radius: u32,
+    pub solver_uncertainty: u32,
+    pub resource_decay: u32,
+    pub delay_loss: u32,
+}
+
+/// Blitz roster scoring. Model quality alone never selects a defender;
+/// expected success trades against speed, independence, and availability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlitzRosterWeights {
+    pub success: u32,
+    pub speed: u32,
+    pub independence: u32,
+    pub availability: u32,
+    pub cost: u32,
+}
+
+/// Diversity floors for a defensive formation. Eight correlated workers are
+/// not eight independent attempts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlitzDiversity {
+    pub min_providers: usize,
+    pub min_model_families: usize,
+    pub max_same_family: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlitzBudgets {
+    pub normal: BlitzBudget,
+    pub latency_critical: BlitzBudget,
+    pub power_critical: BlitzBudget,
+    pub network_critical: BlitzBudget,
+    pub cost_critical: BlitzBudget,
+}
+
+/// Blitz thresholds. Eligibility bands, envelopes per resource mode,
+/// diversity floors, and corroboration defaults live here, never in
+/// compiled business logic.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlitzPolicy {
+    pub battery_critical_ppm: u32,
+    pub quota_critical_ppm: u32,
+    pub production_health_floor_ppm: u32,
+    pub deadline_horizon_ms: u64,
+    pub min_urgency_score: u32,
+    pub min_pressure_score: u32,
+    pub min_worker_score: i64,
+    pub min_effective_parallelism_milli: u32,
+    pub max_verifier_retries: u32,
+    pub pressure_weights: BlitzPressureWeights,
+    pub roster_weights: BlitzRosterWeights,
+    pub diversity: BlitzDiversity,
+    pub budgets: BlitzBudgets,
+    pub corroboration: BlitzCorroboration,
+}
+
+impl BlitzPolicy {
+    /// The envelope for a resource-mode key.
+    pub fn budget(&self, mode: &str) -> BlitzBudget {
+        match mode {
+            "latency_critical" => self.budgets.latency_critical,
+            "power_critical" => self.budgets.power_critical,
+            "network_critical" => self.budgets.network_critical,
+            "cost_critical" => self.budgets.cost_critical,
+            _ => self.budgets.normal,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
@@ -122,6 +216,7 @@ pub struct Policy {
     pub plays: Vec<PlayDefinition>,
     pub routing: RoutingWeights,
     pub huddle: HuddlePolicy,
+    pub blitz: BlitzPolicy,
 }
 
 impl Policy {
@@ -241,6 +336,76 @@ impl Policy {
                     },
                 },
             },
+            blitz: BlitzPolicy {
+                battery_critical_ppm: 150_000,
+                quota_critical_ppm: 100_000,
+                production_health_floor_ppm: 300_000,
+                deadline_horizon_ms: 120_000,
+                min_urgency_score: 300,
+                min_pressure_score: 500,
+                min_worker_score: 2_000,
+                min_effective_parallelism_milli: 1_500,
+                max_verifier_retries: 1,
+                pressure_weights: BlitzPressureWeights {
+                    severity: 300,
+                    deadline_pressure: 300,
+                    deterioration: 200,
+                    blast_radius: 150,
+                    solver_uncertainty: 250,
+                    resource_decay: 200,
+                    delay_loss: 300,
+                },
+                roster_weights: BlitzRosterWeights {
+                    success: 4,
+                    speed: 3,
+                    independence: 3,
+                    availability: 2,
+                    cost: 1,
+                },
+                diversity: BlitzDiversity {
+                    min_providers: 2,
+                    min_model_families: 2,
+                    max_same_family: 3,
+                },
+                budgets: BlitzBudgets {
+                    normal: BlitzBudget {
+                        max_tokens: 40_000,
+                        max_cost_microunits: 4_000_000,
+                        max_duration_ms: 120_000,
+                        max_workers: 8,
+                        max_waves: 3,
+                    },
+                    latency_critical: BlitzBudget {
+                        max_tokens: 80_000,
+                        max_cost_microunits: 8_000_000,
+                        max_duration_ms: 30_000,
+                        max_workers: 8,
+                        max_waves: 3,
+                    },
+                    power_critical: BlitzBudget {
+                        max_tokens: 20_000,
+                        max_cost_microunits: 2_000_000,
+                        max_duration_ms: 60_000,
+                        max_workers: 4,
+                        max_waves: 2,
+                    },
+                    network_critical: BlitzBudget {
+                        max_tokens: 20_000,
+                        max_cost_microunits: 2_000_000,
+                        max_duration_ms: 60_000,
+                        max_workers: 4,
+                        max_waves: 2,
+                    },
+                    cost_critical: BlitzBudget {
+                        max_tokens: 10_000,
+                        max_cost_microunits: 1_000_000,
+                        max_duration_ms: 90_000,
+                        max_workers: 2,
+                        max_waves: 2,
+                    },
+                },
+                corroboration: BlitzCorroboration::FirstPass,
+            },
         }
     }
 
@@ -272,6 +437,33 @@ pub fn from_str(text: &str) -> Result<Policy, PlaybookError> {
         return Err(PlaybookError::Evidence(
             "huddle coherence-debt bands must ascend below 1000".into(),
         ));
+    }
+    if !(policy.blitz.min_urgency_score <= policy.blitz.min_pressure_score
+        && policy.blitz.min_pressure_score <= 1_000)
+    {
+        return Err(PlaybookError::Evidence(
+            "blitz urgency and pressure floors must be ordered within 1000".into(),
+        ));
+    }
+    for (mode, budget) in [
+        ("normal", policy.blitz.budgets.normal),
+        ("latency_critical", policy.blitz.budgets.latency_critical),
+        ("power_critical", policy.blitz.budgets.power_critical),
+        ("network_critical", policy.blitz.budgets.network_critical),
+        ("cost_critical", policy.blitz.budgets.cost_critical),
+    ] {
+        if budget.max_tokens == 0 || budget.max_workers == 0 || budget.max_waves == 0 {
+            return Err(PlaybookError::Evidence(format!(
+                "blitz {mode} envelope is empty"
+            )));
+        }
+    }
+    if let BlitzCorroboration::NOfM { n, m } = policy.blitz.corroboration {
+        if n == 0 || m == 0 || n > m {
+            return Err(PlaybookError::Evidence(
+                "blitz N-of-M corroboration must satisfy 0 < n <= m".into(),
+            ));
+        }
     }
     Ok(policy)
 }

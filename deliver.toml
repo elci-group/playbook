@@ -227,3 +227,80 @@ min_size_bytes = 100
 path = "fixtures/huddles/budget_exhausted.json"
 required = true
 min_size_bytes = 100
+
+[[command]]
+name = "tov check blitz eligibility"
+cmd = ["tov", "check", "--json", "tov/blitz/eligibility.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov check blitz worker score"
+cmd = ["tov", "check", "--json", "tov/blitz/worker_score.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[file]]
+path = "crates/playbook-blitz/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/blitz.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "fixtures/blitz/fast_winner.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/fast_wrong_answer.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/slow_correct.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/provider_outage.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/budget_exhausted.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/deadline_exhausted.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/correlated_failure.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/verifier_fail_closed.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/target_drift.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/power_critical.json"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/blitz/network_critical.json"
+required = true
+min_size_bytes = 100

@@ -243,5 +243,75 @@
         "max_participants": 24
       }
     }
+  },
+  "blitz": {
+    "battery_critical_ppm": 150000,
+    "quota_critical_ppm": 100000,
+    "production_health_floor_ppm": 300000,
+    "deadline_horizon_ms": 120000,
+    "min_urgency_score": 300,
+    "min_pressure_score": 500,
+    "min_worker_score": 2000,
+    "min_effective_parallelism_milli": 1500,
+    "max_verifier_retries": 1,
+    "pressure_weights": {
+      "severity": 300,
+      "deadline_pressure": 300,
+      "deterioration": 200,
+      "blast_radius": 150,
+      "solver_uncertainty": 250,
+      "resource_decay": 200,
+      "delay_loss": 300
+    },
+    "roster_weights": {
+      "success": 4,
+      "speed": 3,
+      "independence": 3,
+      "availability": 2,
+      "cost": 1
+    },
+    "diversity": {
+      "min_providers": 2,
+      "min_model_families": 2,
+      "max_same_family": 3
+    },
+    "budgets": {
+      "normal": {
+        "max_tokens": 40000,
+        "max_cost_microunits": 4000000,
+        "max_duration_ms": 120000,
+        "max_workers": 8,
+        "max_waves": 3
+      },
+      "latency_critical": {
+        "max_tokens": 80000,
+        "max_cost_microunits": 8000000,
+        "max_duration_ms": 30000,
+        "max_workers": 8,
+        "max_waves": 3
+      },
+      "power_critical": {
+        "max_tokens": 20000,
+        "max_cost_microunits": 2000000,
+        "max_duration_ms": 60000,
+        "max_workers": 4,
+        "max_waves": 2
+      },
+      "network_critical": {
+        "max_tokens": 20000,
+        "max_cost_microunits": 2000000,
+        "max_duration_ms": 60000,
+        "max_workers": 4,
+        "max_waves": 2
+      },
+      "cost_critical": {
+        "max_tokens": 10000,
+        "max_cost_microunits": 1000000,
+        "max_duration_ms": 90000,
+        "max_workers": 2,
+        "max_waves": 2
+      }
+    },
+    "corroboration": "first_pass"
   }
 }

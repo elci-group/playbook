@@ -1,0 +1,21 @@
+[package]
+name = "playbook-blitz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "Defensive parallel single-focus inference: bounded, budget-governed races to the earliest verified recovery."
+
+[dependencies]
+playbook-core.workspace = true
+playbook-policy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+playbook-events.workspace = true
+playbook-state.workspace = true
+
+[lints]
+workspace = true

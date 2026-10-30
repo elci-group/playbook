@@ -4,196 +4,848 @@
   "title": "Playbook policy bundle",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "schema_version", "first_down_attempt_threshold", "rush_budget_fraction_ppm", "conversion_threshold_ppm", "workload_thresholds", "min_attempt_ppm", "punt_preserve_ppm", "receiver_finish_ppm", "reset_bonus_ppm", "retry_limit", "stall_penalty_ppm", "capability_acquisition_limit", "swarm_min_marginal_milli", "rush_deterministic_bonus_ppm", "budget_weights", "allowed_side_effects", "plays", "routing", "huddle"],
+  "required": [
+    "version",
+    "schema_version",
+    "first_down_attempt_threshold",
+    "rush_budget_fraction_ppm",
+    "conversion_threshold_ppm",
+    "workload_thresholds",
+    "min_attempt_ppm",
+    "punt_preserve_ppm",
+    "receiver_finish_ppm",
+    "reset_bonus_ppm",
+    "retry_limit",
+    "stall_penalty_ppm",
+    "capability_acquisition_limit",
+    "swarm_min_marginal_milli",
+    "rush_deterministic_bonus_ppm",
+    "budget_weights",
+    "allowed_side_effects",
+    "plays",
+    "routing",
+    "huddle",
+    "blitz"
+  ],
   "properties": {
-    "version": { "type": "string" },
-    "schema_version": { "type": "integer" },
+    "version": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
     "plays": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "name", "personnel_kind", "operation", "capability_id", "target_gate", "side_effect", "expected_ytg_reduction_milli", "marginal_cost", "reliability_ppm", "survey", "evidence_class"],
+        "required": [
+          "kind",
+          "name",
+          "personnel_kind",
+          "operation",
+          "capability_id",
+          "target_gate",
+          "side_effect",
+          "expected_ytg_reduction_milli",
+          "marginal_cost",
+          "reliability_ppm",
+          "survey",
+          "evidence_class"
+        ],
         "properties": {
-          "kind": { "type": "string" },
-          "name": { "type": "string" },
-          "personnel_kind": { "type": "string" },
-          "operation": { "type": "string" },
-          "capability_id": { "type": "string" },
-          "target_gate": { "type": ["string", "null"] },
-          "side_effect": { "type": "string" },
-          "expected_ytg_reduction_milli": { "type": "integer" },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "personnel_kind": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "capability_id": {
+            "type": "string"
+          },
+          "target_gate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "side_effect": {
+            "type": "string"
+          },
+          "expected_ytg_reduction_milli": {
+            "type": "integer"
+          },
           "marginal_cost": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+            "required": [
+              "tokens",
+              "monetary_cost_micros",
+              "wall_clock_ms",
+              "tool_calls",
+              "inference_calls",
+              "retry_count",
+              "context_capacity",
+              "provider_quota"
+            ],
             "properties": {
-              "tokens": { "type": "integer" },
-              "monetary_cost_micros": { "type": "integer" },
-              "wall_clock_ms": { "type": "integer" },
-              "tool_calls": { "type": "integer" },
-              "inference_calls": { "type": "integer" },
-              "retry_count": { "type": "integer" },
-              "context_capacity": { "type": "integer" },
-              "provider_quota": { "type": "integer" }
+              "tokens": {
+                "type": "integer"
+              },
+              "monetary_cost_micros": {
+                "type": "integer"
+              },
+              "wall_clock_ms": {
+                "type": "integer"
+              },
+              "tool_calls": {
+                "type": "integer"
+              },
+              "inference_calls": {
+                "type": "integer"
+              },
+              "retry_count": {
+                "type": "integer"
+              },
+              "context_capacity": {
+                "type": "integer"
+              },
+              "provider_quota": {
+                "type": "integer"
+              }
             }
           },
-          "reliability_ppm": { "type": "integer" },
-          "survey": { "type": "boolean" },
-          "evidence_class": { "type": "string" }
+          "reliability_ppm": {
+            "type": "integer"
+          },
+          "survey": {
+            "type": "boolean"
+          },
+          "evidence_class": {
+            "type": "string"
+          }
         }
       }
     },
-    "rush_budget_fraction_ppm": { "type": "integer" },
-    "conversion_threshold_ppm": { "type": "integer" },
-    "workload_thresholds": { "type": "object", "additionalProperties": { "type": "integer" } },
-    "first_down_attempt_threshold": { "type": "integer" },
-    "min_attempt_ppm": { "type": "integer" },
-    "punt_preserve_ppm": { "type": "integer" },
-    "receiver_finish_ppm": { "type": "integer" },
-    "reset_bonus_ppm": { "type": "integer" },
-    "retry_limit": { "type": "integer" },
-    "stall_penalty_ppm": { "type": "integer" },
-    "capability_acquisition_limit": { "type": "integer" },
-    "swarm_min_marginal_milli": { "type": "integer" },
-    "rush_deterministic_bonus_ppm": { "type": "integer" },
-    "allowed_side_effects": { "type": "array", "items": { "type": "string" } },
+    "rush_budget_fraction_ppm": {
+      "type": "integer"
+    },
+    "conversion_threshold_ppm": {
+      "type": "integer"
+    },
+    "workload_thresholds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "first_down_attempt_threshold": {
+      "type": "integer"
+    },
+    "min_attempt_ppm": {
+      "type": "integer"
+    },
+    "punt_preserve_ppm": {
+      "type": "integer"
+    },
+    "receiver_finish_ppm": {
+      "type": "integer"
+    },
+    "reset_bonus_ppm": {
+      "type": "integer"
+    },
+    "retry_limit": {
+      "type": "integer"
+    },
+    "stall_penalty_ppm": {
+      "type": "integer"
+    },
+    "capability_acquisition_limit": {
+      "type": "integer"
+    },
+    "swarm_min_marginal_milli": {
+      "type": "integer"
+    },
+    "rush_deterministic_bonus_ppm": {
+      "type": "integer"
+    },
+    "allowed_side_effects": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "budget_weights": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tokens", "monetary_cost_micros", "wall_clock_ms", "tool_calls", "inference_calls", "retry_count", "context_capacity", "provider_quota"],
+      "required": [
+        "tokens",
+        "monetary_cost_micros",
+        "wall_clock_ms",
+        "tool_calls",
+        "inference_calls",
+        "retry_count",
+        "context_capacity",
+        "provider_quota"
+      ],
       "properties": {
-        "tokens": { "type": "integer" },
-        "monetary_cost_micros": { "type": "integer" },
-        "wall_clock_ms": { "type": "integer" },
-        "tool_calls": { "type": "integer" },
-        "inference_calls": { "type": "integer" },
-        "retry_count": { "type": "integer" },
-        "context_capacity": { "type": "integer" },
-        "provider_quota": { "type": "integer" }
+        "tokens": {
+          "type": "integer"
+        },
+        "monetary_cost_micros": {
+          "type": "integer"
+        },
+        "wall_clock_ms": {
+          "type": "integer"
+        },
+        "tool_calls": {
+          "type": "integer"
+        },
+        "inference_calls": {
+          "type": "integer"
+        },
+        "retry_count": {
+          "type": "integer"
+        },
+        "context_capacity": {
+          "type": "integer"
+        },
+        "provider_quota": {
+          "type": "integer"
+        }
       }
     },
     "routing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ytg", "success", "cost", "latency", "capability_fit", "reliability", "quota", "evidence_quality", "prior_min_samples"],
+      "required": [
+        "ytg",
+        "success",
+        "cost",
+        "latency",
+        "capability_fit",
+        "reliability",
+        "quota",
+        "evidence_quality",
+        "prior_min_samples"
+      ],
       "properties": {
-        "ytg": { "type": "integer" },
-        "success": { "type": "integer" },
-        "cost": { "type": "integer" },
-        "latency": { "type": "integer" },
-        "capability_fit": { "type": "integer" },
-        "reliability": { "type": "integer" },
-        "quota": { "type": "integer" },
-        "evidence_quality": { "type": "integer" },
-        "prior_min_samples": { "type": "integer" }
+        "ytg": {
+          "type": "integer"
+        },
+        "success": {
+          "type": "integer"
+        },
+        "cost": {
+          "type": "integer"
+        },
+        "latency": {
+          "type": "integer"
+        },
+        "capability_fit": {
+          "type": "integer"
+        },
+        "reliability": {
+          "type": "integer"
+        },
+        "quota": {
+          "type": "integer"
+        },
+        "evidence_quality": {
+          "type": "integer"
+        },
+        "prior_min_samples": {
+          "type": "integer"
+        }
       }
     },
     "huddle": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["failure_threshold", "minimum_expected_value", "debt_monitor", "debt_eligible", "debt_coordinator", "debt_mandatory", "min_participant_score", "debt_weights", "participant_weights", "budgets"],
+      "required": [
+        "failure_threshold",
+        "minimum_expected_value",
+        "debt_monitor",
+        "debt_eligible",
+        "debt_coordinator",
+        "debt_mandatory",
+        "min_participant_score",
+        "debt_weights",
+        "participant_weights",
+        "budgets"
+      ],
       "properties": {
-        "failure_threshold": { "type": "integer" },
-        "minimum_expected_value": { "type": "integer" },
-        "debt_monitor": { "type": "integer" },
-        "debt_eligible": { "type": "integer" },
-        "debt_coordinator": { "type": "integer" },
-        "debt_mandatory": { "type": "integer" },
-        "min_participant_score": { "type": "integer" },
+        "failure_threshold": {
+          "type": "integer"
+        },
+        "minimum_expected_value": {
+          "type": "integer"
+        },
+        "debt_monitor": {
+          "type": "integer"
+        },
+        "debt_eligible": {
+          "type": "integer"
+        },
+        "debt_coordinator": {
+          "type": "integer"
+        },
+        "debt_mandatory": {
+          "type": "integer"
+        },
+        "min_participant_score": {
+          "type": "integer"
+        },
         "debt_weights": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["assumption", "dependency", "contradiction", "turnover", "cross_impact", "blocker", "context_age"],
+          "required": [
+            "assumption",
+            "dependency",
+            "contradiction",
+            "turnover",
+            "cross_impact",
+            "blocker",
+            "context_age"
+          ],
           "properties": {
-            "assumption": { "type": "integer" },
-            "dependency": { "type": "integer" },
-            "contradiction": { "type": "integer" },
-            "turnover": { "type": "integer" },
-            "cross_impact": { "type": "integer" },
-            "blocker": { "type": "integer" },
-            "context_age": { "type": "integer" }
+            "assumption": {
+              "type": "integer"
+            },
+            "dependency": {
+              "type": "integer"
+            },
+            "contradiction": {
+              "type": "integer"
+            },
+            "turnover": {
+              "type": "integer"
+            },
+            "cross_impact": {
+              "type": "integer"
+            },
+            "blocker": {
+              "type": "integer"
+            },
+            "context_age": {
+              "type": "integer"
+            }
           }
         },
         "participant_weights": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["dependency_overlap", "contradiction_relevance", "ownership", "downstream_impact", "specialist_value", "context_cost"],
+          "required": [
+            "dependency_overlap",
+            "contradiction_relevance",
+            "ownership",
+            "downstream_impact",
+            "specialist_value",
+            "context_cost"
+          ],
           "properties": {
-            "dependency_overlap": { "type": "integer" },
-            "contradiction_relevance": { "type": "integer" },
-            "ownership": { "type": "integer" },
-            "downstream_impact": { "type": "integer" },
-            "specialist_value": { "type": "integer" },
-            "context_cost": { "type": "integer" }
+            "dependency_overlap": {
+              "type": "integer"
+            },
+            "contradiction_relevance": {
+              "type": "integer"
+            },
+            "ownership": {
+              "type": "integer"
+            },
+            "downstream_impact": {
+              "type": "integer"
+            },
+            "specialist_value": {
+              "type": "integer"
+            },
+            "context_cost": {
+              "type": "integer"
+            }
           }
         },
         "budgets": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["position", "unit", "coordinator", "team", "franchise"],
+          "required": [
+            "position",
+            "unit",
+            "coordinator",
+            "team",
+            "franchise"
+          ],
           "properties": {
             "position": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_rounds",
+                "max_participants"
+              ],
               "properties": {
-                "max_tokens": { "type": "integer" },
-                "max_cost_microunits": { "type": "integer" },
-                "max_duration_ms": { "type": "integer" },
-                "max_rounds": { "type": "integer" },
-                "max_participants": { "type": "integer" }
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_rounds": {
+                  "type": "integer"
+                },
+                "max_participants": {
+                  "type": "integer"
+                }
               }
             },
             "unit": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_rounds",
+                "max_participants"
+              ],
               "properties": {
-                "max_tokens": { "type": "integer" },
-                "max_cost_microunits": { "type": "integer" },
-                "max_duration_ms": { "type": "integer" },
-                "max_rounds": { "type": "integer" },
-                "max_participants": { "type": "integer" }
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_rounds": {
+                  "type": "integer"
+                },
+                "max_participants": {
+                  "type": "integer"
+                }
               }
             },
             "coordinator": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_rounds",
+                "max_participants"
+              ],
               "properties": {
-                "max_tokens": { "type": "integer" },
-                "max_cost_microunits": { "type": "integer" },
-                "max_duration_ms": { "type": "integer" },
-                "max_rounds": { "type": "integer" },
-                "max_participants": { "type": "integer" }
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_rounds": {
+                  "type": "integer"
+                },
+                "max_participants": {
+                  "type": "integer"
+                }
               }
             },
             "team": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_rounds",
+                "max_participants"
+              ],
               "properties": {
-                "max_tokens": { "type": "integer" },
-                "max_cost_microunits": { "type": "integer" },
-                "max_duration_ms": { "type": "integer" },
-                "max_rounds": { "type": "integer" },
-                "max_participants": { "type": "integer" }
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_rounds": {
+                  "type": "integer"
+                },
+                "max_participants": {
+                  "type": "integer"
+                }
               }
             },
             "franchise": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["max_tokens", "max_cost_microunits", "max_duration_ms", "max_rounds", "max_participants"],
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_rounds",
+                "max_participants"
+              ],
               "properties": {
-                "max_tokens": { "type": "integer" },
-                "max_cost_microunits": { "type": "integer" },
-                "max_duration_ms": { "type": "integer" },
-                "max_rounds": { "type": "integer" },
-                "max_participants": { "type": "integer" }
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_rounds": {
+                  "type": "integer"
+                },
+                "max_participants": {
+                  "type": "integer"
+                }
               }
             }
           }
+        }
+      }
+    },
+    "blitz": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "battery_critical_ppm",
+        "quota_critical_ppm",
+        "production_health_floor_ppm",
+        "deadline_horizon_ms",
+        "min_urgency_score",
+        "min_pressure_score",
+        "min_worker_score",
+        "min_effective_parallelism_milli",
+        "max_verifier_retries",
+        "pressure_weights",
+        "roster_weights",
+        "diversity",
+        "budgets",
+        "corroboration"
+      ],
+      "properties": {
+        "battery_critical_ppm": {
+          "type": "integer"
+        },
+        "quota_critical_ppm": {
+          "type": "integer"
+        },
+        "production_health_floor_ppm": {
+          "type": "integer"
+        },
+        "deadline_horizon_ms": {
+          "type": "integer"
+        },
+        "min_urgency_score": {
+          "type": "integer"
+        },
+        "min_pressure_score": {
+          "type": "integer"
+        },
+        "min_worker_score": {
+          "type": "integer"
+        },
+        "min_effective_parallelism_milli": {
+          "type": "integer"
+        },
+        "max_verifier_retries": {
+          "type": "integer"
+        },
+        "pressure_weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "severity",
+            "deadline_pressure",
+            "deterioration",
+            "blast_radius",
+            "solver_uncertainty",
+            "resource_decay",
+            "delay_loss"
+          ],
+          "properties": {
+            "severity": {
+              "type": "integer"
+            },
+            "deadline_pressure": {
+              "type": "integer"
+            },
+            "deterioration": {
+              "type": "integer"
+            },
+            "blast_radius": {
+              "type": "integer"
+            },
+            "solver_uncertainty": {
+              "type": "integer"
+            },
+            "resource_decay": {
+              "type": "integer"
+            },
+            "delay_loss": {
+              "type": "integer"
+            }
+          }
+        },
+        "roster_weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "success",
+            "speed",
+            "independence",
+            "availability",
+            "cost"
+          ],
+          "properties": {
+            "success": {
+              "type": "integer"
+            },
+            "speed": {
+              "type": "integer"
+            },
+            "independence": {
+              "type": "integer"
+            },
+            "availability": {
+              "type": "integer"
+            },
+            "cost": {
+              "type": "integer"
+            }
+          }
+        },
+        "diversity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "min_providers",
+            "min_model_families",
+            "max_same_family"
+          ],
+          "properties": {
+            "min_providers": {
+              "type": "integer"
+            },
+            "min_model_families": {
+              "type": "integer"
+            },
+            "max_same_family": {
+              "type": "integer"
+            }
+          }
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normal",
+            "latency_critical",
+            "power_critical",
+            "network_critical",
+            "cost_critical"
+          ],
+          "properties": {
+            "normal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_workers",
+                "max_waves"
+              ],
+              "properties": {
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_workers": {
+                  "type": "integer"
+                },
+                "max_waves": {
+                  "type": "integer"
+                }
+              }
+            },
+            "latency_critical": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_workers",
+                "max_waves"
+              ],
+              "properties": {
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_workers": {
+                  "type": "integer"
+                },
+                "max_waves": {
+                  "type": "integer"
+                }
+              }
+            },
+            "power_critical": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_workers",
+                "max_waves"
+              ],
+              "properties": {
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_workers": {
+                  "type": "integer"
+                },
+                "max_waves": {
+                  "type": "integer"
+                }
+              }
+            },
+            "network_critical": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_workers",
+                "max_waves"
+              ],
+              "properties": {
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_workers": {
+                  "type": "integer"
+                },
+                "max_waves": {
+                  "type": "integer"
+                }
+              }
+            },
+            "cost_critical": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "max_tokens",
+                "max_cost_microunits",
+                "max_duration_ms",
+                "max_workers",
+                "max_waves"
+              ],
+              "properties": {
+                "max_tokens": {
+                  "type": "integer"
+                },
+                "max_cost_microunits": {
+                  "type": "integer"
+                },
+                "max_duration_ms": {
+                  "type": "integer"
+                },
+                "max_workers": {
+                  "type": "integer"
+                },
+                "max_waves": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "corroboration": {
+          "oneOf": [
+            {
+              "enum": [
+                "first_pass",
+                "two_independent_passes",
+                "heterogeneous_confirmation",
+                "deterministic_only",
+                "human_confirmation"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "n_of_m"
+              ],
+              "properties": {
+                "n_of_m": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "n",
+                    "m"
+                  ],
+                  "properties": {
+                    "n": {
+                      "type": "integer"
+                    },
+                    "m": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       }
     }

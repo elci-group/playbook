@@ -101,6 +101,7 @@ pub struct DriveState {
     pub(crate) acquisition_count: u32,
     pub(crate) priors: HistoricalPriorTable,
     pub(crate) huddles: playbook_huddle::HuddleLedger,
+    pub(crate) blitzes: playbook_blitz::BlitzLedger,
     pub(crate) benched: Vec<PersonnelId>,
 }
 
@@ -166,6 +167,7 @@ impl DriveState {
             acquisition_count: 0,
             priors: HistoricalPriorTable::empty(),
             huddles: playbook_huddle::HuddleLedger::empty(),
+            blitzes: playbook_blitz::BlitzLedger::empty(),
             benched: Vec::new(),
         }
     }
@@ -210,6 +212,11 @@ impl DriveState {
     /// committed assignments, and substitution recommendations.
     pub fn huddles(&self) -> &playbook_huddle::HuddleLedger {
         &self.huddles
+    }
+    /// Event-sourced blitz ledger: the defensive formation, its race state,
+    /// and closed records with recovery economics.
+    pub fn blitzes(&self) -> &playbook_blitz::BlitzLedger {
+        &self.blitzes
     }
     /// Personnel the Bench has benched. They are excluded from the
     /// selection pool until the verdict is reversed.

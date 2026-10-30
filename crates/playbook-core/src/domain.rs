@@ -456,6 +456,40 @@ impl HuddleBudget {
     }
 }
 
+/// Hard envelope for one blitz. Every dimension is a ceiling; exhausting any
+/// of them terminates the race. A blitz may never extend itself, and no
+/// worker may expand its own share of the envelope.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlitzBudget {
+    pub max_tokens: u64,
+    pub max_cost_microunits: u64,
+    pub max_duration_ms: u64,
+    pub max_workers: u16,
+    pub max_waves: u16,
+}
+
+impl BlitzBudget {
+    pub fn zero() -> Self {
+        Self::default()
+    }
+
+    pub fn fits(
+        &self,
+        tokens: u64,
+        cost_microunits: u64,
+        duration_ms: u64,
+        workers: u16,
+        waves: u16,
+    ) -> bool {
+        tokens <= self.max_tokens
+            && cost_microunits <= self.max_cost_microunits
+            && duration_ms <= self.max_duration_ms
+            && workers <= self.max_workers
+            && waves <= self.max_waves
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BarrierMode {

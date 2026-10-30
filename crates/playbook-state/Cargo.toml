@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Deterministic drive state. Classification is a pure function of evidence, budget, and policy."
 
 [dependencies]
+playbook-blitz.workspace = true
 playbook-core.workspace = true
 playbook-events.workspace = true
 playbook-evidence.workspace = true

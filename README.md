@@ -32,6 +32,12 @@ readiness and Playbook deployment remain live coaching decisions. See
 
 `playbook-huddle` adds budgeted, policy-admitted synchronization barriers above the drive authority: scoped, evidence-bound coordination between concurrently operating personnel. A huddle runs only when the expected cost of team-state divergence exceeds the expected cost of reconciliation, and its outcome can reassign work without ever moving gates, evidence or the measured field. Journal events, admission economics and the state machine are specified in [the huddle contract](docs/huddles.md).
 
+## Blitz
+
+`playbook-blitz` adds defensive parallel single-focus inference to the drive authority: under material defensive pressure — an outage, an imminent deadline, failing power, quota or network — multiple independently operating workers race on the same frozen, content-addressed target. The governing trade is economic: when the expected cost of delay exceeds the expected marginal cost of redundant inference, Playbook deliberately purchases verified-recovery latency with parallel inference. The first independently verified candidate wins, never the first response; redundant inference is cancelled the moment recovery is verified; every ceiling is a policy envelope, and only a failed independence attempt escalates into a huddle.
+
+Journal events, eligibility, envelopes and the state machine are specified in [the blitz contract](docs/blitz.md).
+
 ## Layout
 
 ```text

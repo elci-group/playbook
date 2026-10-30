@@ -6,6 +6,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use playbook_blitz::{
+    BlitzCorroboration, BlitzCost, BlitzFailure, BlitzTrigger, Candidate, DefensivePressure,
+    HuddleRecommendation, TargetPackage, VerificationKind, WorkerExitKind, WorkerSlot, WorkerSpent,
+};
 use playbook_core::*;
 use playbook_huddle::{
     Contradiction, HuddleCost, HuddleOutcome, HuddleParticipant, HuddleReport, HuddleScope,
@@ -188,6 +192,133 @@ pub enum DriveEvent {
         huddle_id: HuddleId,
         reason_code: String,
     },
+    BlitzProposed {
+        blitz_id: BlitzId,
+        trigger: BlitzTrigger,
+        target: TargetPackage,
+        pressure: DefensivePressure,
+        at_ms: u64,
+    },
+    BlitzAuthorised {
+        blitz_id: BlitzId,
+        budget: BlitzBudget,
+        corroboration: BlitzCorroboration,
+        resource_mode: playbook_blitz::BlitzResourceMode,
+        at_ms: u64,
+    },
+    BlitzRejected {
+        blitz_id: BlitzId,
+        reason_code: String,
+    },
+    BlitzTargetFrozen {
+        blitz_id: BlitzId,
+        target_hash: String,
+    },
+    BlitzWorkerDispatched {
+        blitz_id: BlitzId,
+        worker: WorkerSlot,
+        effective_parallelism_milli: u32,
+    },
+    BlitzWorkerStarted {
+        blitz_id: BlitzId,
+        worker_id: WorkerId,
+        at_ms: u64,
+    },
+    BlitzWorkerExited {
+        blitz_id: BlitzId,
+        worker_id: WorkerId,
+        kind: WorkerExitKind,
+        at_ms: u64,
+    },
+    BlitzWorkerSpent {
+        blitz_id: BlitzId,
+        spent: WorkerSpent,
+    },
+    BlitzWaveClosed {
+        blitz_id: BlitzId,
+        wave: u16,
+        diagnostics: Vec<String>,
+    },
+    BlitzCandidateReceived {
+        blitz_id: BlitzId,
+        candidate: Box<Candidate>,
+    },
+    BlitzVerificationStarted {
+        blitz_id: BlitzId,
+        candidate_id: CandidateId,
+    },
+    BlitzCandidateRejected {
+        blitz_id: BlitzId,
+        candidate_id: CandidateId,
+        gate: VerificationKind,
+        reason_code: String,
+    },
+    BlitzCandidateVerified {
+        blitz_id: BlitzId,
+        candidate_id: CandidateId,
+        passed: Vec<VerificationKind>,
+    },
+    BlitzVerificationUnavailable {
+        blitz_id: BlitzId,
+        candidate_id: CandidateId,
+    },
+    BlitzHumanConfirmed {
+        blitz_id: BlitzId,
+        candidate_id: CandidateId,
+        authority: String,
+    },
+    BlitzWinnerSelected {
+        blitz_id: BlitzId,
+        candidate_id: CandidateId,
+        worker_id: WorkerId,
+        at_ms: u64,
+    },
+    BlitzCancelStarted {
+        blitz_id: BlitzId,
+        at_ms: u64,
+    },
+    BlitzWorkerCancelled {
+        blitz_id: BlitzId,
+        worker_id: WorkerId,
+        avoided_tokens: u64,
+        avoided_cost_microunits: u64,
+    },
+    BlitzCancelComplete {
+        blitz_id: BlitzId,
+        cancelled: u16,
+        latency_ms: u64,
+        avoided_tokens: u64,
+        avoided_cost_microunits: u64,
+    },
+    BlitzRecoveryConfirmed {
+        blitz_id: BlitzId,
+        evidence_refs: Vec<EvidenceId>,
+        at_ms: u64,
+    },
+    BlitzBudgetConsumed {
+        blitz_id: BlitzId,
+        cost: BlitzCost,
+    },
+    BlitzExhausted {
+        blitz_id: BlitzId,
+        failure: BlitzFailure,
+    },
+    BlitzEscalated {
+        blitz_id: BlitzId,
+        recommendation: HuddleRecommendation,
+    },
+    BlitzSuperseded {
+        blitz_id: BlitzId,
+        successor_id: BlitzId,
+    },
+    BlitzFailed {
+        blitz_id: BlitzId,
+        reason_code: String,
+    },
+    BlitzAborted {
+        blitz_id: BlitzId,
+        reason_code: String,
+    },
 }
 
 impl DriveEvent {
@@ -235,6 +366,32 @@ impl DriveEvent {
             Self::HuddleEscalationRequested { .. } => "huddle_escalation_requested",
             Self::HuddleEscalated { .. } => "huddle_escalated",
             Self::HuddleClosed { .. } => "huddle_closed",
+            Self::BlitzProposed { .. } => "blitz_proposed",
+            Self::BlitzAuthorised { .. } => "blitz_authorised",
+            Self::BlitzRejected { .. } => "blitz_rejected",
+            Self::BlitzTargetFrozen { .. } => "blitz_target_frozen",
+            Self::BlitzWorkerDispatched { .. } => "blitz_worker_dispatched",
+            Self::BlitzWorkerStarted { .. } => "blitz_worker_started",
+            Self::BlitzWorkerExited { .. } => "blitz_worker_exited",
+            Self::BlitzWorkerSpent { .. } => "blitz_worker_spent",
+            Self::BlitzWaveClosed { .. } => "blitz_wave_closed",
+            Self::BlitzCandidateReceived { .. } => "blitz_candidate_received",
+            Self::BlitzVerificationStarted { .. } => "blitz_verification_started",
+            Self::BlitzCandidateRejected { .. } => "blitz_candidate_rejected",
+            Self::BlitzCandidateVerified { .. } => "blitz_candidate_verified",
+            Self::BlitzVerificationUnavailable { .. } => "blitz_verification_unavailable",
+            Self::BlitzHumanConfirmed { .. } => "blitz_human_confirmed",
+            Self::BlitzWinnerSelected { .. } => "blitz_winner_selected",
+            Self::BlitzCancelStarted { .. } => "blitz_cancel_started",
+            Self::BlitzWorkerCancelled { .. } => "blitz_worker_cancelled",
+            Self::BlitzCancelComplete { .. } => "blitz_cancel_complete",
+            Self::BlitzRecoveryConfirmed { .. } => "blitz_recovery_confirmed",
+            Self::BlitzBudgetConsumed { .. } => "blitz_budget_consumed",
+            Self::BlitzExhausted { .. } => "blitz_exhausted",
+            Self::BlitzEscalated { .. } => "blitz_escalated",
+            Self::BlitzSuperseded { .. } => "blitz_superseded",
+            Self::BlitzFailed { .. } => "blitz_failed",
+            Self::BlitzAborted { .. } => "blitz_aborted",
         }
     }
 }
