@@ -3,8 +3,9 @@
 //! Three adjustment plays, each with the same constitutional line: they
 //! happen BEFORE irreversible execution or they do not happen at all.
 //!
-//! Motion moves personnel before the snap to reveal defensive structure —
-//! probes are diagnostic, bounded, tiny, and never a full play. Shift
+//! Motion sends personnel out to probe before the snap, revealing the
+//! defensive structure — probes are diagnostic, bounded, tiny, never a
+//! full play, and they change nothing they inspect. Shift
 //! reconfigures responsibility distribution without changing the roster:
 //! the formation changes, the people do not. Audible replaces the called
 //! tactic on newly observed state — and an audible after the snap is not an
@@ -30,7 +31,8 @@ pub enum ProbeKind {
     DependencyGraph,
 }
 
-/// One diagnostic probe: one worker, one domain, before the play.
+/// One diagnostic probe: one worker, one domain, before the play. A probe
+/// observes; it never reassigns anyone.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MotionProbe {
@@ -40,7 +42,9 @@ pub struct MotionProbe {
 }
 
 /// The motion plan. Motion is diagnostic by construction: the budget is
-/// tiny, because a probe that costs a play is a play.
+/// tiny, because a probe that costs a play is a play. A plan is pure
+/// observation — personnel, domains, and probe kinds — and carries no
+/// personnel shape and no authority to alter one.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MotionPlan {
@@ -82,8 +86,12 @@ pub fn plan_motion(
 }
 
 /// The information gain of the motion: the domains whose probing CHANGED
-/// the coupling reading, in probe order. A probe that revealed nothing is
-/// still cheap evidence — but only changed readings are reported.
+/// the coupling reading, in probe order; empty when the reading is
+/// unchanged. The probe set is read as one diagnostic against a single
+/// before/after coupling pair: a moved reading reports every probed
+/// domain in probe order, an unmoved reading reports nothing. A probe
+/// that revealed nothing is still cheap evidence — but only changed
+/// readings are reported.
 pub fn motion_reveals(
     probes: &[MotionProbe],
     coupling_after_ppm: u32,
@@ -117,10 +125,14 @@ pub struct Shift {
 
 /// Apply a shift to a personnel shape without changing the roster. Each
 /// move takes one person out of the `from_domain` and puts them in the
-/// `to_domain` (created with sole ownership when absent). Refusals:
-/// moving the last owner of a domain (an unowned domain is a gap), moving
-/// to the same domain, and moving someone who does not hold the from
-/// domain. The shifted shape must still validate.
+/// `to_domain` (created with sole ownership when absent). Moves apply in
+/// order, so a later move may reference a domain an earlier move created
+/// — or be refused by a gap an earlier move opened. Refusals: moving the
+/// last owner of a domain (an unowned domain is a gap), moving to the
+/// same domain, and moving someone who does not hold the from domain.
+/// Each legal move removes one membership and adds one, so the roster
+/// total across domains is invariant under any legal shift, and the
+/// shifted shape must still validate.
 pub fn apply_shift(
     mut shape: crate::domain::PersonnelShape,
     shift: &Shift,
@@ -209,8 +221,9 @@ pub fn call_audible(
 
 /// Check-With-Me: the precomputed alternatives. Candidates are (name,
 /// trigger, net value in ppm); the selection is the first candidate whose
-/// trigger fires on the observed context AND whose net value clears the
-/// threshold. None fires → nothing is called, and the planned tactic
+/// trigger fires on the observed context AND whose net value is strictly
+/// above the threshold — a net value exactly equal to the threshold does
+/// not win. Nothing qualifies → nothing is called, and the planned tactic
 /// stands.
 pub fn check_with_me(
     candidates: &[(String, TacticalTrigger, i64)],
@@ -426,5 +439,253 @@ mod tests {
         assert!(check_with_me(&candidates, &context(0), 500).is_none());
         // Nothing fires above a prohibitive threshold either.
         assert!(check_with_me(&candidates, &context(0), 900).is_none());
+    }
+
+    #[test]
+    fn motion_is_a_diagnostic_with_a_budget_well_below_a_play() {
+        // A reference full play (the admission fixture's budget) runs
+        // 10_000 tokens over 30_000 ms. Motion must sit far under that: a
+        // probe that costs a play is a play.
+        let plan = plan_motion(&[person("a"), person("b")], &["api", "tests"]).unwrap();
+        assert!(plan.max_tokens < 10_000);
+        assert!(plan.max_duration_ms < 30_000);
+        // And the plan is pure observation: personnel, domains, and kinds.
+        // Two identical calls read identically, and the probes name people
+        // without reassigning them — no personnel shape enters or leaves
+        // the planner.
+        assert_eq!(
+            plan,
+            plan_motion(&[person("a"), person("b")], &["api", "tests"]).unwrap()
+        );
+        for probe in &plan.probes {
+            assert!(matches!(
+                probe.probe_kind,
+                ProbeKind::Api | ProbeKind::Tests | ProbeKind::DependencyGraph
+            ));
+        }
+    }
+
+    #[test]
+    fn shifts_apply_in_order_and_may_reference_created_domains() {
+        let four = crate::domain::PersonnelShape {
+            primary_executors: 4,
+            support: 0,
+            reserves: 0,
+            observers: 0,
+            assignments: vec![
+                crate::domain::DomainAssignment {
+                    domain: "architecture".into(),
+                    personnel: vec![person("a")],
+                    mode: crate::domain::OwnershipMode::Sole,
+                },
+                crate::domain::DomainAssignment {
+                    domain: "tests".into(),
+                    personnel: vec![person("b"), person("c"), person("d")],
+                    mode: crate::domain::OwnershipMode::Shared,
+                },
+            ],
+        };
+        let shift = Shift {
+            moves: vec![
+                // Move 1 creates "build chain" with c as its sole owner.
+                ShiftMove {
+                    personnel: person("c"),
+                    from_domain: "tests".into(),
+                    to_domain: "build chain".into(),
+                },
+                // Move 2 joins b into the domain move 1 created.
+                ShiftMove {
+                    personnel: person("b"),
+                    from_domain: "tests".into(),
+                    to_domain: "build chain".into(),
+                },
+                // Move 3 moves c back out of it — legal only because moves
+                // one and two ran first and left a second owner behind.
+                ShiftMove {
+                    personnel: person("c"),
+                    from_domain: "build chain".into(),
+                    to_domain: "deps".into(),
+                },
+            ],
+        };
+        let shifted = apply_shift(four.clone(), &shift).unwrap();
+        let owners_of = |domain: &str| {
+            shifted
+                .assignments
+                .iter()
+                .find(|assignment| assignment.domain == domain)
+                .map(|assignment| assignment.personnel.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(owners_of("architecture"), vec![person("a")]);
+        assert_eq!(owners_of("tests"), vec![person("d")]);
+        assert_eq!(owners_of("build chain"), vec![person("b")]);
+        assert_eq!(owners_of("deps"), vec![person("c")]);
+        // Roster constancy under a multi-move shift: every legal move
+        // removes one membership and adds one, so the total across domains
+        // is invariant, and the distinct people are the same people.
+        let total = |shape: &crate::domain::PersonnelShape| {
+            shape
+                .assignments
+                .iter()
+                .map(|assignment| assignment.personnel.len())
+                .sum::<usize>()
+        };
+        assert_eq!(total(&four), 4);
+        assert_eq!(total(&shifted), 4);
+        assert!(shifted.validate().is_ok());
+        // The ordering is real: move 3 alone, on the unshifted shape,
+        // names a domain nobody has created yet.
+        let late_move_alone = Shift {
+            moves: vec![shift.moves[2].clone()],
+        };
+        assert!(apply_shift(four, &late_move_alone).is_err());
+    }
+
+    #[test]
+    fn the_audible_refusal_is_structural_even_when_every_candidate_fires() {
+        // A candidate list that fires on every observation whatsoever:
+        // whatever the field shows, these alternatives want in.
+        let always_firing: Vec<(String, Trigger)> = vec![
+            ("trips".into(), Trigger::Always),
+            ("bunch".into(), Trigger::Always),
+        ];
+        // Before dispatch they audible, first-listed first, with the
+        // documented reason code.
+        assert_eq!(
+            call_audible("spread", &context(0), &always_firing),
+            AudibleDecision::AudibleTo {
+                new_tactic: "trips".into(),
+                reason_code: "observed_state_matches_candidate_trips".into(),
+            }
+        );
+        // After the snap the identical list, still firing on everything,
+        // is refused. The refusal is structural — execution began — not
+        // circumstantial: no candidate list can talk the sideline out of
+        // it.
+        assert_eq!(
+            call_audible("spread", &context(1), &always_firing),
+            AudibleDecision::KeepPlan
+        );
+        // The same inputs decide the same way.
+        assert_eq!(
+            call_audible("spread", &context(1), &always_firing),
+            call_audible("spread", &context(1), &always_firing)
+        );
+    }
+
+    #[test]
+    fn check_with_me_wins_only_strictly_above_the_threshold() {
+        let candidates: Vec<(String, Trigger, i64)> =
+            vec![("counter".into(), Trigger::Always, 400)];
+        // Exactly at the threshold: the plan stands.
+        assert_eq!(check_with_me(&candidates, &context(0), 400), None);
+        // One ppm above it: the alternative wins.
+        assert_eq!(
+            check_with_me(&candidates, &context(0), 399),
+            Some(("counter".into(), 400))
+        );
+        // The same inputs decide the same way.
+        assert_eq!(
+            check_with_me(&candidates, &context(0), 399),
+            check_with_me(&candidates, &context(0), 399)
+        );
+    }
+
+    #[test]
+    fn check_with_me_walks_the_documented_ladder_in_order() {
+        // The mirror of the check_with_me.tov ladder: instability
+        // concentrates first (heavy), independent breadth spreads second,
+        // and bunch is the unconditional fallback. Order decides — every
+        // candidate carries the same clearing net value, so a
+        // highest-score rule would read the ladder differently.
+        let ladder: Vec<(String, Trigger, i64)> = vec![
+            (
+                "heavy".into(),
+                Trigger::ProviderInstabilityAbove { ppm: 700 },
+                100,
+            ),
+            (
+                "spread".into(),
+                Trigger::All(vec![
+                    Trigger::ProblemBreadthAtLeast { ppm: 600 },
+                    Trigger::DomainCouplingAtMost { ppm: 400 },
+                ]),
+                100,
+            ),
+            ("bunch".into(), Trigger::Always, 100),
+        ];
+        let mut observed = context(0);
+        // (200, 700, 200): independent broad problems spread.
+        observed.provider_instability_ppm = 200;
+        observed.problem_breadth_ppm = 700;
+        observed.domain_coupling_ppm = 200;
+        assert_eq!(
+            check_with_me(&ladder, &observed, 0),
+            Some(("spread".into(), 100))
+        );
+        // Instability above 700 concentrates first — and exactly 700 is
+        // not ABOVE 700: the ladder is walked in order, not re-sorted.
+        observed.provider_instability_ppm = 800;
+        assert_eq!(
+            check_with_me(&ladder, &observed, 0),
+            Some(("heavy".into(), 100))
+        );
+        observed.provider_instability_ppm = 700;
+        assert_eq!(
+            check_with_me(&ladder, &observed, 0),
+            Some(("spread".into(), 100))
+        );
+        // (200, 300, 700): coupled, narrow problems fall to the fallback.
+        observed.problem_breadth_ppm = 300;
+        observed.domain_coupling_ppm = 700;
+        assert_eq!(
+            check_with_me(&ladder, &observed, 0),
+            Some(("bunch".into(), 100))
+        );
+    }
+
+    #[test]
+    fn every_planning_function_is_deterministic() {
+        // Motion plans: identical calls, identical plans.
+        let first = plan_motion(&[person("a"), person("b")], &["api", "tests", "deps"]).unwrap();
+        assert_eq!(
+            first,
+            plan_motion(&[person("a"), person("b")], &["api", "tests", "deps"]).unwrap()
+        );
+        // Motion readings: identical readings, reported in probe order.
+        assert_eq!(
+            motion_reveals(&first.probes, 600, 900),
+            vec!["api".to_string(), "tests".to_string(), "deps".to_string()]
+        );
+        assert_eq!(
+            motion_reveals(&first.probes, 600, 900),
+            motion_reveals(&first.probes, 600, 900)
+        );
+        // Shifts: the same shift on equal shapes lands in the same place.
+        let shift = Shift {
+            moves: vec![ShiftMove {
+                personnel: person("c"),
+                from_domain: "tests".into(),
+                to_domain: "build chain".into(),
+            }],
+        };
+        assert_eq!(
+            apply_shift(shape(), &shift).unwrap(),
+            apply_shift(shape(), &shift).unwrap()
+        );
+        // Audibles.
+        let candidates: Vec<(String, Trigger)> =
+            vec![("bunch".into(), Trigger::DomainCouplingAtLeast { ppm: 600 })];
+        assert_eq!(
+            call_audible("spread", &context(0), &candidates),
+            call_audible("spread", &context(0), &candidates)
+        );
+        // Check-with-me selections.
+        let options: Vec<(String, Trigger, i64)> = vec![("heavy".into(), Trigger::Always, 250)];
+        assert_eq!(
+            check_with_me(&options, &context(0), 100),
+            check_with_me(&options, &context(0), 100)
+        );
     }
 }

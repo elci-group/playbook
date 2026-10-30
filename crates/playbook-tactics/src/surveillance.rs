@@ -20,14 +20,19 @@ use crate::domain::{tactics_refusal, PersonnelShape, RiskBand, TacticalContext};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpyAssignment {
+    /// The watcher. It holds no execution assignment anywhere in the shape.
     pub observer: PersonnelId,
+    /// The high-risk worker under watch.
     pub subject: PersonnelId,
+    /// The domain the subject is watched on.
     pub domain: String,
 }
 
 /// Assign a spy. Non-interference is validated at assignment: the observer
-/// must differ from the subject, and must hold no execution assignment in
-/// the shape — a spy with a job is not watching.
+/// must differ from the subject, and must hold no domain assignment in the
+/// shape — every assignment in a shape is execution work (an observer's post
+/// lives in the observers count, never in the assignment list), and a spy
+/// with a job is not watching. The domain must be named.
 pub fn assign_spy(
     observer: PersonnelId,
     subject: PersonnelId,
@@ -73,12 +78,18 @@ pub struct DriftReading {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DriftPolicy {
+    /// Rate at or above which the subject lands in the Watch band, ppm.
     pub watch_ppm: u32,
+    /// Rate at or above which the subject lands in the Intervene band, ppm.
     pub intervene_ppm: u32,
+    /// Unusual decisions at or above which the subject lands in the
+    /// Intervene band.
     pub unusual_decision_limit: u32,
 }
 
 impl DriftPolicy {
+    /// The frozen default ladder: watch at 300 ppm, intervene at 700 ppm,
+    /// intervene on three unusual decisions in one window.
     pub fn builtin() -> Self {
         Self {
             watch_ppm: 300,
@@ -117,9 +128,10 @@ pub fn drift_band(reading: &DriftReading, policy: &DriftPolicy) -> DriftBand {
     DriftBand::Calm
 }
 
-/// What the AUTHORITY may do when the spy reads a band. The spy itself does
-/// nothing — these are recommendations, and substitute-subject is
-/// deliberately reserved for the Bench, not the watcher.
+/// The recommendation the watcher hands the AUTHORITY for a band: calm needs
+/// nothing, watch earns more observation, intervene earns a halt. Total and
+/// deterministic; the spy does nothing itself, and substitution is never
+/// recommended here — that call belongs to the Bench, not the watcher.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Intervention {
@@ -129,6 +141,7 @@ pub enum Intervention {
     SubstituteSubject,
 }
 
+/// Map a band to its recommendation. Every band maps to exactly one.
 pub fn intervention(band: DriftBand) -> Intervention {
     match band {
         DriftBand::Calm => Intervention::None,
@@ -137,12 +150,20 @@ pub fn intervention(band: DriftBand) -> Intervention {
     }
 }
 
-/// A bracket: two different kinds of control over one critical domain.
+/// A bracket: two named control roles over one critical domain. The struct
+/// just carries the roles; that they are genuinely different KINDS of
+/// control — a deterministic scanner and a generative adversarial reviewer —
+/// is the caller's declaration. Assembly enforces only that the two
+/// PERSONNEL are distinct, because two of the same control is not a bracket,
+/// it is one control said twice.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Bracket {
+    /// The domain under dual control.
     pub domain: String,
+    /// The deterministic role: scans, checks, refuses.
     pub deterministic_control: PersonnelId,
+    /// The generative role: probes, reviews, attacks the work.
     pub generative_control: PersonnelId,
 }
 
@@ -168,21 +189,20 @@ pub fn bracket(
 }
 
 /// Dual-control coverage: a domain is bracked when the bracket names it AND
-/// both controls hold ownership of that domain in the shape.
+/// both controls hold ownership of that domain in the shape. Ownership is
+/// read across every assignment that names the domain, and it is only ever
+/// read: the bracket grants nothing, transfers nothing, and edits nothing.
 pub fn is_bracked(domain: &str, bracket: &Bracket, shape: &PersonnelShape) -> bool {
     if bracket.domain != domain {
         return false;
     }
-    shape
-        .assignments
-        .iter()
-        .find(|assignment| assignment.domain == domain)
-        .is_some_and(|assignment| {
-            assignment
-                .personnel
-                .contains(&bracket.deterministic_control)
-                && assignment.personnel.contains(&bracket.generative_control)
-        })
+    let holds = |control: &PersonnelId| {
+        shape
+            .assignments
+            .iter()
+            .any(|assignment| assignment.domain == domain && assignment.personnel.contains(control))
+    };
+    holds(&bracket.deterministic_control) && holds(&bracket.generative_control)
 }
 
 /// Which surveillance doctrine to build.
@@ -195,8 +215,11 @@ pub enum SurveillanceKind {
 
 /// The doctrine directive. The spy is observe-only by construction — its
 /// shape deploys watchers only, which the frozen contract validates — and
-/// its budget is a single play, because observation is not work. The
-/// bracket is a play: two controls, joint ownership, one domain.
+/// its budget is a single play, because observation is not work; it admits
+/// once the defence reaches Guarded. The bracket is a play: two controls in
+/// joint ownership of one domain, admitted from Elevated upward, claiming a
+/// protection delta of at least 700 ppm. Both variants pass
+/// `crate::admission::validated` as built and admit on their triggers.
 pub fn directive(
     kind: SurveillanceKind,
     context: &TacticalContext,
@@ -536,5 +559,205 @@ mod tests {
         crate::admission::validated(&bracket_directive).unwrap();
         assert!(bracket_directive.expected_effect.protection_delta_ppm >= 700);
         assert!(bracket_directive.shape.assignments[0].personnel.len() == 2);
+    }
+
+    fn context_at(band: RiskBand, critical_domain: Option<&str>) -> TacticalContext {
+        TacticalContext {
+            problem_breadth_ppm: 300,
+            domain_coupling_ppm: 400,
+            provider_instability_ppm: 100,
+            coherence_debt: 100,
+            repeated_failures: 0,
+            risk_band: band,
+            divergence_observed: false,
+            critical_domain: critical_domain.map(String::from),
+            ytg_milli: 10_000,
+            budget_remaining_ppm: 900_000,
+            short_ytg: false,
+            at_ms: 0,
+        }
+    }
+
+    #[test]
+    fn the_spy_only_reads_and_recommends() {
+        // The adversarial rule: a spy that intervenes is the failure mode.
+        // Every public function in this module takes shared references and
+        // returns owned readings, bands, recommendations, and booleans —
+        // none can reassign personnel, mutate a shape, or touch evidence.
+        // The shape that goes in is the shape that comes out.
+        let shape = shape_with(false);
+        let snapshot = shape.clone();
+        let _ = assign_spy(person("watcher"), person("subject"), "runtime", &shape).unwrap();
+        let pair = bracket("runtime", person("watcher"), person("subject")).unwrap();
+        assert!(!is_bracked("runtime", &pair, &shape));
+        assert_eq!(shape, snapshot);
+
+        // And the directive claims no acting authority at all.
+        let spy = directive(SurveillanceKind::Spy, &context_at(RiskBand::Guarded, None));
+        assert!(spy.authority.observe_only);
+        assert!(!spy.authority.may_reassign);
+        assert!(!spy.authority.may_reallocate_budget);
+        assert!(!spy.authority.may_change_information_topology);
+
+        // The watcher's whole output vocabulary is bands and
+        // recommendations; substitution is never one of them.
+        for band in [DriftBand::Calm, DriftBand::Watch, DriftBand::Intervene] {
+            assert_ne!(intervention(band), Intervention::SubstituteSubject);
+        }
+    }
+
+    #[test]
+    fn drift_band_boundaries_are_exact() {
+        // The frozen builtin ladder: watch at 300 ppm, intervene at 700 ppm,
+        // intervene on three unusual decisions.
+        let policy = DriftPolicy::builtin();
+        assert_eq!(policy.watch_ppm, 300);
+        assert_eq!(policy.intervene_ppm, 700);
+        assert_eq!(policy.unusual_decision_limit, 3);
+        let reading = |scope: u32, resource: u32, decisions: u32| DriftReading {
+            scope_expansion_ppm: scope,
+            resource_use_ppm: resource,
+            unusual_decisions: decisions,
+        };
+        // One below watch is calm; exactly at watch is watch — both rates.
+        assert_eq!(drift_band(&reading(299, 0, 0), &policy), DriftBand::Calm);
+        assert_eq!(drift_band(&reading(0, 299, 0), &policy), DriftBand::Calm);
+        assert_eq!(drift_band(&reading(300, 0, 0), &policy), DriftBand::Watch);
+        assert_eq!(drift_band(&reading(0, 300, 0), &policy), DriftBand::Watch);
+        // One below intervene is still watch; exactly at intervene intervenes.
+        assert_eq!(drift_band(&reading(699, 0, 0), &policy), DriftBand::Watch);
+        assert_eq!(drift_band(&reading(0, 699, 0), &policy), DriftBand::Watch);
+        assert_eq!(
+            drift_band(&reading(700, 0, 0), &policy),
+            DriftBand::Intervene
+        );
+        assert_eq!(
+            drift_band(&reading(0, 700, 0), &policy),
+            DriftBand::Intervene
+        );
+        // Limit minus one unusual decision with quiet rates is watch; at the
+        // limit it intervenes. A decision never calms a watched rate.
+        assert_eq!(drift_band(&reading(0, 0, 2), &policy), DriftBand::Watch);
+        assert_eq!(drift_band(&reading(0, 0, 3), &policy), DriftBand::Intervene);
+        assert_eq!(drift_band(&reading(299, 0, 2), &policy), DriftBand::Watch);
+    }
+
+    #[test]
+    fn every_band_maps_to_exactly_one_intervention() {
+        // The mapping is total: all three bands, element for element.
+        let bands = [DriftBand::Calm, DriftBand::Watch, DriftBand::Intervene];
+        let expected = [
+            Intervention::None,
+            Intervention::IncreaseObservation,
+            Intervention::HaltSubject,
+        ];
+        for (band, recommendation) in bands.iter().zip(expected.iter()) {
+            assert_eq!(intervention(*band), *recommendation);
+        }
+        // And substitution is reserved for the Bench, for every band.
+        for band in bands {
+            assert_ne!(intervention(band), Intervention::SubstituteSubject);
+        }
+    }
+
+    #[test]
+    fn bracket_roles_are_the_callers_declaration() {
+        // The struct carries two roles; which person fills the deterministic
+        // role and which the generative role is declared by the caller, and
+        // assembly inspects only distinctness of personnel, never the kind
+        // of control each person actually is.
+        let scanner = person("scanner");
+        let reviewer = person("reviewer");
+        let declared = bracket("security", scanner.clone(), reviewer.clone()).unwrap();
+        let swapped = bracket("security", reviewer.clone(), scanner.clone()).unwrap();
+        assert_eq!(declared.deterministic_control, scanner);
+        assert_eq!(declared.generative_control, reviewer);
+        assert_eq!(swapped.deterministic_control, reviewer);
+        assert_eq!(swapped.generative_control, scanner);
+        // Coverage reads the two roles symmetrically: each must own it.
+        let shape = crate::domain::PersonnelShape {
+            primary_executors: 1,
+            support: 2,
+            reserves: 0,
+            observers: 0,
+            assignments: vec![crate::domain::DomainAssignment {
+                domain: "security".into(),
+                personnel: vec![person("scanner"), person("reviewer")],
+                mode: crate::domain::OwnershipMode::Joint,
+            }],
+        };
+        assert!(is_bracked("security", &declared, &shape));
+        assert!(is_bracked("security", &swapped, &shape));
+    }
+
+    #[test]
+    fn is_bracked_negative_paths_and_split_ownership() {
+        let pair = bracket("security", person("scanner"), person("reviewer")).unwrap();
+        // An empty shape owns nothing: unbracked.
+        let empty = crate::domain::PersonnelShape {
+            primary_executors: 1,
+            support: 0,
+            reserves: 0,
+            observers: 0,
+            assignments: Vec::new(),
+        };
+        assert!(!is_bracked("security", &pair, &empty));
+        // Ownership split across two assignments of the same domain still
+        // counts: both controls hold the domain between them.
+        let split = crate::domain::PersonnelShape {
+            primary_executors: 2,
+            support: 0,
+            reserves: 0,
+            observers: 0,
+            assignments: vec![
+                crate::domain::DomainAssignment {
+                    domain: "security".into(),
+                    personnel: vec![person("scanner")],
+                    mode: crate::domain::OwnershipMode::Sole,
+                },
+                crate::domain::DomainAssignment {
+                    domain: "security".into(),
+                    personnel: vec![person("reviewer")],
+                    mode: crate::domain::OwnershipMode::Sole,
+                },
+            ],
+        };
+        assert!(is_bracked("security", &pair, &split));
+        // A different domain: unbracked.
+        assert!(!is_bracked("payments", &pair, &split));
+    }
+
+    #[test]
+    fn surveillance_directives_admit_only_on_their_triggers() {
+        // The spy fires from Guarded upward.
+        let guarded = context_at(RiskBand::Guarded, None);
+        let spy = directive(SurveillanceKind::Spy, &guarded);
+        crate::admission::validated(&spy).unwrap();
+        assert_eq!(
+            spy.evaluate_admission(&guarded, 100),
+            crate::admission::Admission::Admitted
+        );
+        // On a Low band the trigger misses and admission rejects by trigger.
+        assert_eq!(
+            spy.evaluate_admission(&context_at(RiskBand::Low, None), 100),
+            crate::admission::Admission::Rejected {
+                reason_code: "trigger_not_fired".into()
+            }
+        );
+        // The bracket fires from Elevated upward.
+        let elevated = context_at(RiskBand::Elevated, Some("security"));
+        let bracket_directive = directive(SurveillanceKind::Bracket, &elevated);
+        crate::admission::validated(&bracket_directive).unwrap();
+        assert_eq!(
+            bracket_directive.evaluate_admission(&elevated, 100),
+            crate::admission::Admission::Admitted
+        );
+        assert_eq!(
+            bracket_directive
+                .evaluate_admission(&context_at(RiskBand::Guarded, Some("security")), 100),
+            crate::admission::Admission::Rejected {
+                reason_code: "trigger_not_fired".into()
+            }
+        );
     }
 }
