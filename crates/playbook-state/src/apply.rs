@@ -879,6 +879,105 @@ fn apply_open(
             next.directive = Some(directive);
             next.at_ms = *at_ms;
         }
+        DriveEvent::TacticAdmitted { tactic, at_ms } => {
+            ensure_active(&next)?;
+            if tactic.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "tactics".into(),
+                    "an admitted tactic names itself".into(),
+                ));
+            }
+            next.tactics.push(crate::TacticRecord {
+                tactic: tactic.clone(),
+                kind: crate::TacticRecordKind::Admitted,
+                at_ms: *at_ms,
+            });
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::TacticRejected {
+            tactic,
+            reason_code,
+            at_ms,
+        } => {
+            ensure_active(&next)?;
+            if reason_code.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "tactics".into(),
+                    "a rejected tactic names its reason".into(),
+                ));
+            }
+            next.tactics.push(crate::TacticRecord {
+                tactic: tactic.clone(),
+                kind: crate::TacticRecordKind::Rejected {
+                    reason_code: reason_code.clone(),
+                },
+                at_ms: *at_ms,
+            });
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::TacticCompleted {
+            tactic,
+            success,
+            ytg_before_milli,
+            ytg_after_milli,
+            tokens_spent,
+            at_ms,
+        } => {
+            ensure_active(&next)?;
+            next.tactics.push(crate::TacticRecord {
+                tactic: tactic.clone(),
+                kind: crate::TacticRecordKind::Completed {
+                    success: *success,
+                    ytg_before_milli: *ytg_before_milli,
+                    ytg_after_milli: *ytg_after_milli,
+                    tokens_spent: *tokens_spent,
+                },
+                at_ms: *at_ms,
+            });
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::TacticFailed {
+            tactic,
+            failure_mode,
+            at_ms,
+        } => {
+            ensure_active(&next)?;
+            if failure_mode.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "tactics".into(),
+                    "a failed tactic names its failure mode".into(),
+                ));
+            }
+            next.tactics.push(crate::TacticRecord {
+                tactic: tactic.clone(),
+                kind: crate::TacticRecordKind::Failed {
+                    failure_mode: failure_mode.clone(),
+                },
+                at_ms: *at_ms,
+            });
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::TacticCountered {
+            tactic,
+            counter,
+            at_ms,
+        } => {
+            ensure_active(&next)?;
+            if counter.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "tactics".into(),
+                    "a countered tactic names its counter".into(),
+                ));
+            }
+            next.tactics.push(crate::TacticRecord {
+                tactic: tactic.clone(),
+                kind: crate::TacticRecordKind::Countered {
+                    counter: counter.clone(),
+                },
+                at_ms: *at_ms,
+            });
+            next.at_ms = *at_ms;
+        }
         DriveEvent::DirectiveExecuted { report, at_ms } => {
             ensure_active(&next)?;
             let directive = next.directive.as_ref().ok_or_else(|| {

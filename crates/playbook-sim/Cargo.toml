@@ -21,6 +21,7 @@ playbook-policy.workspace = true
 playbook-routing.workspace = true
 playbook-security.workspace = true
 playbook-state.workspace = true
+playbook-tactics.workspace = true
 playbook-observability.workspace = true
 playbook-lastdown.workspace = true
 playbook-journal.workspace = true

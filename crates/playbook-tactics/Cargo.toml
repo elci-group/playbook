@@ -1,0 +1,19 @@
+[package]
+name = "playbook-tactics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "The tactical layer: formations, adjustment plays, diagnostic attack patterns, conservative doctrines, surveillance, and responsibility exchange — recommendations the existing authorities execute and validate."
+
+[dependencies]
+playbook-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+playbook-policy.workspace = true
+
+[lints]
+workspace = true

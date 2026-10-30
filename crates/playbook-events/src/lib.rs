@@ -355,6 +355,33 @@ pub enum DriveEvent {
         report: TinkerReport,
         at_ms: u64,
     },
+    TacticAdmitted {
+        tactic: String,
+        at_ms: u64,
+    },
+    TacticRejected {
+        tactic: String,
+        reason_code: String,
+        at_ms: u64,
+    },
+    TacticCompleted {
+        tactic: String,
+        success: bool,
+        ytg_before_milli: u32,
+        ytg_after_milli: u32,
+        tokens_spent: u64,
+        at_ms: u64,
+    },
+    TacticFailed {
+        tactic: String,
+        failure_mode: String,
+        at_ms: u64,
+    },
+    TacticCountered {
+        tactic: String,
+        counter: String,
+        at_ms: u64,
+    },
 }
 
 impl DriveEvent {
@@ -435,6 +462,11 @@ impl DriveEvent {
             Self::CersRecovered { .. } => "cers_recovered",
             Self::DirectiveSealed { .. } => "directive_sealed",
             Self::DirectiveExecuted { .. } => "directive_executed",
+            Self::TacticAdmitted { .. } => "tactic_admitted",
+            Self::TacticRejected { .. } => "tactic_rejected",
+            Self::TacticCompleted { .. } => "tactic_completed",
+            Self::TacticFailed { .. } => "tactic_failed",
+            Self::TacticCountered { .. } => "tactic_countered",
         }
     }
 }

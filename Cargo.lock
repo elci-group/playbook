@@ -322,6 +322,7 @@ dependencies = [
  "playbook-routing",
  "playbook-security",
  "playbook-state",
+ "playbook-tactics",
  "playbook-ytg",
  "serde_json",
 ]
@@ -344,6 +345,16 @@ dependencies = [
  "playbook-security",
  "playbook-sim",
  "playbook-ytg",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "playbook-tactics"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-policy",
  "serde",
  "serde_json",
 ]

@@ -359,3 +359,29 @@ min_size_bytes = 2000
 path = "docs/live-runtime.md"
 required = true
 min_size_bytes = 2000
+
+[[file]]
+path = "crates/playbook-tactics/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-tactics/src/domain.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-sim/tests/tactical_game.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/tactics.md"
+required = true
+min_size_bytes = 2000
+
+[[command]]
+name = "tov check tactics check with me"
+cmd = ["tov", "check", "--json", "tov/tactics/check_with_me.tov"]
+expect_exit = 0
+timeout_secs = 120

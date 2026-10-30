@@ -76,6 +76,97 @@ pub struct CersRecord {
     pub at_ms: u64,
 }
 
+/// One journalled tactical decision, for multi-play tactical memory.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TacticRecord {
+    pub tactic: String,
+    pub kind: TacticRecordKind,
+    pub at_ms: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TacticRecordKind {
+    Admitted,
+    Rejected {
+        reason_code: String,
+    },
+    Completed {
+        success: bool,
+        ytg_before_milli: u32,
+        ytg_after_milli: u32,
+        tokens_spent: u64,
+    },
+    Failed {
+        failure_mode: String,
+    },
+    Countered {
+        counter: String,
+    },
+}
+
+/// Event-sourced tactical memory: what was called, what it produced, and
+/// what countered it — the input to sequencing and constraint doctrine.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TacticsLedger {
+    history: Vec<TacticRecord>,
+    admitted_total: u32,
+    rejected_total: u32,
+    completed_total: u32,
+    failed_total: u32,
+    countered_total: u32,
+}
+
+impl TacticsLedger {
+    pub fn empty() -> Self {
+        Self::default()
+    }
+    pub fn history(&self) -> &[TacticRecord] {
+        &self.history
+    }
+    /// The last `window` records, oldest first — the sequencing window.
+    pub fn recent(&self, window: usize) -> &[TacticRecord] {
+        let start = self.history.len().saturating_sub(window);
+        &self.history[start..]
+    }
+    pub fn admitted_total(&self) -> u32 {
+        self.admitted_total
+    }
+    pub fn rejected_total(&self) -> u32 {
+        self.rejected_total
+    }
+    pub fn completed_total(&self) -> u32 {
+        self.completed_total
+    }
+    pub fn failed_total(&self) -> u32 {
+        self.failed_total
+    }
+    pub fn countered_total(&self) -> u32 {
+        self.countered_total
+    }
+    /// How many consecutive most-recent calls are the named tactic: the
+    /// overreaction detector's raw input. Outcomes interleaved between calls
+    /// are part of those calls, not breaks in the run — a run breaks only
+    /// when a different tactic is called.
+    pub fn consecutive(&self, tactic: &str) -> u32 {
+        self.history
+            .iter()
+            .rev()
+            .filter(|record| matches!(record.kind, TacticRecordKind::Admitted))
+            .take_while(|record| record.tactic == tactic)
+            .count() as u32
+    }
+    pub(crate) fn push(&mut self, record: TacticRecord) {
+        match &record.kind {
+            TacticRecordKind::Admitted => self.admitted_total += 1,
+            TacticRecordKind::Rejected { .. } => self.rejected_total += 1,
+            TacticRecordKind::Completed { .. } => self.completed_total += 1,
+            TacticRecordKind::Failed { .. } => self.failed_total += 1,
+            TacticRecordKind::Countered { .. } => self.countered_total += 1,
+        }
+        self.history.push(record);
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DriveState {
     pub(crate) drive_id: DriveId,
@@ -142,6 +233,7 @@ pub struct DriveState {
     pub(crate) directive: Option<playbook_core::TtDirective>,
     pub(crate) tinker_conformances: u32,
     pub(crate) tinker_deviations: u32,
+    pub(crate) tactics: TacticsLedger,
 }
 
 impl DriveState {
@@ -216,6 +308,7 @@ impl DriveState {
             directive: None,
             tinker_conformances: 0,
             tinker_deviations: 0,
+            tactics: TacticsLedger::empty(),
         }
     }
 
@@ -297,6 +390,10 @@ impl DriveState {
     /// Measured Thinker→Tinker discipline.
     pub fn tinker_discipline(&self) -> (u32, u32) {
         (self.tinker_conformances, self.tinker_deviations)
+    }
+    /// Event-sourced tactical memory.
+    pub fn tactics(&self) -> &TacticsLedger {
+        &self.tactics
     }
     /// Personnel the Bench has benched. They are excluded from the
     /// selection pool until the verdict is reversed.

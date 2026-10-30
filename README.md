@@ -42,6 +42,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 `playbook-live` begins the v0.2.x series: real execution through a non-fixture `CapabilityPlane`. Tool personnel run actual commands under enforced deadlines with sealed outcomes, model personnel sit behind a provider transport seam that packages their responses as claims, dispatch is durable at-least-once with explicit reconciliation, cancellation is a six-state conservative answer, and the directive's full fault list is scripted against any plane in `FaultPlane`. Journal events, envelopes, identity, and the fault table are specified in [the live runtime contract](docs/live-runtime.md).
 
+## Tactics
+
+`playbook-tactics` adds the organisational-shape layer above personnel selection: formations (Spread, Heavy, Trips, Bunch), adjustment plays (Motion, Shift, Audible, Check-With-Me), diagnostic attack patterns (Mesh, Flood, Levels), conservative doctrines (Prevent, Make Them Drive), surveillance (Spy, Bracket), and responsibility exchange (Banjo, Scrape Exchange). Every tactic is a bounded, deterministically admitted directive with a declared counter; the conflict matrix composes them and fails closed. The contract, admission economics and the conflict matrix are specified in [the tactics contract](docs/tactics.md).
+
 ## Layout
 
 ```text
