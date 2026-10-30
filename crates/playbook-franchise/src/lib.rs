@@ -18,6 +18,12 @@ use playbook_policy::Policy;
 use playbook_state::{fold, ApplyMode, Authority, DriveState, EventSink};
 use serde::{Deserialize, Serialize};
 
+pub mod bench;
+pub mod manmark;
+
+pub use bench::{decide, BenchCandidate, BenchInput, SubstitutionClass, SubstitutionDecision};
+pub use manmark::{InspectionTrigger, ManmarkRegistry, Mark, MarkOutcome, MarkState, Remediation};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Availability {

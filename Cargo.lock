@@ -94,6 +94,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-cers"
+version = "0.1.0"
+dependencies = [
+ "playbook-blitz",
+ "playbook-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-cli"
 version = "0.1.0"
 dependencies = [
@@ -150,6 +160,7 @@ dependencies = [
 name = "playbook-franchise"
 version = "0.1.0"
 dependencies = [
+ "playbook-blitz",
  "playbook-core",
  "playbook-elci",
  "playbook-events",
@@ -282,10 +293,13 @@ dependencies = [
 name = "playbook-sim"
 version = "0.1.0"
 dependencies = [
+ "playbook-blitz",
+ "playbook-cers",
  "playbook-core",
  "playbook-elci",
  "playbook-events",
  "playbook-evidence",
+ "playbook-franchise",
  "playbook-huddle",
  "playbook-journal",
  "playbook-lastdown",
@@ -294,6 +308,7 @@ dependencies = [
  "playbook-routing",
  "playbook-security",
  "playbook-state",
+ "playbook-ytg",
  "serde_json",
 ]
 

@@ -8,10 +8,12 @@
 mod apply;
 mod authority;
 mod classify;
+pub mod evaluate;
 
 pub use apply::{apply, export_log, fold, import_log, trajectory, ApplyMode, TrajectoryPoint};
 pub use authority::{started_budget, Authority, HuddleAdmission, HuddleRequest};
 pub use classify::{classify_measurement, estimate_completion_ppm};
+pub use evaluate::{evaluate_branch, EvaluationInputs};
 
 use std::collections::BTreeMap;
 
@@ -43,6 +45,35 @@ pub trait EventSink: Send {
     fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError>;
     fn mark(&self) -> u64;
     fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError>;
+}
+
+/// One EVALUATING branch decision, journalled.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EvaluationRecord {
+    pub branch: playbook_core::EvaluationBranch,
+    pub reasons: Vec<String>,
+    pub at_ms: u64,
+}
+
+/// One journalled bench substitution.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SubstitutionRecord {
+    pub class: String,
+    pub out: PersonnelId,
+    pub replacement: Option<PersonnelId>,
+    pub reasons: Vec<String>,
+    pub at_ms: u64,
+}
+
+/// One journalled CERS recovery artefact.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CersRecord {
+    pub artefact_id: EvidenceId,
+    pub source: String,
+    pub confirmed_facts: u32,
+    pub failed_assumptions: u32,
+    pub times_reused: u32,
+    pub at_ms: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,6 +134,14 @@ pub struct DriveState {
     pub(crate) huddles: playbook_huddle::HuddleLedger,
     pub(crate) blitzes: playbook_blitz::BlitzLedger,
     pub(crate) benched: Vec<PersonnelId>,
+    pub(crate) game_contract: Option<playbook_core::GameContract>,
+    pub(crate) last_evaluation: Option<EvaluationRecord>,
+    pub(crate) substitutions: Vec<SubstitutionRecord>,
+    pub(crate) cers_recovered_total: u32,
+    pub(crate) cers_artefacts: Vec<CersRecord>,
+    pub(crate) directive: Option<playbook_core::TtDirective>,
+    pub(crate) tinker_conformances: u32,
+    pub(crate) tinker_deviations: u32,
 }
 
 impl DriveState {
@@ -169,6 +208,14 @@ impl DriveState {
             huddles: playbook_huddle::HuddleLedger::empty(),
             blitzes: playbook_blitz::BlitzLedger::empty(),
             benched: Vec::new(),
+            game_contract: None,
+            last_evaluation: None,
+            substitutions: Vec::new(),
+            cers_recovered_total: 0,
+            cers_artefacts: Vec::new(),
+            directive: None,
+            tinker_conformances: 0,
+            tinker_deviations: 0,
         }
     }
 
@@ -217,6 +264,39 @@ impl DriveState {
     /// and closed records with recovery economics.
     pub fn blitzes(&self) -> &playbook_blitz::BlitzLedger {
         &self.blitzes
+    }
+    /// The sealed game contract, when one governs this drive. DriveCompleted
+    /// is refused unless its mandatory win conditions verify.
+    pub fn game_contract(&self) -> Option<&playbook_core::GameContract> {
+        self.game_contract.as_ref()
+    }
+    /// The most recent EVALUATING branch decision.
+    pub fn last_evaluation(&self) -> Option<&EvaluationRecord> {
+        self.last_evaluation.as_ref()
+    }
+    /// Sealed evidence, oldest first.
+    pub fn evidence(&self) -> &[Evidence] {
+        &self.evidence
+    }
+    /// Artefact refs with their validation state.
+    pub fn artefacts(&self) -> &[ArtefactRef] {
+        &self.artefacts
+    }
+    /// Journalled bench substitutions, oldest first.
+    pub fn substitutions(&self) -> &[SubstitutionRecord] {
+        &self.substitutions
+    }
+    /// Recovered-cognition artefacts journaled on this drive.
+    pub fn cers_artefacts(&self) -> &[CersRecord] {
+        &self.cers_artefacts
+    }
+    /// The sealed Thinker→Tinker directive, when one governs execution.
+    pub fn directive(&self) -> Option<&playbook_core::TtDirective> {
+        self.directive.as_ref()
+    }
+    /// Measured Thinker→Tinker discipline.
+    pub fn tinker_discipline(&self) -> (u32, u32) {
+        (self.tinker_conformances, self.tinker_deviations)
     }
     /// Personnel the Bench has benched. They are excluded from the
     /// selection pool until the verdict is reversed.

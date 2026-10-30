@@ -304,3 +304,38 @@ min_size_bytes = 100
 path = "fixtures/blitz/network_critical.json"
 required = true
 min_size_bytes = 100
+
+[[file]]
+path = "crates/playbook-core/src/contract.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-state/src/evaluate.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/closure-campaign.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "crates/playbook-cers/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-franchise/src/bench.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-franchise/src/manmark.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-sim/tests/canonical_game.rs"
+required = true
+min_size_bytes = 2000

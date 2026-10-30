@@ -6,8 +6,18 @@ exist today, names the smallest architectural gap in each, and fixes the
 sprint order. The directive's strategic rule governs: integration, runtime
 enforcement, measurement, and proof outrank new conceptual subsystems.
 
-Verified against the tree at `v0.1.16` (Blitz delivered on
-`feat/franchise-front-office`, commit `8df49e1`).
+**STATUS: ALL SIX RELEASE GATES CLOSED** as of the FC-1..FC-7 delivery. Gate
+A: `GameContract`/`WinCondition` with fold-enforced completion gating
+(`playbook-core::contract`), `ProgressVector` (`playbook-ytg`), and the
+EVALUATING branch ladder (`playbook-state::evaluate`). Gate B: the Bench
+decision service and the Manmark registry with the strategic→instinctive
+graduation path (`playbook-franchise::{bench,manmark}`), plus the sealed
+Thinker→Tinker directive. Gate C: huddles. Gate D: Lastdown plus CERS
+(`playbook-cers`). Gate E: Blitz. Gate F: the canonical Franchise Game runs
+end-to-end through the journal fold
+(`playbook-sim/tests/canonical_game.rs`) with the §28 demonstration trace
+and no human intervention. The sections below are the original gap analysis,
+retained as the record of what was found and what was built.
 
 ## Release gate status
 

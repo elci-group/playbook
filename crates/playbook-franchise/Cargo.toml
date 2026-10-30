@@ -14,6 +14,7 @@ playbook-events.workspace = true
 playbook-state.workspace = true
 playbook-policy.workspace = true
 playbook-elci.workspace = true
+playbook-blitz.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

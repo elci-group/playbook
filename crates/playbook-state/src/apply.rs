@@ -626,6 +626,19 @@ fn apply_open(
             if !is_complete(&next.gates) || next.ytg_milli != 0 {
                 return Err(PlaybookError::Incomplete);
             }
+            // A sealed contract is the only authority on what a win means.
+            if let Some(contract) = &next.game_contract {
+                let verdict = playbook_core::verify_win_conditions(
+                    contract,
+                    &next.gates,
+                    &next.evidence,
+                    &next.artefacts,
+                    &next.environment_snapshot,
+                );
+                if !verdict.verified_win {
+                    return Err(PlaybookError::Incomplete);
+                }
+            }
             next.status = DriveStatus::Completed;
             next.at_ms = *at_ms;
         }
@@ -748,6 +761,155 @@ fn apply_open(
             if let DriveEvent::BlitzProposed { at_ms, .. } = event {
                 next.at_ms = *at_ms;
             }
+        }
+        DriveEvent::GameContractSealed { contract, at_ms }
+        | DriveEvent::GameContractAmended { contract, at_ms } => {
+            ensure_active(&next)?;
+            contract.verify()?;
+            if let Some(existing) = &next.game_contract {
+                // Immutability: the only lawful successor names its
+                // predecessor. Silent mutation is a replay divergence.
+                if contract.predecessor_hash.as_deref() != Some(existing.contract_hash.as_str()) {
+                    return Err(PlaybookError::Inadmissible(
+                        "contract".into(),
+                        "amendment does not name the seated predecessor".into(),
+                    ));
+                }
+            } else if contract.predecessor_hash.is_some() {
+                return Err(PlaybookError::Inadmissible(
+                    "contract".into(),
+                    "the first contract has no predecessor".into(),
+                ));
+            }
+            next.game_contract = Some((**contract).clone());
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::EvaluationDecided {
+            at_ms,
+            branch,
+            reasons,
+        } => {
+            ensure_active(&next)?;
+            if reasons.is_empty() || reasons.iter().any(|reason| reason.trim().is_empty()) {
+                return Err(PlaybookError::Inadmissible(
+                    "evaluation".into(),
+                    "every branch decision carries its reasons".into(),
+                ));
+            }
+            next.last_evaluation = Some(crate::EvaluationRecord {
+                branch: *branch,
+                reasons: reasons.clone(),
+                at_ms: *at_ms,
+            });
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::PlayerSubstituted {
+            at_ms,
+            class,
+            out,
+            replacement,
+            reasons,
+        } => {
+            ensure_active(&next)?;
+            if !matches!(
+                class.as_str(),
+                "tactical" | "performance" | "availability" | "economic" | "emergency"
+            ) {
+                return Err(PlaybookError::Inadmissible(
+                    "bench".into(),
+                    "unknown substitution class".into(),
+                ));
+            }
+            if reasons.is_empty() || reasons.iter().any(|reason| reason.trim().is_empty()) {
+                return Err(PlaybookError::Inadmissible(
+                    "bench".into(),
+                    "every substitution carries its reasons".into(),
+                ));
+            }
+            next.substitutions.push(crate::SubstitutionRecord {
+                class: class.clone(),
+                out: out.clone(),
+                replacement: replacement.clone(),
+                reasons: reasons.clone(),
+                at_ms: *at_ms,
+            });
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::CersRecovered {
+            artefact_id,
+            source,
+            confirmed_facts,
+            failed_assumptions,
+            reuse_hint,
+            at_ms,
+        } => {
+            ensure_active(&next)?;
+            if *confirmed_facts + *failed_assumptions == 0 {
+                return Err(PlaybookError::Evidence(
+                    "a recovery artefact with no recoverable cognition is no artefact".into(),
+                ));
+            }
+            if reuse_hint.trim().is_empty() {
+                return Err(PlaybookError::Evidence(
+                    "a recovery artefact names its reuse hint".into(),
+                ));
+            }
+            next.cers_recovered_total = next.cers_recovered_total.saturating_add(1);
+            if let Some(record) = next
+                .cers_artefacts
+                .iter_mut()
+                .find(|record| record.artefact_id == *artefact_id)
+            {
+                record.times_reused = record.times_reused.saturating_add(1);
+            } else {
+                next.cers_artefacts.push(crate::CersRecord {
+                    artefact_id: artefact_id.clone(),
+                    source: source.clone(),
+                    confirmed_facts: *confirmed_facts,
+                    failed_assumptions: *failed_assumptions,
+                    times_reused: 0,
+                    at_ms: *at_ms,
+                });
+            }
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::DirectiveSealed { directive, at_ms } => {
+            ensure_active(&next)?;
+            let directive = directive.clone().seal()?;
+            next.directive = Some(directive);
+            next.at_ms = *at_ms;
+        }
+        DriveEvent::DirectiveExecuted { report, at_ms } => {
+            ensure_active(&next)?;
+            let directive = next.directive.as_ref().ok_or_else(|| {
+                PlaybookError::Inadmissible("tt".into(), "no sealed directive to execute".into())
+            })?;
+            if report.directive_id != directive.id {
+                return Err(PlaybookError::Inadmissible(
+                    "tt".into(),
+                    "report names another directive".into(),
+                ));
+            }
+            // The Tinker implements the specification; it never rewrites it.
+            if !directive.spec_matches(&report.specification_hash) {
+                return Err(PlaybookError::ReplayDivergence(
+                    "tinker reported against a rewritten specification".into(),
+                ));
+            }
+            if !report.conformance && report.deviation.is_none() {
+                return Err(PlaybookError::Inadmissible(
+                    "tt".into(),
+                    "a non-conformant report names its deviation".into(),
+                ));
+            }
+            if report.conformance {
+                next.tinker_conformances = next.tinker_conformances.saturating_add(1);
+            } else {
+                next.tinker_deviations = next.tinker_deviations.saturating_add(1);
+                // Control returns to Playbook: the possession restarts.
+                next.possession_restarted = true;
+            }
+            next.at_ms = *at_ms;
         }
     }
     Ok(next)

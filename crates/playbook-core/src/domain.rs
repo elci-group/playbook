@@ -888,9 +888,102 @@ pub struct TacticalSnapshot {
     pub explanation: Vec<String>,
 }
 
+/// The EVALUATING branch of the game state machine. The control plane names
+/// exactly one branch per evaluation, defence before coherence before
+/// personnel before possession before progress:
+/// Blitz → CersRecovery → Huddle → Substitute → Lastdown → Advance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvaluationBranch {
+    Advance,
+    Huddle,
+    Substitute,
+    Lastdown,
+    Blitz,
+    CersRecovery,
+}
+
+impl EvaluationBranch {
+    /// The journal key.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Advance => "advance",
+            Self::Huddle => "huddle",
+            Self::Substitute => "substitute",
+            Self::Lastdown => "lastdown",
+            Self::Blitz => "blitz",
+            Self::CersRecovery => "cers_recovery",
+        }
+    }
+
+    /// Parse a journal key back.
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "advance" => Some(Self::Advance),
+            "huddle" => Some(Self::Huddle),
+            "substitute" => Some(Self::Substitute),
+            "lastdown" => Some(Self::Lastdown),
+            "blitz" => Some(Self::Blitz),
+            "cers_recovery" => Some(Self::CersRecovery),
+            _ => None,
+        }
+    }
+}
+
 /// Keys a model must not be able to mark complete by assertion.
 pub fn narrative_has_no_weight(class: EvidenceClass) -> bool {
     matches!(class, EvidenceClass::NarrativeClaim)
+}
+
+/// A Thinker→Tinker execution directive. The Thinker's specification is
+/// sealed content-addressably; the Tinker implements it and may not silently
+/// reinterpret it. If implementation exposes an invalid premise, control
+/// returns to Playbook — the Tinker never rewrites the strategy.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TtDirective {
+    pub id: crate::ids::DirectiveId,
+    pub thinker: PersonnelId,
+    pub tinker: PersonnelId,
+    pub specification: String,
+    pub specification_hash: String,
+    pub expected_evidence: Vec<EvidenceClass>,
+}
+
+impl TtDirective {
+    /// Seal the specification. An empty specification is no directive.
+    pub fn seal(mut self) -> Result<Self, PlaybookError> {
+        if self.specification.trim().is_empty() {
+            return Err(PlaybookError::Evidence(
+                "a directive requires a specification".into(),
+            ));
+        }
+        if self.thinker == self.tinker {
+            return Err(PlaybookError::Evidence(
+                "the thinker and the tinker must be different personnel".into(),
+            ));
+        }
+        self.specification_hash.clear();
+        self.specification_hash = sha256_hex(self.specification.as_bytes());
+        Ok(self)
+    }
+
+    /// The reported specification is exactly the sealed one.
+    pub fn spec_matches(&self, reported_hash: &str) -> bool {
+        reported_hash == self.specification_hash
+    }
+}
+
+/// What the Tinker reported after executing a directive. A non-conformant
+/// report must name its deviation; control returns to Playbook either way.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TinkerReport {
+    pub directive_id: crate::ids::DirectiveId,
+    pub specification_hash: String,
+    pub conformance: bool,
+    pub deviation: Option<String>,
+    pub evidence_refs: Vec<EvidenceId>,
 }
 
 pub fn check_ppm(value: u32) -> Result<Ppm, PlaybookError> {

@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod canonical;
+pub mod contract;
 pub mod domain;
 pub mod error;
 pub mod ids;
@@ -13,6 +14,7 @@ pub mod priors;
 pub mod units;
 
 pub use canonical::{canonical_bytes, canonical_value, sha256_hex, to_canonical_bytes};
+pub use contract::*;
 pub use domain::*;
 pub use error::PlaybookError;
 pub use ids::*;

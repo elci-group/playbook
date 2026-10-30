@@ -12,10 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::canonical::{sha256_hex, to_canonical_bytes};
 use crate::error::PlaybookError;
-use crate::ids::{DriveId, EvidenceId, GameId, GateId, WinConditionId};
-use crate::{
-    ArtefactRef, Constraint, DriveBudget, Evidence, EvidenceClass, Gate, GateState, TaskContract,
-};
+use crate::ids::{GameId, GateId, WinConditionId};
+use crate::{ArtefactRef, DriveBudget, Evidence, EvidenceClass, Gate, GateState, TaskContract};
 
 /// What one win condition checks, and everything needed to check it. The
 /// directive's examples map one-to-one: build succeeds and tests pass are
@@ -169,7 +167,9 @@ impl GameContract {
     pub fn amend(mut self, evidence_policy: EvidencePolicy) -> Self {
         self.predecessor_hash = Some(self.contract_hash.clone());
         self.evidence_policy = evidence_policy;
-        self
+        self.contract_hash.clear();
+        self.seal()
+            .expect("an amendment of a valid contract seals cleanly")
     }
 }
 
@@ -178,7 +178,7 @@ impl GameContract {
 #[serde(deny_unknown_fields)]
 pub struct ConditionResult {
     pub condition_id: WinConditionId,
-    pub kind_key: &'static str,
+    pub kind_key: String,
     pub passed: bool,
     pub reason_code: String,
 }
@@ -208,10 +208,17 @@ pub fn verify_win_conditions(
         .win_conditions
         .iter()
         .map(|condition| {
-            let (passed, reason_code) = check(condition, contract, gates, evidence, artefacts, environment_snapshot);
+            let (passed, reason_code) = check(
+                condition,
+                contract,
+                gates,
+                evidence,
+                artefacts,
+                environment_snapshot,
+            );
             ConditionResult {
                 condition_id: condition.id.clone(),
-                kind_key: condition.kind.key(),
+                kind_key: condition.kind.key().to_string(),
                 passed,
                 reason_code,
             }
@@ -255,10 +262,7 @@ fn check(
             if !contract.evidence_policy.accepts(*class) {
                 return (false, "evidence_class_rejected_by_policy".into());
             }
-            let count = evidence
-                .iter()
-                .filter(|item| item.class == *class)
-                .count() as u32;
+            let count = evidence.iter().filter(|item| item.class == *class).count() as u32;
             if count >= *minimum {
                 (true, "evidence_present".into())
             } else {
@@ -273,15 +277,13 @@ fn check(
                 (false, format!("artefact_shortfall_{count}_of_{minimum}"))
             }
         }
-        WinConditionKind::EnvironmentFact { key, value } => {
-            match environment_snapshot.get(key) {
-                Some(observed) if observed == &serde_json::Value::String(value.clone()) => {
-                    (true, "environment_fact_holds".into())
-                }
-                Some(_) => (false, "environment_fact_conflicts".into()),
-                None => (false, "environment_fact_absent".into()),
+        WinConditionKind::EnvironmentFact { key, value } => match environment_snapshot.get(key) {
+            Some(observed) if observed == &serde_json::Value::String(value.clone()) => {
+                (true, "environment_fact_holds".into())
             }
-        }
+            Some(_) => (false, "environment_fact_conflicts".into()),
+            None => (false, "environment_fact_absent".into()),
+        },
     }
 }
 
@@ -327,22 +329,10 @@ pub fn check_loss_conditions(
         })
 }
 
-/// Evidence referenced by a contract must exist in the drive's measured
-/// record before the contract seals — a contract may not cite evidence it
-/// does not yet have.
-pub fn contract_evidence_known(contract: &GameContract, evidence_ids: &[EvidenceId]) -> bool {
-    contract
-        .objective
-        .constraints
-        .iter()
-        .all(|Constraint { key, value }| !key.is_empty() && !value.is_empty())
-        && evidence_ids.len() >= evidence_ids.len()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ArtefactId, Constraint, Down, DriveStatus, TaskIntegrity};
+    use crate::{ArtefactId, Constraint, Down, DriveStatus, EvidenceId, TaskIntegrity};
 
     fn gate(id: &str) -> Gate {
         Gate::declare(
@@ -369,11 +359,23 @@ mod tests {
                 integrity: TaskIntegrity::Sound,
             },
             win_conditions: vec![win],
-            loss_conditions: vec![LossCondition {
-                id: WinConditionId::new("loss-budget").unwrap(),
-                kind: LossConditionKind::BudgetExhausted,
-                description: "budget gone".into(),
-            }],
+            loss_conditions: vec![
+                LossCondition {
+                    id: WinConditionId::new("loss-budget").unwrap(),
+                    kind: LossConditionKind::BudgetExhausted,
+                    description: "budget gone".into(),
+                },
+                LossCondition {
+                    id: WinConditionId::new("loss-gate").unwrap(),
+                    kind: LossConditionKind::MandatoryGateFailed,
+                    description: "a mandatory gate failed".into(),
+                },
+                LossCondition {
+                    id: WinConditionId::new("loss-deadline").unwrap(),
+                    kind: LossConditionKind::DeadlinePassed,
+                    description: "the deadline passed".into(),
+                },
+            ],
             budget: DriveBudget {
                 tokens: 1_000,
                 ..DriveBudget::zero()
@@ -406,7 +408,10 @@ mod tests {
         sealed.verify().unwrap();
         let mut tampered = sealed.clone();
         tampered.budget.tokens = 5_000;
-        assert!(matches!(tampered.verify(), Err(PlaybookError::DigestMismatch)));
+        assert!(matches!(
+            tampered.verify(),
+            Err(PlaybookError::DigestMismatch)
+        ));
     }
 
     #[test]
@@ -524,14 +529,21 @@ mod tests {
             rejected: false,
             evidence_id: None,
         };
-        assert!(!verify_win_conditions(&sealed, &[], &[], &[unvalidated], &serde_json::json!({}))
-            .verified_win);
+        assert!(
+            !verify_win_conditions(&sealed, &[], &[], &[unvalidated], &serde_json::json!({}))
+                .verified_win
+        );
         let validated = ArtefactRef {
+            id: ArtefactId::new("art-1").unwrap(),
+            digest: "d".into(),
             validated: true,
-            ..unvalidated
+            rejected: false,
+            evidence_id: None,
         };
-        assert!(verify_win_conditions(&sealed, &[], &[], &[validated], &serde_json::json!({}))
-            .verified_win);
+        assert!(
+            verify_win_conditions(&sealed, &[], &[], &[validated], &serde_json::json!({}))
+                .verified_win
+        );
 
         let environment = contract(WinCondition {
             id: WinConditionId::new("win-env").unwrap(),
@@ -569,11 +581,9 @@ mod tests {
     #[test]
     fn amendment_supersedes_without_mutating_the_predecessor() {
         let original = contract(win());
-        let amended = original
-            .clone()
-            .amend(EvidencePolicy {
-                accepted_classes: vec![EvidenceClass::CompilerResult, EvidenceClass::Benchmark],
-            });
+        let amended = original.clone().amend(EvidencePolicy {
+            accepted_classes: vec![EvidenceClass::CompilerResult, EvidenceClass::Benchmark],
+        });
         assert_eq!(
             amended.predecessor_hash.as_deref(),
             Some(original.contract_hash.as_str())
@@ -603,12 +613,7 @@ mod tests {
             gate
         };
         assert_eq!(
-            check_loss_conditions(
-                &sealed,
-                &[failed],
-                DriveBudget::zero(),
-                10
-            ),
+            check_loss_conditions(&sealed, &[failed], DriveBudget::zero(), 10),
             Some(ContractLoss::MandatoryGateFailed)
         );
         assert_eq!(
@@ -620,23 +625,5 @@ mod tests {
             None
         );
         let _ = (Down::FirstDown, DriveStatus::Active);
-    }
-
-    #[test]
-    fn contract_constraints_must_be_well_formed() {
-        let mut malformed = contract(win());
-        malformed.objective.constraints = vec![Constraint {
-            key: String::new(),
-            value: String::new(),
-        }];
-        assert!(!contract_evidence_known(
-            &malformed,
-            &[EvidenceId::new("ev-1").unwrap()]
-        ));
-        let sealed = contract(win());
-        assert!(contract_evidence_known(
-            &sealed,
-            &[EvidenceId::new("ev-1").unwrap()]
-        ));
     }
 }

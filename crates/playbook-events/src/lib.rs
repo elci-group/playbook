@@ -319,6 +319,42 @@ pub enum DriveEvent {
         blitz_id: BlitzId,
         reason_code: String,
     },
+    GameContractSealed {
+        contract: Box<GameContract>,
+        at_ms: u64,
+    },
+    GameContractAmended {
+        contract: Box<GameContract>,
+        at_ms: u64,
+    },
+    EvaluationDecided {
+        at_ms: u64,
+        branch: EvaluationBranch,
+        reasons: Vec<String>,
+    },
+    PlayerSubstituted {
+        at_ms: u64,
+        class: String,
+        out: PersonnelId,
+        replacement: Option<PersonnelId>,
+        reasons: Vec<String>,
+    },
+    CersRecovered {
+        artefact_id: EvidenceId,
+        source: String,
+        confirmed_facts: u32,
+        failed_assumptions: u32,
+        reuse_hint: String,
+        at_ms: u64,
+    },
+    DirectiveSealed {
+        directive: TtDirective,
+        at_ms: u64,
+    },
+    DirectiveExecuted {
+        report: TinkerReport,
+        at_ms: u64,
+    },
 }
 
 impl DriveEvent {
@@ -392,6 +428,240 @@ impl DriveEvent {
             Self::BlitzSuperseded { .. } => "blitz_superseded",
             Self::BlitzFailed { .. } => "blitz_failed",
             Self::BlitzAborted { .. } => "blitz_aborted",
+            Self::GameContractSealed { .. } => "game_contract_sealed",
+            Self::GameContractAmended { .. } => "game_contract_amended",
+            Self::EvaluationDecided { .. } => "evaluation_decided",
+            Self::PlayerSubstituted { .. } => "player_substituted",
+            Self::CersRecovered { .. } => "cers_recovered",
+            Self::DirectiveSealed { .. } => "directive_sealed",
+            Self::DirectiveExecuted { .. } => "directive_executed",
+        }
+    }
+}
+
+impl DriveEvent {
+    /// The inverse of the drive fold's blitz projection: the race engine's
+    /// events become journal events one-to-one. The projection is total —
+    /// every blitz event has exactly one journal form.
+    pub fn from_blitz(event: &playbook_blitz::apply::BlitzEvent) -> Self {
+        use playbook_blitz::apply::BlitzEvent;
+        match event {
+            BlitzEvent::Proposed {
+                blitz_id,
+                trigger,
+                target,
+                pressure,
+                at_ms,
+            } => Self::BlitzProposed {
+                blitz_id: blitz_id.clone(),
+                trigger: trigger.clone(),
+                target: (**target).clone(),
+                pressure: pressure.clone(),
+                at_ms: *at_ms,
+            },
+            BlitzEvent::Authorised {
+                blitz_id,
+                budget,
+                corroboration,
+                resource_mode,
+                at_ms,
+            } => Self::BlitzAuthorised {
+                blitz_id: blitz_id.clone(),
+                budget: *budget,
+                corroboration: *corroboration,
+                resource_mode: *resource_mode,
+                at_ms: *at_ms,
+            },
+            BlitzEvent::Rejected {
+                blitz_id,
+                reason_code,
+            } => Self::BlitzRejected {
+                blitz_id: blitz_id.clone(),
+                reason_code: reason_code.clone(),
+            },
+            BlitzEvent::TargetFrozen {
+                blitz_id,
+                target_hash,
+            } => Self::BlitzTargetFrozen {
+                blitz_id: blitz_id.clone(),
+                target_hash: target_hash.clone(),
+            },
+            BlitzEvent::WorkerDispatched {
+                blitz_id,
+                worker,
+                effective_parallelism_milli,
+            } => Self::BlitzWorkerDispatched {
+                blitz_id: blitz_id.clone(),
+                worker: worker.clone(),
+                effective_parallelism_milli: *effective_parallelism_milli,
+            },
+            BlitzEvent::WorkerStarted {
+                blitz_id,
+                worker_id,
+                at_ms,
+            } => Self::BlitzWorkerStarted {
+                blitz_id: blitz_id.clone(),
+                worker_id: worker_id.clone(),
+                at_ms: *at_ms,
+            },
+            BlitzEvent::WorkerExited {
+                blitz_id,
+                worker_id,
+                kind,
+                at_ms,
+            } => Self::BlitzWorkerExited {
+                blitz_id: blitz_id.clone(),
+                worker_id: worker_id.clone(),
+                kind: *kind,
+                at_ms: *at_ms,
+            },
+            BlitzEvent::WorkerSpent { blitz_id, spent } => Self::BlitzWorkerSpent {
+                blitz_id: blitz_id.clone(),
+                spent: spent.clone(),
+            },
+            BlitzEvent::WaveClosed {
+                blitz_id,
+                wave,
+                diagnostics,
+            } => Self::BlitzWaveClosed {
+                blitz_id: blitz_id.clone(),
+                wave: *wave,
+                diagnostics: diagnostics.clone(),
+            },
+            BlitzEvent::CandidateReceived {
+                blitz_id,
+                candidate,
+            } => Self::BlitzCandidateReceived {
+                blitz_id: blitz_id.clone(),
+                candidate: candidate.clone(),
+            },
+            BlitzEvent::VerificationStarted {
+                blitz_id,
+                candidate_id,
+            } => Self::BlitzVerificationStarted {
+                blitz_id: blitz_id.clone(),
+                candidate_id: candidate_id.clone(),
+            },
+            BlitzEvent::CandidateRejected {
+                blitz_id,
+                candidate_id,
+                gate,
+                reason_code,
+            } => Self::BlitzCandidateRejected {
+                blitz_id: blitz_id.clone(),
+                candidate_id: candidate_id.clone(),
+                gate: *gate,
+                reason_code: reason_code.clone(),
+            },
+            BlitzEvent::CandidateVerified {
+                blitz_id,
+                candidate_id,
+                passed,
+            } => Self::BlitzCandidateVerified {
+                blitz_id: blitz_id.clone(),
+                candidate_id: candidate_id.clone(),
+                passed: passed.clone(),
+            },
+            BlitzEvent::VerificationUnavailable {
+                blitz_id,
+                candidate_id,
+            } => Self::BlitzVerificationUnavailable {
+                blitz_id: blitz_id.clone(),
+                candidate_id: candidate_id.clone(),
+            },
+            BlitzEvent::HumanConfirmed {
+                blitz_id,
+                candidate_id,
+                authority,
+            } => Self::BlitzHumanConfirmed {
+                blitz_id: blitz_id.clone(),
+                candidate_id: candidate_id.clone(),
+                authority: authority.clone(),
+            },
+            BlitzEvent::WinnerSelected {
+                blitz_id,
+                candidate_id,
+                worker_id,
+                at_ms,
+            } => Self::BlitzWinnerSelected {
+                blitz_id: blitz_id.clone(),
+                candidate_id: candidate_id.clone(),
+                worker_id: worker_id.clone(),
+                at_ms: *at_ms,
+            },
+            BlitzEvent::CancelStarted { blitz_id, at_ms } => Self::BlitzCancelStarted {
+                blitz_id: blitz_id.clone(),
+                at_ms: *at_ms,
+            },
+            BlitzEvent::WorkerCancelled {
+                blitz_id,
+                worker_id,
+                avoided_tokens,
+                avoided_cost_microunits,
+            } => Self::BlitzWorkerCancelled {
+                blitz_id: blitz_id.clone(),
+                worker_id: worker_id.clone(),
+                avoided_tokens: *avoided_tokens,
+                avoided_cost_microunits: *avoided_cost_microunits,
+            },
+            BlitzEvent::CancelComplete {
+                blitz_id,
+                cancelled,
+                latency_ms,
+                avoided_tokens,
+                avoided_cost_microunits,
+            } => Self::BlitzCancelComplete {
+                blitz_id: blitz_id.clone(),
+                cancelled: *cancelled,
+                latency_ms: *latency_ms,
+                avoided_tokens: *avoided_tokens,
+                avoided_cost_microunits: *avoided_cost_microunits,
+            },
+            BlitzEvent::RecoveryConfirmed {
+                blitz_id,
+                evidence_refs,
+                at_ms,
+            } => Self::BlitzRecoveryConfirmed {
+                blitz_id: blitz_id.clone(),
+                evidence_refs: evidence_refs.clone(),
+                at_ms: *at_ms,
+            },
+            BlitzEvent::BudgetConsumed { blitz_id, cost } => Self::BlitzBudgetConsumed {
+                blitz_id: blitz_id.clone(),
+                cost: *cost,
+            },
+            BlitzEvent::Exhausted { blitz_id, failure } => Self::BlitzExhausted {
+                blitz_id: blitz_id.clone(),
+                failure: *failure,
+            },
+            BlitzEvent::Escalated {
+                blitz_id,
+                recommendation,
+            } => Self::BlitzEscalated {
+                blitz_id: blitz_id.clone(),
+                recommendation: recommendation.clone(),
+            },
+            BlitzEvent::Superseded {
+                blitz_id,
+                successor_id,
+            } => Self::BlitzSuperseded {
+                blitz_id: blitz_id.clone(),
+                successor_id: successor_id.clone(),
+            },
+            BlitzEvent::Failed {
+                blitz_id,
+                reason_code,
+            } => Self::BlitzFailed {
+                blitz_id: blitz_id.clone(),
+                reason_code: reason_code.clone(),
+            },
+            BlitzEvent::Aborted {
+                blitz_id,
+                reason_code,
+            } => Self::BlitzAborted {
+                blitz_id: blitz_id.clone(),
+                reason_code: reason_code.clone(),
+            },
         }
     }
 }

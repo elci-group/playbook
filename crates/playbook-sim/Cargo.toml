@@ -8,7 +8,11 @@ rust-version.workspace = true
 description = "Deterministic drive replay, policy comparison, and the MVP acceptance sequence."
 
 [dependencies]
+playbook-blitz.workspace = true
+playbook-cers.workspace = true
 playbook-core.workspace = true
+playbook-franchise.workspace = true
+playbook-ytg.workspace = true
 playbook-events.workspace = true
 playbook-evidence.workspace = true
 playbook-elci.workspace = true

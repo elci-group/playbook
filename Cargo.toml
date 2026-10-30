@@ -23,6 +23,7 @@ members = [
     "crates/playbook-front-office",
     "crates/playbook-huddle",
     "crates/playbook-blitz",
+    "crates/playbook-cers",
 ]
 
 [workspace.package]
@@ -57,6 +58,7 @@ playbook-franchise = { path = "crates/playbook-franchise" }
 playbook-front-office = { path = "crates/playbook-front-office" }
 playbook-huddle = { path = "crates/playbook-huddle" }
 playbook-blitz = { path = "crates/playbook-blitz" }
+playbook-cers = { path = "crates/playbook-cers" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
