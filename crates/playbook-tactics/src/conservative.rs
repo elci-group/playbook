@@ -23,8 +23,9 @@ pub enum RiskState {
 }
 
 /// The deterministic classification. Critical when the measured band is
-/// critical or the budget is nearly gone; fragile on elevated risk,
-/// observed divergence, or heavy coherence debt; stable otherwise.
+/// critical or the remaining budget share has sunk to 100_000 ppm or less
+/// (the boundary is inclusive); fragile on elevated risk, observed
+/// divergence, or a coherence debt of 400 or more; stable otherwise.
 pub fn classify(context: &TacticalContext) -> RiskState {
     if context.risk_band == RiskBand::Critical || context.budget_remaining_ppm <= 100_000 {
         return RiskState::Critical;
@@ -106,10 +107,14 @@ fn refused(reason: &str) -> ChangeVerdict {
 
 /// Adjudicate a change against the envelope. A single patch over the
 /// envelope is admitted under Stable (breadth is trusted) and refused under
-/// Fragile/Critical with the exceeding dimension named. A staged patch is
-/// admitted when every stage fits the per-stage allowance — under
-/// Fragile/Critical that allowance is the envelope itself; under Stable the
-/// stages are informational.
+/// Fragile/Critical with the exceeding dimension named — the files
+/// dimension is checked before the lines dimension. A single patch that
+/// fits a staging envelope still splits: under Fragile/Critical it returns
+/// `SplitIntoStages { stages: 1 }` so the validation gate applies. A staged
+/// patch declaring no stages is refused (`staged_patch_declares_no_stages`);
+/// one whose stage overflows the envelope is refused under Fragile/Critical
+/// (`stage_exceeds_envelope`), while under Stable the stage sizes are
+/// informational and the patch is admitted.
 pub fn adjudicate(request: &ChangeRequest, envelope: &ChangeEnvelope) -> ChangeVerdict {
     match request {
         ChangeRequest::Patch { files, lines } => {
@@ -148,10 +153,11 @@ pub fn adjudicate(request: &ChangeRequest, envelope: &ChangeEnvelope) -> ChangeV
 }
 
 /// Make Them Drive: split an oversized patch into the minimum number of
-/// stages that fit the per-stage allowance (ceiling division, saturating).
-/// A patch with no files and no lines is one empty stage; a patch that
-/// touches no files but claims lines cannot be staged honestly — that is
-/// `None`.
+/// stages that fit the per-stage allowance — the larger of the two ceiling
+/// divisions binds. A zero allowance is clamped to one so the division
+/// cannot panic. A patch with no files and no lines is one empty stage; a
+/// patch that touches no files but claims lines cannot be staged honestly —
+/// that is `None`.
 pub fn drive_stages(
     files: u16,
     lines: u16,
@@ -170,8 +176,12 @@ pub fn drive_stages(
 }
 
 /// The doctrine directive for one risk state: `prevent` under Critical,
-/// `make_them_drive` under Fragile. Both pass the frozen contract's
-/// validation, and both declare counters the conflict matrix admits.
+/// `make_them_drive` under Fragile (and, with a softer always-on shape,
+/// under Stable). Both pass the frozen contract's validation. Each declared
+/// counter composes per the conflict matrix — `make_them_drive` names
+/// `quick_game`, a conditional pair — while `prevent` declares no counter:
+/// its natural counter is an explosive doctrine, which the matrix marks
+/// conflicting.
 pub fn directive(state: RiskState, context: &TacticalContext) -> crate::domain::TacticalDirective {
     let (name, trigger, protection, tempo, counter) = match state {
         // Prevent: catastrophic-risk avoidance. Its natural counter would be
@@ -448,5 +458,89 @@ mod tests {
             ),
             "a doctrine's counter must compose with it"
         );
+    }
+
+    #[test]
+    fn the_budget_boundary_is_inclusive_at_one_hundred_thousand_ppm() {
+        // Exactly at the boundary is already critical: the comparison is
+        // at-most, not strictly below.
+        assert_eq!(
+            classify(&context(RiskBand::Low, 100_000, 0, false)),
+            RiskState::Critical
+        );
+        // One ppm above it, with no other fragile reading, is not.
+        assert_eq!(
+            classify(&context(RiskBand::Low, 100_001, 0, false)),
+            RiskState::Stable
+        );
+    }
+
+    #[test]
+    fn files_are_named_before_lines_when_both_dimensions_overflow() {
+        // Both dimensions exceed the fragile envelope; the files dimension
+        // is the reason named.
+        let over_both = ChangeRequest::Patch {
+            files: 11,
+            lines: 801,
+        };
+        assert_eq!(
+            adjudicate(&over_both, &envelope(RiskState::Fragile)),
+            refused("files_exceed_envelope")
+        );
+    }
+
+    #[test]
+    fn the_binding_dimension_is_the_larger_ceiling_division() {
+        // Files bind: 10 files at 3 per stage is 4 stages; 50 lines fit in
+        // one.
+        assert_eq!(drive_stages(10, 50, 3, 100), Some(4));
+        // Lines bind: 400 lines at 100 per stage is 4 stages; 1 file fits
+        // in one.
+        assert_eq!(drive_stages(1, 400, 3, 100), Some(4));
+    }
+
+    #[test]
+    fn prevent_omits_its_counter_because_the_matrix_conflicts_explosives() {
+        // Prevent declares no counter, and the omission is principled: its
+        // natural counter would be an explosive doctrine, and the matrix
+        // refuses that pair outright.
+        let critical_context = context(RiskBand::Critical, 900_000, 0, false);
+        let prevent = directive(RiskState::Critical, &critical_context);
+        assert_eq!(prevent.counter_tactic, None);
+        assert!(matches!(
+            compatibility("prevent", "verticals"),
+            crate::composition::Compatibility::Conflicting
+                | crate::composition::Compatibility::Invalid
+        ));
+        // Make Them Drive declares quick_game, and the pair composes.
+        let fragile_context = context(RiskBand::Elevated, 900_000, 0, false);
+        let drive = directive(RiskState::Fragile, &fragile_context);
+        assert_eq!(drive.counter_tactic.as_deref(), Some("quick_game"));
+        assert!(matches!(
+            compatibility("make_them_drive", "quick_game"),
+            crate::composition::Compatibility::Allowed
+                | crate::composition::Compatibility::Conditional
+        ));
+    }
+
+    #[test]
+    fn both_doctrines_admit_on_the_phases_the_tactical_game_drives() {
+        // Phase six of the acceptance game: a critical band with 80_000 ppm
+        // of budget left admits prevent.
+        let phase_six = context(RiskBand::Critical, 80_000, 100, false);
+        let prevent = directive(RiskState::Critical, &phase_six);
+        assert_eq!(prevent.name, "prevent");
+        assert!(matches!(
+            prevent.evaluate_admission(&phase_six, 100),
+            crate::admission::Admission::Admitted
+        ));
+        // An elevated phase admits make_them_drive.
+        let elevated = context(RiskBand::Elevated, 900_000, 100, false);
+        let drive = directive(RiskState::Fragile, &elevated);
+        assert_eq!(drive.name, "make_them_drive");
+        assert!(matches!(
+            drive.evaluate_admission(&elevated, 100),
+            crate::admission::Admission::Admitted
+        ));
     }
 }
