@@ -89,16 +89,19 @@ pub struct DriveView {
 }
 
 impl DriveView {
-    fn knows(&self, id: &playbook_core::EvidenceId) -> bool {
+    #[tracing::instrument]
+fn knows(&self, id: &playbook_core::EvidenceId) -> bool {
         self.evidence_ids.iter().any(|known| known == id)
     }
 
-    fn knows_all(&self, ids: &[playbook_core::EvidenceId]) -> bool {
+    #[tracing::instrument]
+fn knows_all(&self, ids: &[playbook_core::EvidenceId]) -> bool {
         ids.iter().all(|id| self.knows(id))
     }
 }
 
-pub fn fold_huddle(
+pub #[tracing::instrument]
+fn fold_huddle(
     ledger: &mut HuddleLedger,
     events: &[HuddleEvent],
     view: &DriveView,
@@ -110,7 +113,8 @@ pub fn fold_huddle(
     Ok(())
 }
 
-pub fn apply_huddle(
+pub #[tracing::instrument]
+fn apply_huddle(
     ledger: &mut HuddleLedger,
     event: &HuddleEvent,
     view: &DriveView,
@@ -459,6 +463,7 @@ pub fn apply_huddle(
     }
 }
 
+#[tracing::instrument]
 fn ensure_report_evidence(report: &HuddleReport, view: &DriveView) -> Result<(), PlaybookError> {
     if !view.knows_all(&report.verified_progress) {
         return Err(refusal("unknown evidence reference"));
@@ -500,6 +505,7 @@ fn ensure_report_evidence(report: &HuddleReport, view: &DriveView) -> Result<(),
 
 /// Contract checks for a committed outcome. No evidence resolution without
 /// evidence; no historical rewriting; no untracked contradictions.
+#[tracing::instrument]
 fn validate_outcome(
     ledger: &HuddleLedger,
     huddle_id: &HuddleId,
@@ -595,6 +601,7 @@ fn validate_outcome(
 
 /// Tactical effects. A huddle outcome can reassign personnel and queue
 /// recommendations; it can never satisfy a gate or alter evidence.
+#[tracing::instrument]
 fn apply_outcome(
     ledger: &mut HuddleLedger,
     outcome: &crate::domain::HuddleOutcome,
@@ -623,11 +630,13 @@ mod tests {
     };
     use playbook_core::{Down, EventId, EvidenceId, HuddleBudget};
 
-    fn policy() -> Policy {
+    #[tracing::instrument]
+fn policy() -> Policy {
         Policy::builtin()
     }
 
-    fn view() -> DriveView {
+    #[tracing::instrument]
+fn view() -> DriveView {
         DriveView {
             active: true,
             down: Down::FirstDown,
@@ -637,7 +646,8 @@ mod tests {
         }
     }
 
-    fn trigger() -> HuddleTrigger {
+    #[tracing::instrument]
+fn trigger() -> HuddleTrigger {
         HuddleTrigger {
             kind: crate::domain::HuddleTriggerKind::Failure,
             reason_code: "repeated_failed_play".into(),
@@ -646,7 +656,8 @@ mod tests {
         }
     }
 
-    fn participant(id: &str) -> HuddleParticipant {
+    #[tracing::instrument]
+fn participant(id: &str) -> HuddleParticipant {
         HuddleParticipant {
             personnel_id: playbook_core::PersonnelId::new(id).unwrap(),
             role: HuddleRole::Contributor,
@@ -659,7 +670,8 @@ mod tests {
         }
     }
 
-    fn budget() -> HuddleBudget {
+    #[tracing::instrument]
+fn budget() -> HuddleBudget {
         HuddleBudget {
             max_tokens: 2_000,
             max_cost_microunits: 200_000,
@@ -669,7 +681,8 @@ mod tests {
         }
     }
 
-    fn report(id: &str, current: &str) -> HuddleReport {
+    #[tracing::instrument]
+fn report(id: &str, current: &str) -> HuddleReport {
         HuddleReport {
             participant: playbook_core::PersonnelId::new(id).unwrap(),
             verified_progress: vec![EvidenceId::new("ev-1").unwrap()],
@@ -687,7 +700,8 @@ mod tests {
         }
     }
 
-    fn contradiction(claims: usize) -> crate::domain::Contradiction {
+    #[tracing::instrument]
+fn contradiction(claims: usize) -> crate::domain::Contradiction {
         Contradiction {
             id: ContradictionId::new("con-000").unwrap(),
             subject: "interface".into(),
@@ -707,7 +721,8 @@ mod tests {
         }
     }
 
-    fn outcome(id: &str) -> HuddleOutcome {
+    #[tracing::instrument]
+fn outcome(id: &str) -> HuddleOutcome {
         HuddleOutcome {
             huddle_id: HuddleId::new(id).unwrap(),
             reconciled_state: SharedStateDelta {
@@ -728,7 +743,8 @@ mod tests {
         }
     }
 
-    fn open_huddle(ledger: &mut HuddleLedger, id: &str) {
+    #[tracing::instrument]
+fn open_huddle(ledger: &mut HuddleLedger, id: &str) {
         let huddle_id = HuddleId::new(id).unwrap();
         fold_huddle(
             ledger,
@@ -758,7 +774,8 @@ mod tests {
     }
 
     #[test]
-    fn a_huddle_lifecycle_commits_and_closes() {
+    #[tracing::instrument]
+fn a_huddle_lifecycle_commits_and_closes() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -810,7 +827,8 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_reports_and_foreign_evidence_are_refused() {
+    #[tracing::instrument]
+fn duplicate_reports_and_foreign_evidence_are_refused() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -849,7 +867,8 @@ mod tests {
     }
 
     #[test]
-    fn budget_exhaustion_forces_synthesis() {
+    #[tracing::instrument]
+fn budget_exhaustion_forces_synthesis() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -914,7 +933,8 @@ mod tests {
     }
 
     #[test]
-    fn no_evidence_no_resolution_and_no_history_rewrites() {
+    #[tracing::instrument]
+fn no_evidence_no_resolution_and_no_history_rewrites() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -994,7 +1014,8 @@ mod tests {
     }
 
     #[test]
-    fn blocking_contradictions_require_escalation_to_commit() {
+    #[tracing::instrument]
+fn blocking_contradictions_require_escalation_to_commit() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -1054,7 +1075,8 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_huddles_need_disjoint_partitions() {
+    #[tracing::instrument]
+fn concurrent_huddles_need_disjoint_partitions() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         // The second huddle cites no shared evidence, so its partition is
@@ -1096,7 +1118,8 @@ mod tests {
     }
 
     #[test]
-    fn escalation_flow_moves_scope_and_requires_justification() {
+    #[tracing::instrument]
+fn escalation_flow_moves_scope_and_requires_justification() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -1163,7 +1186,8 @@ mod tests {
     }
 
     #[test]
-    fn assignments_land_but_gates_and_evidence_do_not_move() {
+    #[tracing::instrument]
+fn assignments_land_but_gates_and_evidence_do_not_move() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -1211,7 +1235,8 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_play_proposal_is_refused() {
+    #[tracing::instrument]
+fn an_unknown_play_proposal_is_refused() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();
@@ -1249,7 +1274,8 @@ mod tests {
     }
 
     #[test]
-    fn a_same_scope_request_while_one_is_active_is_refused_at_fold_time() {
+    #[tracing::instrument]
+fn a_same_scope_request_while_one_is_active_is_refused_at_fold_time() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let again = HuddleEvent::Requested {
@@ -1279,7 +1305,8 @@ mod tests {
     }
 
     #[test]
-    fn confidence_and_observer_rules_hold() {
+    #[tracing::instrument]
+fn confidence_and_observer_rules_hold() {
         let mut ledger = HuddleLedger::empty();
         open_huddle(&mut ledger, "h-1");
         let id = HuddleId::new("h-1").unwrap();

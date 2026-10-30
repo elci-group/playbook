@@ -117,7 +117,8 @@ pub struct FranchiseRecord {
 }
 
 impl FranchiseSnapshot {
-    pub fn scouting(&self) -> Result<HistoricalPriorTable, PlaybookError> {
+    pub #[tracing::instrument]
+fn scouting(&self) -> Result<HistoricalPriorTable, PlaybookError> {
         let mut result = HistoricalPriorTable::empty();
         for drive in self.drives.values() {
             let state = drive.state()?;
@@ -126,7 +127,8 @@ impl FranchiseSnapshot {
         Ok(result)
     }
 
-    pub fn record(&self) -> Result<FranchiseRecord, PlaybookError> {
+    pub #[tracing::instrument]
+fn record(&self) -> Result<FranchiseRecord, PlaybookError> {
         let mut record = FranchiseRecord {
             objectives: self.objectives.len(),
             cap_unallocated: self.salary_cap.remaining(self.allocated),
@@ -170,7 +172,8 @@ impl FranchiseSnapshot {
         Ok(record)
     }
 
-    fn audit(&self) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn audit(&self) -> Result<(), PlaybookError> {
         accept_schema(self.schema_version)?;
         FranchiseId::new(self.id.as_str())?;
         for contract in [&self.current_roster, &self.staged_roster]
@@ -275,7 +278,8 @@ impl FranchiseSnapshot {
         Ok(())
     }
 
-    fn note(&mut self, action: &str, subject: &str, reason: &str) {
+    #[tracing::instrument]
+fn note(&mut self, action: &str, subject: &str, reason: &str) {
         self.management.push(ManagementRecord {
             sequence: self.management.len() as u64 + 1,
             action: action.into(),
@@ -284,7 +288,8 @@ impl FranchiseSnapshot {
         });
     }
 
-    fn freeze_roster(&self) -> Result<FrozenRoster, PlaybookError> {
+    #[tracing::instrument]
+fn freeze_roster(&self) -> Result<FrozenRoster, PlaybookError> {
         let mut members = BTreeMap::new();
         if let Some(contract) = &self.current_roster {
             contract.verify()?;
@@ -316,7 +321,8 @@ impl FranchiseSnapshot {
 }
 
 impl ManagedDrive {
-    pub fn state(&self) -> Result<DriveState, PlaybookError> {
+    pub #[tracing::instrument]
+fn state(&self) -> Result<DriveState, PlaybookError> {
         fold(&self.events, &Policy::builtin(), ApplyMode::Audit)
     }
 }
@@ -336,15 +342,18 @@ struct Storage {
     poisoned: bool,
 }
 
+#[tracing::instrument]
 fn invalid(message: &str) -> PlaybookError {
     PlaybookError::Evidence(message.into())
 }
+#[tracing::instrument]
 fn io(error: std::io::Error) -> PlaybookError {
     PlaybookError::Io(error.to_string())
 }
 
 impl Storage {
-    fn persist(&mut self, next: FranchiseSnapshot) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn persist(&mut self, next: FranchiseSnapshot) -> Result<(), PlaybookError> {
         if self.poisoned {
             return Err(PlaybookError::Io(
                 "reopen franchise after uncertain write".into(),
@@ -388,7 +397,8 @@ pub struct Franchise {
 }
 
 impl Franchise {
-    pub fn create(
+    pub #[tracing::instrument]
+fn create(
         path: &Path,
         id: FranchiseId,
         salary_cap: DriveBudget,
@@ -424,7 +434,8 @@ impl Franchise {
         })
     }
 
-    pub fn open(path: &Path) -> Result<Self, PlaybookError> {
+    pub #[tracing::instrument]
+fn open(path: &Path) -> Result<Self, PlaybookError> {
         let envelope: Envelope = serde_json::from_slice(&std::fs::read(path).map_err(io)?)
             .map_err(PlaybookError::json)?;
         if envelope.digest != sha256_hex(&to_canonical_bytes(&envelope.franchise)?) {
@@ -458,7 +469,8 @@ impl Franchise {
         })
     }
 
-    pub fn snapshot(&self) -> FranchiseSnapshot {
+    pub #[tracing::instrument]
+fn snapshot(&self) -> FranchiseSnapshot {
         self.storage
             .lock()
             .expect("franchise storage")
@@ -466,7 +478,8 @@ impl Franchise {
             .clone()
     }
 
-    fn update(
+    #[tracing::instrument]
+fn update(
         &mut self,
         action: impl FnOnce(&mut FranchiseSnapshot) -> Result<(), PlaybookError>,
     ) -> Result<(), PlaybookError> {
@@ -476,7 +489,8 @@ impl Franchise {
         storage.persist(next)
     }
 
-    pub fn acquire(&mut self, member: RosterMember, reason: &str) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn acquire(&mut self, member: RosterMember, reason: &str) -> Result<(), PlaybookError> {
         validate_member(&member)?;
         require_reason(reason)?;
         self.update(|next| {
@@ -491,7 +505,8 @@ impl Franchise {
     }
 
     /// Quarantine a prospective roster. This does not change any eligible roster.
-    pub fn stage_roster(
+    pub #[tracing::instrument]
+fn stage_roster(
         &mut self,
         contract: RosterContract,
         reason: &str,
@@ -512,7 +527,8 @@ impl Franchise {
 
     /// Explicit transaction window: every contest must have ended. A punt is
     /// continuity inside the same contest, so it does not open this window.
-    pub fn activate_roster(&mut self, reason: &str) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn activate_roster(&mut self, reason: &str) -> Result<(), PlaybookError> {
         require_reason(reason)?;
         self.update(|next| {
             for drive in next.drives.values() {
@@ -537,7 +553,8 @@ impl Franchise {
         })
     }
 
-    pub fn set_availability(
+    pub #[tracing::instrument]
+fn set_availability(
         &mut self,
         id: &PersonnelId,
         availability: Availability,
@@ -562,7 +579,8 @@ impl Franchise {
         })
     }
 
-    pub fn declare_objective(&mut self, objective: Objective) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn declare_objective(&mut self, objective: Objective) -> Result<(), PlaybookError> {
         validate_objective(&objective, false)?;
         self.update(|next| {
             let id = objective.id.to_string();
@@ -575,7 +593,8 @@ impl Franchise {
         })
     }
 
-    pub fn start_drive(
+    pub #[tracing::instrument]
+fn start_drive(
         &mut self,
         objective_id: &ObjectiveId,
         drive_id: DriveId,
@@ -640,7 +659,8 @@ impl Franchise {
         })
     }
 
-    fn authority(
+    #[tracing::instrument]
+fn authority(
         &self,
         id: &DriveId,
         player: Option<&PersonnelId>,
@@ -686,7 +706,8 @@ impl Franchise {
         Ok(authority)
     }
 
-    pub fn preflight(
+    pub #[tracing::instrument]
+fn preflight(
         &mut self,
         id: &DriveId,
         plane: &mut dyn CapabilityPlane,
@@ -696,7 +717,8 @@ impl Franchise {
 
     /// The coordinator selects from ready personnel, or constrains a bounded
     /// play to one explicitly selected substitute. All progress stays official.
-    pub fn step(
+    pub #[tracing::instrument]
+fn step(
         &mut self,
         id: &DriveId,
         player: Option<&PersonnelId>,
@@ -715,7 +737,8 @@ impl Franchise {
         self.authority(id, player)?.step(plane, at_ms)
     }
 
-    pub fn pressure(
+    pub #[tracing::instrument]
+fn pressure(
         &mut self,
         id: &DriveId,
         cost: DriveBudget,
@@ -724,11 +747,13 @@ impl Franchise {
         self.authority(id, None)?.pressure(cost, at_ms)
     }
 
-    pub fn punt(&mut self, id: &DriveId) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn punt(&mut self, id: &DriveId) -> Result<(), PlaybookError> {
         self.authority(id, None)?.punt()
     }
 
-    pub fn receive(
+    pub #[tracing::instrument]
+fn receive(
         &mut self,
         id: &DriveId,
         player: &PersonnelId,
@@ -741,7 +766,8 @@ impl Franchise {
         authority.receive(personnel, budget, at_ms)
     }
 
-    pub fn reconcile(
+    pub #[tracing::instrument]
+fn reconcile(
         &mut self,
         id: &DriveId,
         key: &str,
@@ -805,16 +831,19 @@ impl Franchise {
         })
     }
 
-    pub fn complete(&mut self, id: &DriveId, at_ms: u64) -> Result<bool, PlaybookError> {
+    pub #[tracing::instrument]
+fn complete(&mut self, id: &DriveId, at_ms: u64) -> Result<bool, PlaybookError> {
         self.authority(id, None)?.claim_complete(at_ms)
     }
 
-    pub fn abandon(&mut self, id: &DriveId, reason: &str) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn abandon(&mut self, id: &DriveId, reason: &str) -> Result<(), PlaybookError> {
         require_reason(reason)?;
         self.authority(id, None)?.abandon(reason)
     }
 }
 
+#[tracing::instrument]
 fn require_reason(reason: &str) -> Result<(), PlaybookError> {
     if reason.trim().is_empty() {
         Err(invalid("management action requires a reason"))
@@ -823,6 +852,7 @@ fn require_reason(reason: &str) -> Result<(), PlaybookError> {
     }
 }
 
+#[tracing::instrument]
 fn validate_member(member: &RosterMember) -> Result<(), PlaybookError> {
     PersonnelId::new(member.personnel.id.as_str())?;
     if member.position.trim().is_empty() {
@@ -839,6 +869,7 @@ fn validate_member(member: &RosterMember) -> Result<(), PlaybookError> {
     Ok(())
 }
 
+#[tracing::instrument]
 fn validate_objective(objective: &Objective, existing: bool) -> Result<(), PlaybookError> {
     ObjectiveId::new(objective.id.as_str())?;
     if objective.task.statement.trim().is_empty()
@@ -881,7 +912,8 @@ struct FranchiseSink {
 }
 
 impl EventSink for FranchiseSink {
-    fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
         let mut storage = self.storage.lock().expect("franchise storage");
         let mut next = storage.state.clone();
         if let DriveEvent::PossessionStarted { budget, .. } = event {
@@ -901,13 +933,15 @@ impl EventSink for FranchiseSink {
         storage.persist(next)
     }
 
-    fn mark(&self) -> u64 {
+    #[tracing::instrument]
+fn mark(&self) -> u64 {
         self.storage.lock().expect("franchise storage").state.drives[&self.drive_id]
             .events
             .len() as u64
     }
 
-    fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
         let mut storage = self.storage.lock().expect("franchise storage");
         let mut next = storage.state.clone();
         let drive = next.drives.get_mut(&self.drive_id).expect("sink drive");

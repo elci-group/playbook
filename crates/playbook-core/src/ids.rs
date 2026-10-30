@@ -9,7 +9,8 @@ macro_rules! id_type {
         pub struct $name(String);
 
         impl $name {
-            pub fn new(value: impl Into<String>) -> Result<Self, PlaybookError> {
+            pub #[tracing::instrument]
+fn new(value: impl Into<String>) -> Result<Self, PlaybookError> {
                 let value = value.into();
                 if value.is_empty() || value.len() > 200 {
                     return Err(PlaybookError::InvalidId);
@@ -23,13 +24,15 @@ macro_rules! id_type {
                 Ok(Self(value))
             }
 
-            pub fn as_str(&self) -> &str {
+            pub #[tracing::instrument]
+fn as_str(&self) -> &str {
                 &self.0
             }
         }
 
         impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            #[tracing::instrument]
+fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.write_str(&self.0)
             }
         }

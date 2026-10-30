@@ -63,7 +63,8 @@ pub struct WorkerPlan {
 
 impl WorkerPlan {
     /// The worker's slot in a formation dispatched at `at_ms`.
-    fn slot(&self, wave: u16, at_ms: u64, deadline_ms: u64) -> WorkerSlot {
+    #[tracing::instrument]
+fn slot(&self, wave: u16, at_ms: u64, deadline_ms: u64) -> WorkerSlot {
         WorkerSlot {
             worker_id: self.worker_id.clone(),
             personnel_id: self.personnel_id.clone(),
@@ -116,7 +117,8 @@ impl<'a> Engine<'a> {
     /// Apply one event through the fold. Budget exhaustion is not an error:
     /// it is the governor terminating the race, reported to the caller as a
     /// `false` so the engine can close the blitz out.
-    fn emit(&mut self, event: BlitzEvent) -> Result<bool, PlaybookError> {
+    #[tracing::instrument]
+fn emit(&mut self, event: BlitzEvent) -> Result<bool, PlaybookError> {
         match apply_blitz(self.ledger, &event, self.view, self.policy) {
             Ok(()) => {
                 self.applied.push(event);
@@ -127,7 +129,8 @@ impl<'a> Engine<'a> {
         }
     }
 
-    fn active_workers(&self) -> Vec<WorkerSlot> {
+    #[tracing::instrument]
+fn active_workers(&self) -> Vec<WorkerSlot> {
         self.ledger
             .active_blitz()
             .map(|blitz| blitz.workers.clone())
@@ -140,7 +143,8 @@ impl<'a> Engine<'a> {
 /// recovery — or terminate on deadline or budget and escalate into a huddle
 /// recommendation. Returns every event applied, in order. Any fold refusal
 /// fails the race closed.
-pub fn run_race(
+pub #[tracing::instrument]
+fn run_race(
     ledger: &mut BlitzLedger,
     spec: &RaceSpec,
     plans: &[WorkerPlan],
@@ -287,6 +291,7 @@ pub fn run_race(
     Ok(engine.applied)
 }
 
+#[tracing::instrument]
 fn next_event(pending: &mut Vec<(u64, usize, BlitzEvent)>) -> Option<(u64, usize, BlitzEvent)> {
     if pending.is_empty() {
         return None;
@@ -302,6 +307,7 @@ fn next_event(pending: &mut Vec<(u64, usize, BlitzEvent)>) -> Option<(u64, usize
     Some(pending.remove(best))
 }
 
+#[tracing::instrument]
 fn wave_diagnostics(ledger: &BlitzLedger, wave: u16) -> Vec<String> {
     let Some(blitz) = ledger.active_blitz() else {
         return vec!["formation closed".into()];
@@ -335,7 +341,8 @@ fn wave_diagnostics(ledger: &BlitzLedger, wave: u16) -> Vec<String> {
 }
 
 impl<'a> Engine<'a> {
-    fn dispatch(
+    #[tracing::instrument]
+fn dispatch(
         &mut self,
         plans: &[WorkerPlan],
         wave: u16,
@@ -367,7 +374,8 @@ impl<'a> Engine<'a> {
         Ok(())
     }
 
-    fn spec_id(&self) -> BlitzId {
+    #[tracing::instrument]
+fn spec_id(&self) -> BlitzId {
         self.ledger
             .active_blitz()
             .map(|blitz| blitz.id.clone())
@@ -377,7 +385,8 @@ impl<'a> Engine<'a> {
     /// The early-cancellation tail: winner, cancellation signal, per-worker
     /// cancellations with avoided spend, the cancellation summary, and the
     /// recovery confirmation. Cancellation latency is measured, not assumed.
-    fn finish(&mut self, dispatched: &[WorkerPlan], winner_time: u64) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn finish(&mut self, dispatched: &[WorkerPlan], winner_time: u64) -> Result<(), PlaybookError> {
         let winner = self.ledger.active_blitz().and_then(|blitz| {
             blitz
                 .verified_candidates()
@@ -463,6 +472,7 @@ impl<'a> Engine<'a> {
     }
 }
 
+#[tracing::instrument]
 fn schedule_wave(
     plans: &[WorkerPlan],
     wave: u16,
@@ -610,6 +620,7 @@ fn schedule_wave(
     }
 }
 
+#[tracing::instrument]
 fn candidate_for(
     spec: &RaceSpec,
     plan: &WorkerPlan,

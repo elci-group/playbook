@@ -64,7 +64,8 @@ pub const KNOWN_TACTICS: &[&str] = &[
 
 /// The pairwise compatibility table. Symmetric: `compatibility(a, b)` equals
 /// `compatibility(b, a)`.
-pub fn compatibility(left: &str, right: &str) -> Compatibility {
+pub #[tracing::instrument]
+fn compatibility(left: &str, right: &str) -> Compatibility {
     let mut pair = [left, right];
     pair.sort_unstable();
     match (pair[0], pair[1]) {
@@ -119,7 +120,8 @@ pub struct TacticalPlan {
 /// conflicting pairs fail closed; exclusive pairs keep the first-listed (the
 /// caller's order is the priority, and the record names what was dropped
 /// through the dropped count).
-pub fn compose(directives: &[TacticalDirective]) -> Result<TacticalPlan, PlaybookError> {
+pub #[tracing::instrument]
+fn compose(directives: &[TacticalDirective]) -> Result<TacticalPlan, PlaybookError> {
     let mut kept: Vec<TacticalDirective> = Vec::new();
     let mut dropped = 0u32;
     for directive in directives {
@@ -173,13 +175,15 @@ pub fn compose(directives: &[TacticalDirective]) -> Result<TacticalPlan, Playboo
 /// The named counter of a directive, per the constraint-play doctrine: when
 /// a dominant tactic's failure signature appears, the plan proposes its
 /// counter.
-pub fn counter_of(directive: &TacticalDirective) -> Option<&str> {
+pub #[tracing::instrument]
+fn counter_of(directive: &TacticalDirective) -> Option<&str> {
     directive.counter_tactic.as_deref()
 }
 
 /// The reasoning level a tactic sits on: franchise → formation → play →
 /// adjustment.
-pub fn class_of(directive: &TacticalDirective) -> TacticalClass {
+pub #[tracing::instrument]
+fn class_of(directive: &TacticalDirective) -> TacticalClass {
     directive.class
 }
 
@@ -194,12 +198,14 @@ mod tests {
     };
     use playbook_core::TacticalId;
 
-    fn named(name: &str) -> TacticalDirective {
+    #[tracing::instrument]
+fn named(name: &str) -> TacticalDirective {
         directive(name, TacticalTrigger::Always, 400, 100, 50)
     }
 
     #[test]
-    fn the_directive_examples_compose_and_clash_exactly_as_declared() {
+    #[tracing::instrument]
+fn the_directive_examples_compose_and_clash_exactly_as_declared() {
         // Spread + Mesh composes.
         assert!(compose(&[named("spread"), named("mesh")]).is_ok());
         // Spread + Heavy are exclusive: the first-listed wins, the later is
@@ -220,19 +226,22 @@ mod tests {
     }
 
     #[test]
-    fn unknown_tactics_are_refused_not_invented() {
+    #[tracing::instrument]
+fn unknown_tactics_are_refused_not_invented() {
         let mut rogue = named("huey_kew");
         rogue.class = TacticalClass::Play;
         assert!(compose(&[rogue]).is_err());
     }
 
     #[test]
-    fn one_name_cannot_appear_twice_in_one_plan() {
+    #[tracing::instrument]
+fn one_name_cannot_appear_twice_in_one_plan() {
         assert!(compose(&[named("spread"), named("spread")]).is_err());
     }
 
     #[test]
-    fn the_matrix_is_symmetric_and_total_over_known_tactics() {
+    #[tracing::instrument]
+fn the_matrix_is_symmetric_and_total_over_known_tactics() {
         for left in KNOWN_TACTICS {
             for right in KNOWN_TACTICS {
                 let forward = compatibility(left, right);
@@ -253,7 +262,8 @@ mod tests {
     }
 
     #[test]
-    fn counters_are_declared_not_discovered() {
+    #[tracing::instrument]
+fn counters_are_declared_not_discovered() {
         let mut spread = named("spread");
         spread.counter_tactic = Some("bunch".into());
         assert_eq!(counter_of(&spread), Some("bunch"));

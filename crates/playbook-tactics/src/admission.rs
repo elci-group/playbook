@@ -22,7 +22,8 @@ pub enum Admission {
 }
 
 /// The deterministic admission calculation.
-pub fn admit(
+pub #[tracing::instrument]
+fn admit(
     directive: &TacticalDirective,
     context: &TacticalContext,
     threshold_ppm: u32,
@@ -58,7 +59,8 @@ pub fn admit(
 /// Refuse a composition that violates the authority boundary or the frozen
 /// contract's validation rules. Shared by every module before it hands a
 /// directive upward.
-pub fn validated(directive: &TacticalDirective) -> Result<(), PlaybookError> {
+pub #[tracing::instrument]
+fn validated(directive: &TacticalDirective) -> Result<(), PlaybookError> {
     directive.shape.validate()?;
     if directive.name.trim().is_empty() {
         return Err(tactics_refusal("directive names no tactic"));
@@ -79,7 +81,8 @@ pub(crate) mod tests {
     };
     use playbook_core::{PersonnelId, TacticalId};
 
-    pub fn shape() -> PersonnelShape {
+    pub #[tracing::instrument]
+fn shape() -> PersonnelShape {
         PersonnelShape {
             primary_executors: 3,
             support: 1,
@@ -93,7 +96,8 @@ pub(crate) mod tests {
         }
     }
 
-    pub fn directive(
+    pub #[tracing::instrument]
+fn directive(
         name: &str,
         trigger: TacticalTrigger,
         benefit: u32,
@@ -144,7 +148,8 @@ pub(crate) mod tests {
         }
     }
 
-    pub fn context() -> TacticalContext {
+    pub #[tracing::instrument]
+fn context() -> TacticalContext {
         TacticalContext {
             problem_breadth_ppm: 700,
             domain_coupling_ppm: 200,
@@ -162,7 +167,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn admission_requires_trigger_and_economics() {
+    #[tracing::instrument]
+fn admission_requires_trigger_and_economics() {
         let spread = directive(
             "spread",
             TacticalTrigger::ProblemBreadthAtLeast { ppm: 500 },
@@ -197,7 +203,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn observe_only_tactics_may_not_claim_executors() {
+    #[tracing::instrument]
+fn observe_only_tactics_may_not_claim_executors() {
         let mut spy = directive("spy", TacticalTrigger::Always, 300, 100, 50);
         spy.authority.observe_only = true;
         assert_eq!(
@@ -214,7 +221,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn validated_refuses_unnamed_or_undefined_directives() {
+    #[tracing::instrument]
+fn validated_refuses_unnamed_or_undefined_directives() {
         let mut good = directive("spread", TacticalTrigger::Always, 400, 100, 50);
         assert!(validated(&good).is_ok());
         good.name = "  ".into();

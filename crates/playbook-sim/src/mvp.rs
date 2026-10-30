@@ -51,7 +51,8 @@ pub struct PolicyComparison {
     pub efficiency_ratio_milli: i64,
 }
 
-pub fn stage_names(events: &[DriveEvent]) -> Vec<String> {
+pub #[tracing::instrument]
+fn stage_names(events: &[DriveEvent]) -> Vec<String> {
     let mut stages = Vec::new();
     for event in events {
         if let DriveEvent::DownChanged { down, .. } = event {
@@ -64,16 +65,19 @@ pub fn stage_names(events: &[DriveEvent]) -> Vec<String> {
     stages
 }
 
-pub fn run_mvp() -> Result<MvpReport, PlaybookError> {
+pub #[tracing::instrument]
+fn run_mvp() -> Result<MvpReport, PlaybookError> {
     run_mvp_inner(None)
 }
 
 /// Run the acceptance drive through a durable journal, then recover a second
 /// authority from the file. The recovered log must equal the live log.
-pub fn run_mvp_with_journal(journal_path: &Path) -> Result<MvpReport, PlaybookError> {
+pub #[tracing::instrument]
+fn run_mvp_with_journal(journal_path: &Path) -> Result<MvpReport, PlaybookError> {
     run_mvp_inner(Some(journal_path))
 }
 
+#[tracing::instrument]
 fn run_mvp_inner(journal_path: Option<&Path>) -> Result<MvpReport, PlaybookError> {
     let mut plane = FixturePlane::mvp();
     let mut authority = match journal_path {
@@ -276,7 +280,8 @@ fn run_mvp_inner(journal_path: Option<&Path>) -> Result<MvpReport, PlaybookError
     })
 }
 
-pub fn compare_policies(events: &[DriveEvent]) -> Result<PolicyComparison, PlaybookError> {
+pub #[tracing::instrument]
+fn compare_policies(events: &[DriveEvent]) -> Result<PolicyComparison, PlaybookError> {
     let candidate = Policy::pass_heavy_contrast();
     compare_policies_with(events, &candidate)
 }
@@ -284,7 +289,8 @@ pub fn compare_policies(events: &[DriveEvent]) -> Result<PolicyComparison, Playb
 /// Compare the recorded event sequence under the builtin audit policy and a
 /// selected candidate policy. This reclassifies the same historical events;
 /// it does not generate new actions or predict a counterfactual drive.
-pub fn compare_policies_with(
+pub #[tracing::instrument]
+fn compare_policies_with(
     events: &[DriveEvent],
     candidate: &Policy,
 ) -> Result<PolicyComparison, PlaybookError> {
@@ -350,6 +356,7 @@ pub fn compare_policies_with(
     })
 }
 
+#[tracing::instrument]
 fn count_model_calls(events: &[DriveEvent]) -> u32 {
     let mut personnel_kinds = HashMap::new();
     let mut count = 0u32;
@@ -374,6 +381,7 @@ fn count_model_calls(events: &[DriveEvent]) -> u32 {
     count
 }
 
+#[tracing::instrument]
 fn count_unsuccessful_tool_outcomes(events: &[DriveEvent]) -> u32 {
     events
         .iter()
@@ -386,7 +394,8 @@ fn count_unsuccessful_tool_outcomes(events: &[DriveEvent]) -> u32 {
         .count() as u32
 }
 
-pub fn control_duplicate_failures() -> Result<u32, PlaybookError> {
+pub #[tracing::instrument]
+fn control_duplicate_failures() -> Result<u32, PlaybookError> {
     let mut plane = FixturePlane::failing_twice();
     let generation = plane.discover()?.generation;
     let mut duplicates = 0u32;
@@ -406,6 +415,7 @@ pub fn control_duplicate_failures() -> Result<u32, PlaybookError> {
     Ok(duplicates)
 }
 
+#[tracing::instrument]
 fn control_execution(
     generation: u64,
     index: u32,
@@ -435,6 +445,7 @@ fn control_execution(
     })
 }
 
+#[tracing::instrument]
 fn duplicate_failures(events: &[DriveEvent]) -> u32 {
     let mut seen = std::collections::BTreeSet::new();
     let mut duplicates = 0u32;
@@ -448,6 +459,7 @@ fn duplicate_failures(events: &[DriveEvent]) -> u32 {
     duplicates
 }
 
+#[tracing::instrument]
 fn expect(authority: &Authority, label: &str, ytg: u32, down: Down) -> Result<(), PlaybookError> {
     let state = authority.state();
     if state.ytg_milli() != ytg || state.down() != down {
@@ -463,6 +475,7 @@ fn expect(authority: &Authority, label: &str, ytg: u32, down: Down) -> Result<()
     Ok(())
 }
 
+#[tracing::instrument]
 fn diverged(label: &str, detail: &str) -> PlaybookError {
     PlaybookError::ReplayDivergence(format!("{label}: {detail}"))
 }
@@ -473,7 +486,8 @@ mod comparison_tests {
     use crate::harness::person;
 
     #[test]
-    fn model_calls_use_personnel_kind_at_invocation_time() {
+    #[tracing::instrument]
+fn model_calls_use_personnel_kind_at_invocation_time() {
         let report = run_mvp().unwrap();
         let execution = report
             .events
@@ -500,7 +514,8 @@ mod comparison_tests {
     }
 
     #[test]
-    fn rejected_tool_outcomes_count_as_unsuccessful_executions() {
+    #[tracing::instrument]
+fn rejected_tool_outcomes_count_as_unsuccessful_executions() {
         let event = DriveEvent::ToolOutcomeRejected {
             result: None,
             failure: None,

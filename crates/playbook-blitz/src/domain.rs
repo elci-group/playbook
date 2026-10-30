@@ -35,7 +35,8 @@ pub enum Severity {
 
 impl Severity {
     /// Per-mille weight used by the pressure score.
-    pub fn milli(self) -> u32 {
+    pub #[tracing::instrument]
+fn milli(self) -> u32 {
         match self {
             Self::Low => 100,
             Self::Medium => 400,
@@ -69,7 +70,8 @@ pub enum BlitzResourceMode {
 
 impl BlitzResourceMode {
     /// The policy envelope key for this mode.
-    pub fn key(self) -> &'static str {
+    pub #[tracing::instrument]
+fn key(self) -> &'static str {
         match self {
             Self::Normal => "normal",
             Self::LatencyCritical => "latency_critical",
@@ -82,7 +84,8 @@ impl BlitzResourceMode {
     /// Formation bias. Under `POWER_CRITICAL` local compute is expensive, so
     /// remote workers are preferred; under `NETWORK_CRITICAL` the preference
     /// inverts. Any other mode is indifferent.
-    pub fn prefers_remote(self) -> Option<bool> {
+    pub #[tracing::instrument]
+fn prefers_remote(self) -> Option<bool> {
         match self {
             Self::PowerCritical => Some(true),
             Self::NetworkCritical => Some(false),
@@ -148,7 +151,8 @@ pub enum VerificationKind {
 
 impl VerificationKind {
     /// Verification preference ordering: deterministic evidence first.
-    pub fn rank(self) -> u8 {
+    pub #[tracing::instrument]
+fn rank(self) -> u8 {
         match self {
             Self::StaticInvariant => 0,
             Self::Compilation => 1,
@@ -166,12 +170,14 @@ impl VerificationKind {
     /// Generative self-certification is not deterministic evidence. Only
     /// adjudication and human review are generative, and neither may satisfy
     /// a critical recovery alone.
-    pub fn deterministic(self) -> bool {
+    pub #[tracing::instrument]
+fn deterministic(self) -> bool {
         !matches!(self, Self::IndependentAdjudication | Self::HumanReview)
     }
 
     /// The evidence class a passing gate is sealed as.
-    pub fn evidence_class(self) -> EvidenceClass {
+    pub #[tracing::instrument]
+fn evidence_class(self) -> EvidenceClass {
         match self {
             Self::StaticInvariant | Self::SecurityTest => EvidenceClass::StaticAnalysis,
             Self::Compilation => EvidenceClass::CompilerResult,
@@ -208,7 +214,8 @@ impl TargetPackage {
     /// Freeze the target: compute and seal its content hash. The package is
     /// immutable once execution begins except through explicitly logged
     /// supersession.
-    pub fn seal(mut self) -> Result<Self, PlaybookError> {
+    pub #[tracing::instrument]
+fn seal(mut self) -> Result<Self, PlaybookError> {
         if self.problem_statement.trim().is_empty() || self.win_condition.trim().is_empty() {
             return Err(PlaybookError::Evidence(
                 "target requires a problem statement and a win condition".into(),
@@ -229,7 +236,8 @@ impl TargetPackage {
     /// The package is well-formed and the sealed digest matches the
     /// contents. The fold refuses to open a race against a malformed or
     /// tampered target.
-    pub fn verify(&self) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn verify(&self) -> Result<(), PlaybookError> {
         if self.problem_statement.trim().is_empty() || self.win_condition.trim().is_empty() {
             return Err(PlaybookError::Evidence(
                 "target requires a problem statement and a win condition".into(),
@@ -251,7 +259,8 @@ impl TargetPackage {
 
     /// The digest a candidate artefact must attempt. Present for fold-time
     /// single-focus checks; workers receive the whole package.
-    pub fn hash(&self) -> &str {
+    pub #[tracing::instrument]
+fn hash(&self) -> &str {
         &self.target_hash
     }
 }
@@ -333,7 +342,8 @@ pub struct BlitzCost {
 }
 
 impl BlitzCost {
-    pub fn zero() -> Self {
+    pub #[tracing::instrument]
+fn zero() -> Self {
         Self::default()
     }
 }
@@ -494,19 +504,22 @@ pub struct ActiveBlitz {
 }
 
 impl ActiveBlitz {
-    pub fn worker(&self, worker_id: &WorkerId) -> Option<&WorkerSlot> {
+    pub #[tracing::instrument]
+fn worker(&self, worker_id: &WorkerId) -> Option<&WorkerSlot> {
         self.workers
             .iter()
             .find(|slot| &slot.worker_id == worker_id)
     }
 
-    pub fn candidate(&self, candidate_id: &CandidateId) -> Option<&Candidate> {
+    pub #[tracing::instrument]
+fn candidate(&self, candidate_id: &CandidateId) -> Option<&Candidate> {
         self.candidates
             .iter()
             .find(|candidate| &candidate.candidate_id == candidate_id)
     }
 
-    pub fn verification(&self, candidate_id: &CandidateId) -> Option<&VerificationRecord> {
+    pub #[tracing::instrument]
+fn verification(&self, candidate_id: &CandidateId) -> Option<&VerificationRecord> {
         self.verifications
             .iter()
             .find(|record| &record.candidate_id == candidate_id)
@@ -516,7 +529,8 @@ impl ActiveBlitz {
     /// cancelled, it exited without a candidate, or its candidate has a
     /// resolved verification trail. A worker with a pending verification is
     /// never terminal.
-    pub fn worker_terminal(&self, worker_id: &WorkerId) -> bool {
+    pub #[tracing::instrument]
+fn worker_terminal(&self, worker_id: &WorkerId) -> bool {
         self.cancellations
             .iter()
             .any(|cancelled| &cancelled.worker_id == worker_id)
@@ -534,7 +548,8 @@ impl ActiveBlitz {
     /// Workers still consuming inference — everyone except terminal workers
     /// and the worker that produced the selected winner, whose work is no
     /// longer redundant by definition.
-    pub fn in_flight(&self) -> Vec<&WorkerSlot> {
+    pub #[tracing::instrument]
+fn in_flight(&self) -> Vec<&WorkerSlot> {
         let winner_worker = self.winner.as_ref().map(|winner| &winner.worker_id);
         self.workers
             .iter()
@@ -547,7 +562,8 @@ impl ActiveBlitz {
     /// True once every worker of a wave is terminal. A later wave may only
     /// be dispatched after the previous wave closed — that is what keeps
     /// wave 1 independent of wave 2.
-    pub fn wave_closed(&self, wave: u16) -> bool {
+    pub #[tracing::instrument]
+fn wave_closed(&self, wave: u16) -> bool {
         let workers: Vec<&WorkerSlot> = self
             .workers
             .iter()
@@ -561,7 +577,8 @@ impl ActiveBlitz {
 
     /// Candidates that passed every required gate without verifier
     /// unavailability.
-    pub fn verified_candidates(&self) -> Vec<&Candidate> {
+    pub #[tracing::instrument]
+fn verified_candidates(&self) -> Vec<&Candidate> {
         self.candidates
             .iter()
             .filter(|candidate| {
@@ -578,7 +595,8 @@ impl ActiveBlitz {
     /// Whether the corroboration requirement is satisfied by the currently
     /// verified candidates. The first response is never automatically the
     /// winner; this decides when one may be.
-    pub fn corroboration_satisfied(&self, mode: &BlitzCorroboration) -> bool {
+    pub #[tracing::instrument]
+fn corroboration_satisfied(&self, mode: &BlitzCorroboration) -> bool {
         let verified = self.verified_candidates();
         match mode {
             BlitzCorroboration::FirstPass => !verified.is_empty(),
@@ -603,7 +621,8 @@ impl ActiveBlitz {
     /// workers are included: knowing who did *not* produce is the point.
     /// Token and cost attribution arrives via `WorkerSpent` bookkeeping in
     /// the fold; the zeros here are the wall the fold fills.
-    pub fn scouting(&self, spend: &[WorkerSpent]) -> Vec<WorkerScouting> {
+    pub #[tracing::instrument]
+fn scouting(&self, spend: &[WorkerSpent]) -> Vec<WorkerScouting> {
         let winner_worker = self.winner.as_ref().map(|winner| &winner.worker_id);
         self.workers
             .iter()
@@ -651,6 +670,7 @@ pub struct WorkerSpent {
     pub latency_ms: u64,
 }
 
+#[tracing::instrument]
 fn distinct_worker_count(candidates: &[&Candidate]) -> usize {
     let mut workers: Vec<&WorkerId> = candidates
         .iter()
@@ -661,6 +681,7 @@ fn distinct_worker_count(candidates: &[&Candidate]) -> usize {
     workers.len()
 }
 
+#[tracing::instrument]
 fn heterogeneous(candidates: &[&Candidate], blitz: &ActiveBlitz) -> bool {
     for left in candidates {
         for right in candidates {
@@ -716,98 +737,120 @@ pub struct BlitzLedger {
 }
 
 impl BlitzLedger {
-    pub fn empty() -> Self {
+    pub #[tracing::instrument]
+fn empty() -> Self {
         Self::default()
     }
 
-    pub fn active(&self) -> &[ActiveBlitz] {
+    pub #[tracing::instrument]
+fn active(&self) -> &[ActiveBlitz] {
         &self.active
     }
 
     /// At most one defensive formation runs at a time.
-    pub fn active_blitz(&self) -> Option<&ActiveBlitz> {
+    pub #[tracing::instrument]
+fn active_blitz(&self) -> Option<&ActiveBlitz> {
         self.active.first()
     }
 
-    pub fn closed(&self) -> &[BlitzRecord] {
+    pub #[tracing::instrument]
+fn closed(&self) -> &[BlitzRecord] {
         &self.closed
     }
 
-    pub fn proposed_total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn proposed_total(&self) -> u32 {
         self.proposed_total
     }
 
-    pub fn authorised_total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn authorised_total(&self) -> u32 {
         self.authorised_total
     }
 
-    pub fn rejected_total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn rejected_total(&self) -> u32 {
         self.rejected_total
     }
 
-    pub fn recovered_total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn recovered_total(&self) -> u32 {
         self.recovered_total
     }
 
-    pub fn exhausted_total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn exhausted_total(&self) -> u32 {
         self.exhausted_total
     }
 
-    pub fn escalated_total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn escalated_total(&self) -> u32 {
         self.escalated_total
     }
 
-    pub fn correlated_total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn correlated_total(&self) -> u32 {
         self.correlated_total
     }
 
-    pub fn known_id(&self, id: &BlitzId) -> bool {
+    pub #[tracing::instrument]
+fn known_id(&self, id: &BlitzId) -> bool {
         self.active_blitz().is_some_and(|blitz| &blitz.id == id)
             || self.closed.iter().any(|record| &record.id == id)
     }
 
     /// The most recent closed blitz, or none.
-    pub fn last_closed(&self) -> Option<&BlitzRecord> {
+    pub #[tracing::instrument]
+fn last_closed(&self) -> Option<&BlitzRecord> {
         self.closed.last()
     }
 
-    pub(crate) fn active_mut(&mut self, id: &BlitzId) -> Result<&mut ActiveBlitz, PlaybookError> {
+    pub(crate) #[tracing::instrument]
+fn active_mut(&mut self, id: &BlitzId) -> Result<&mut ActiveBlitz, PlaybookError> {
         self.active
             .iter_mut()
             .find(|blitz| &blitz.id == id)
             .ok_or_else(|| refusal("unknown blitz"))
     }
 
-    pub(crate) fn push_active(&mut self, blitz: ActiveBlitz) {
+    pub(crate) #[tracing::instrument]
+fn push_active(&mut self, blitz: ActiveBlitz) {
         self.proposed_total = self.proposed_total.saturating_add(1);
         self.active.push(blitz);
     }
 
-    pub(crate) fn count_authorised(&mut self) {
+    pub(crate) #[tracing::instrument]
+fn count_authorised(&mut self) {
         self.authorised_total = self.authorised_total.saturating_add(1);
     }
 
-    pub(crate) fn count_rejected(&mut self) {
+    pub(crate) #[tracing::instrument]
+fn count_rejected(&mut self) {
         self.rejected_total = self.rejected_total.saturating_add(1);
     }
 
-    pub(crate) fn count_recovered(&mut self) {
+    pub(crate) #[tracing::instrument]
+fn count_recovered(&mut self) {
         self.recovered_total = self.recovered_total.saturating_add(1);
     }
 
-    pub(crate) fn count_exhausted(&mut self) {
+    pub(crate) #[tracing::instrument]
+fn count_exhausted(&mut self) {
         self.exhausted_total = self.exhausted_total.saturating_add(1);
     }
 
-    pub(crate) fn count_escalated(&mut self) {
+    pub(crate) #[tracing::instrument]
+fn count_escalated(&mut self) {
         self.escalated_total = self.escalated_total.saturating_add(1);
     }
 
-    pub(crate) fn count_correlated(&mut self) {
+    pub(crate) #[tracing::instrument]
+fn count_correlated(&mut self) {
         self.correlated_total = self.correlated_total.saturating_add(1);
     }
 
-    pub(crate) fn close_active(
+    pub(crate) #[tracing::instrument]
+fn close_active(
         &mut self,
         id: &BlitzId,
         closure: BlitzClosure,
@@ -838,7 +881,8 @@ impl BlitzLedger {
 }
 
 /// The error recorded when the fold refuses a blitz action.
-pub fn refusal(reason_code: &str) -> PlaybookError {
+pub #[tracing::instrument]
+fn refusal(reason_code: &str) -> PlaybookError {
     PlaybookError::Inadmissible("blitz".into(), reason_code.into())
 }
 
@@ -857,7 +901,8 @@ pub struct HuddleRecommendation {
 
 /// Convenience seal helper used by tests and callers assembling a trigger
 /// from raw evidence; canonical JSON bytes of the named bundle.
-pub fn evidence_bundle_digest(evidence_refs: &[EvidenceId]) -> Result<String, PlaybookError> {
+pub #[tracing::instrument]
+fn evidence_bundle_digest(evidence_refs: &[EvidenceId]) -> Result<String, PlaybookError> {
     let mut refs: Vec<&str> = evidence_refs.iter().map(EvidenceId::as_str).collect();
     refs.sort_unstable();
     refs.dedup();

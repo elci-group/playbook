@@ -23,6 +23,7 @@ pub struct LiveIdentity {
     pub tool_envelope: String,
 }
 
+#[tracing::instrument]
 fn slug(part: &str) -> Result<String, PlaybookError> {
     let cleaned: String = part
         .chars()
@@ -46,7 +47,8 @@ fn slug(part: &str) -> Result<String, PlaybookError> {
 }
 
 impl LiveIdentity {
-    pub fn new(
+    pub #[tracing::instrument]
+fn new(
         provider: &str,
         model: &str,
         profile_version: &str,
@@ -67,7 +69,8 @@ impl LiveIdentity {
 
     /// The deterministic personnel id. The same identity always maps to the
     /// same id, so empirical records accumulate on the right player.
-    pub fn personnel_id(&self) -> Result<PersonnelId, PlaybookError> {
+    pub #[tracing::instrument]
+fn personnel_id(&self) -> Result<PersonnelId, PlaybookError> {
         let id = PersonnelId::new(format!(
             "live-{}-{}-{}-{}",
             slug(&self.provider)?,
@@ -80,7 +83,8 @@ impl LiveIdentity {
 
     /// True when the two identities are empirically comparable: same
     /// provider, same model, same profile, same envelope.
-    pub fn comparable(&self, other: &Self) -> bool {
+    pub #[tracing::instrument]
+fn comparable(&self, other: &Self) -> bool {
         self.provider == other.provider
             && self.model == other.model
             && self.profile_version == other.profile_version
@@ -105,7 +109,8 @@ pub struct Occupancy {
 
 impl Occupancy {
     /// Default policy: unresolved invocation → player busy → no reassignment.
-    pub fn may_take_work(&self) -> bool {
+    pub #[tracing::instrument]
+fn may_take_work(&self) -> bool {
         if !self.has_unresolved_invocation {
             return true;
         }
@@ -118,7 +123,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn identity_changes_produce_distinct_players() {
+    #[tracing::instrument]
+fn identity_changes_produce_distinct_players() {
         let base = LiveIdentity::new("alpha", "model-x", "v1", "shell").unwrap();
         let same = LiveIdentity::new("alpha", "model-x", "v1", "shell").unwrap();
         assert_eq!(base.personnel_id().unwrap(), same.personnel_id().unwrap());
@@ -148,7 +154,8 @@ mod tests {
     }
 
     #[test]
-    fn ids_are_slugified_and_deterministic() {
+    #[tracing::instrument]
+fn ids_are_slugified_and_deterministic() {
         let identity = LiveIdentity::new("Provider A", "model.x/v1", "v1", "read only").unwrap();
         let id = identity.personnel_id().unwrap();
         assert_eq!(id.as_str(), "live-provider-a-model-x-v1-v1-read-only");
@@ -163,7 +170,8 @@ mod tests {
     }
 
     #[test]
-    fn busy_players_do_not_take_work_unless_concurrency_is_explicit() {
+    #[tracing::instrument]
+fn busy_players_do_not_take_work_unless_concurrency_is_explicit() {
         let free = Occupancy {
             has_unresolved_invocation: false,
             supports_concurrent_occupancy: false,

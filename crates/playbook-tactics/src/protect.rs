@@ -98,6 +98,7 @@ pub struct ConcentrationProfile {
 }
 
 /// Total personnel the profile fields.
+#[tracing::instrument]
 fn headcount(profile: &ConcentrationProfile) -> u32 {
     u32::from(profile.executors)
         .saturating_add(u32::from(profile.validators))
@@ -113,7 +114,8 @@ fn headcount(profile: &ConcentrationProfile) -> u32 {
 /// first, then tool specialists, then test workers, then reserves. With
 /// one available this is the executor alone; with none it is the empty
 /// profile.
-pub fn heavy_profile(available: u16) -> ConcentrationProfile {
+pub #[tracing::instrument]
+fn heavy_profile(available: u16) -> ConcentrationProfile {
     let available = u32::from(available);
     let executors = available.min(1);
     let remainder = available.saturating_sub(executors);
@@ -132,6 +134,7 @@ pub fn heavy_profile(available: u16) -> ConcentrationProfile {
 /// specialists, test workers, reserves) with largest-remainder rounding;
 /// leftover units go in that priority order. The parts always sum to
 /// `remainder`, which is at most `u16::MAX`, so every part fits a `u16`.
+#[tracing::instrument]
 fn split_heavy_remainder(remainder: u32) -> (u16, u16, u16, u16) {
     let mut validators = remainder.saturating_mul(3) / 7;
     let mut tool_specialists = remainder.saturating_mul(2) / 7;
@@ -172,7 +175,8 @@ fn split_heavy_remainder(remainder: u32) -> (u16, u16, u16, u16) {
 /// rest of the roster split three-to-one between validators (rounded up)
 /// and test workers. Verification dominates; the backup and the deep
 /// safety are staffed only once the verification core stands.
-pub fn max_protect_profile(available: u16) -> ConcentrationProfile {
+pub #[tracing::instrument]
+fn max_protect_profile(available: u16) -> ConcentrationProfile {
     let available = u32::from(available);
     let executors = available.min(1);
     let observers = if available >= 4 { 1 } else { 0 };
@@ -194,7 +198,8 @@ pub fn max_protect_profile(available: u16) -> ConcentrationProfile {
 /// Assurance weight, 0..=1_000 ppm-scale: validators, observers, and
 /// reserves over the head-count. An empty profile protects nothing and
 /// scores zero.
-pub fn protection_score(profile: &ConcentrationProfile) -> u32 {
+pub #[tracing::instrument]
+fn protection_score(profile: &ConcentrationProfile) -> u32 {
     let total = headcount(profile);
     if total == 0 {
         return 0;
@@ -208,7 +213,8 @@ pub fn protection_score(profile: &ConcentrationProfile) -> u32 {
 /// Generative breadth, 0..=1_000 ppm-scale: executors over the head-count.
 /// The inverse face of [`protection_score`]: one executor among many
 /// protectors scores low, an all-executor profile scores the ceiling.
-pub fn generative_breadth(profile: &ConcentrationProfile) -> u32 {
+pub #[tracing::instrument]
+fn generative_breadth(profile: &ConcentrationProfile) -> u32 {
     let total = headcount(profile);
     if total == 0 {
         return 0;
@@ -219,6 +225,7 @@ pub fn generative_breadth(profile: &ConcentrationProfile) -> u32 {
 /// Staff up to `wanted` positions from `available` starting at `*cursor`,
 /// advancing the cursor. The returned ids are unique across calls because
 /// the cursor never revisits a seat.
+#[tracing::instrument]
 fn staff(wanted: u16, available: &[PersonnelId], cursor: &mut usize) -> Vec<PersonnelId> {
     let room = usize::from(wanted).min(available.len().saturating_sub(*cursor));
     let staffed = available[*cursor..*cursor + room].to_vec();
@@ -236,7 +243,8 @@ fn staff(wanted: u16, available: &[PersonnelId], cursor: &mut usize) -> Vec<Pers
 /// `available.len()`, and the returned shape always passes
 /// `PersonnelShape::validate`. An empty roster, an unnamed primary domain,
 /// or a profile that would deploy nobody is refused.
-pub fn shape(
+pub #[tracing::instrument]
+fn shape(
     profile: &ConcentrationProfile,
     primary_domain: &str,
     available: &[PersonnelId],
@@ -323,6 +331,7 @@ pub enum ProtectionKind {
 /// The Heavy trigger: elevated risk while the drive is still long, or
 /// short-YTG completion outright — heavy serves release closure and the
 /// final push alike.
+#[tracing::instrument]
 fn heavy_trigger() -> TacticalTrigger {
     TacticalTrigger::Any(vec![
         TacticalTrigger::All(vec![
@@ -344,7 +353,8 @@ fn heavy_trigger() -> TacticalTrigger {
 /// so the current assignment is what gets protected. The result passes
 /// [`crate::admission::validated`] before it is returned; an empty roster
 /// is refused.
-pub fn directive(
+pub #[tracing::instrument]
+fn directive(
     kind: ProtectionKind,
     context: &TacticalContext,
     available: &[PersonnelId],
@@ -463,7 +473,8 @@ pub fn directive(
 /// outranks breadth — but never concentrate into an empty wallet. Holds
 /// exactly when the context is short-YTG and at least
 /// [`WALLET_FLOOR_PPM`] of the budget remains.
-pub fn short_ytg_policy(context: &TacticalContext) -> bool {
+pub #[tracing::instrument]
+fn short_ytg_policy(context: &TacticalContext) -> bool {
     context.short_ytg && context.budget_remaining_ppm >= WALLET_FLOOR_PPM
 }
 
@@ -473,7 +484,8 @@ mod tests {
     use crate::admission::Admission;
     use crate::composition::counter_of;
 
-    fn context() -> TacticalContext {
+    #[tracing::instrument]
+fn context() -> TacticalContext {
         TacticalContext {
             problem_breadth_ppm: 500,
             domain_coupling_ppm: 400,
@@ -490,14 +502,16 @@ mod tests {
         }
     }
 
-    fn roster(count: usize) -> Vec<PersonnelId> {
+    #[tracing::instrument]
+fn roster(count: usize) -> Vec<PersonnelId> {
         (0..count)
             .map(|index| PersonnelId::new(format!("p{index:02}")).unwrap())
             .collect()
     }
 
     #[test]
-    fn heavy_and_max_protect_split_the_roster_by_the_documented_ratios() {
+    #[tracing::instrument]
+fn heavy_and_max_protect_split_the_roster_by_the_documented_ratios() {
         // The documented eight-seat examples.
         assert_eq!(
             heavy_profile(8),
@@ -544,7 +558,8 @@ mod tests {
     }
 
     #[test]
-    fn max_protect_verifies_heavier_and_observes_from_four() {
+    #[tracing::instrument]
+fn max_protect_verifies_heavier_and_observes_from_four() {
         // From eight available upward, Max Protect staffs strictly more
         // validators than Heavy at equal availability.
         for available in 8..=24u16 {
@@ -570,7 +585,8 @@ mod tests {
     }
 
     #[test]
-    fn protection_score_orders_concentration_and_generative_breadth_inverts() {
+    #[tracing::instrument]
+fn protection_score_orders_concentration_and_generative_breadth_inverts() {
         let heavy = heavy_profile(8);
         let protect = max_protect_profile(8);
         let wide = ConcentrationProfile {
@@ -609,7 +625,8 @@ mod tests {
     }
 
     #[test]
-    fn shapes_validate_and_never_exceed_the_roster() {
+    #[tracing::instrument]
+fn shapes_validate_and_never_exceed_the_roster() {
         for available in 1..=16usize {
             let people = roster(available);
             for kind in [ProtectionKind::Heavy, ProtectionKind::MaxProtect] {
@@ -665,7 +682,8 @@ mod tests {
     }
 
     #[test]
-    fn empty_rosters_and_unnamed_domains_are_refused() {
+    #[tracing::instrument]
+fn empty_rosters_and_unnamed_domains_are_refused() {
         let people = roster(8);
         assert!(shape(&heavy_profile(8), "migration.core", &[]).is_err());
         assert!(shape(&max_protect_profile(8), "   ", &people).is_err());
@@ -684,7 +702,8 @@ mod tests {
     }
 
     #[test]
-    fn directives_validate_admit_and_trigger_on_band_and_ytg() {
+    #[tracing::instrument]
+fn directives_validate_admit_and_trigger_on_band_and_ytg() {
         let people = roster(8);
         let context = context();
         let heavy = directive(ProtectionKind::Heavy, &context, &people).unwrap();
@@ -748,7 +767,8 @@ mod tests {
     }
 
     #[test]
-    fn short_ytg_policy_demands_a_wallet() {
+    #[tracing::instrument]
+fn short_ytg_policy_demands_a_wallet() {
         let mut context = context();
         context.short_ytg = TacticalContext::is_short_ytg(2_500, 10_000);
         context.budget_remaining_ppm = 150_000;
@@ -763,7 +783,8 @@ mod tests {
     }
 
     #[test]
-    fn concentration_is_deterministic() {
+    #[tracing::instrument]
+fn concentration_is_deterministic() {
         let people = roster(8);
         let context = context();
         assert_eq!(heavy_profile(8), heavy_profile(8));

@@ -57,7 +57,8 @@ pub struct MotionPlan {
 /// probed by `available[i % available.len()]`, and the probe kind cycles
 /// Api → Tests → DependencyGraph in order. Refuses an empty roster or an
 /// empty domain list — motion with nobody or nowhere is nothing.
-pub fn plan_motion(
+pub #[tracing::instrument]
+fn plan_motion(
     available: &[PersonnelId],
     domains: &[&str],
 ) -> Result<MotionPlan, PlaybookError> {
@@ -92,7 +93,8 @@ pub fn plan_motion(
 /// domain in probe order, an unmoved reading reports nothing. A probe
 /// that revealed nothing is still cheap evidence — but only changed
 /// readings are reported.
-pub fn motion_reveals(
+pub #[tracing::instrument]
+fn motion_reveals(
     probes: &[MotionProbe],
     coupling_after_ppm: u32,
     coupling_before_ppm: u32,
@@ -133,7 +135,8 @@ pub struct Shift {
 /// Each legal move removes one membership and adds one, so the roster
 /// total across domains is invariant under any legal shift, and the
 /// shifted shape must still validate.
-pub fn apply_shift(
+pub #[tracing::instrument]
+fn apply_shift(
     mut shape: crate::domain::PersonnelShape,
     shift: &Shift,
 ) -> Result<crate::domain::PersonnelShape, PlaybookError> {
@@ -195,7 +198,8 @@ pub enum AudibleDecision {
 /// field), the plan stands. Before dispatch, the first candidate whose
 /// trigger fires on the observed state — and who is not the planned tactic
 /// itself — wins.
-pub fn call_audible(
+pub #[tracing::instrument]
+fn call_audible(
     planned_tactic: &str,
     observed: &TacticalContext,
     candidates: &[(String, Trigger)],
@@ -225,7 +229,8 @@ pub fn call_audible(
 /// above the threshold — a net value exactly equal to the threshold does
 /// not win. Nothing qualifies → nothing is called, and the planned tactic
 /// stands.
-pub fn check_with_me(
+pub #[tracing::instrument]
+fn check_with_me(
     candidates: &[(String, TacticalTrigger, i64)],
     context: &TacticalContext,
     threshold_ppm: u32,
@@ -240,11 +245,13 @@ pub fn check_with_me(
 mod tests {
     use super::*;
 
-    fn person(id: &str) -> PersonnelId {
+    #[tracing::instrument]
+fn person(id: &str) -> PersonnelId {
         PersonnelId::new(id).unwrap()
     }
 
-    fn context(repeated_failures: u32) -> TacticalContext {
+    #[tracing::instrument]
+fn context(repeated_failures: u32) -> TacticalContext {
         TacticalContext {
             problem_breadth_ppm: 400,
             domain_coupling_ppm: 900,
@@ -261,7 +268,8 @@ mod tests {
         }
     }
 
-    fn shape() -> crate::domain::PersonnelShape {
+    #[tracing::instrument]
+fn shape() -> crate::domain::PersonnelShape {
         crate::domain::PersonnelShape {
             primary_executors: 3,
             support: 0,
@@ -283,7 +291,8 @@ mod tests {
     }
 
     #[test]
-    fn motion_probes_assign_round_robin_with_a_tiny_budget() {
+    #[tracing::instrument]
+fn motion_probes_assign_round_robin_with_a_tiny_budget() {
         let plan = plan_motion(
             &[person("a"), person("b")],
             &["api", "tests", "deps", "schema"],
@@ -305,14 +314,16 @@ mod tests {
     }
 
     #[test]
-    fn motion_reports_exactly_the_changed_readings() {
+    #[tracing::instrument]
+fn motion_reports_exactly_the_changed_readings() {
         let plan = plan_motion(&[person("a")], &["api", "tests"]).unwrap();
         assert!(motion_reveals(&plan.probes, 600, 600).is_empty());
         assert_eq!(motion_reveals(&plan.probes, 600, 900).len(), 2);
     }
 
     #[test]
-    fn shifts_move_people_without_changing_the_roster() {
+    #[tracing::instrument]
+fn shifts_move_people_without_changing_the_roster() {
         let shift = Shift {
             moves: vec![ShiftMove {
                 personnel: person("c"),
@@ -343,7 +354,8 @@ mod tests {
     }
 
     #[test]
-    fn shifts_refuse_gaps_same_domains_and_absent_people() {
+    #[tracing::instrument]
+fn shifts_refuse_gaps_same_domains_and_absent_people() {
         // Moving the last owner leaves a gap: refused.
         let gap = Shift {
             moves: vec![ShiftMove {
@@ -374,7 +386,8 @@ mod tests {
     }
 
     #[test]
-    fn audibles_fire_before_dispatch_and_never_after_the_snap() {
+    #[tracing::instrument]
+fn audibles_fire_before_dispatch_and_never_after_the_snap() {
         let candidates: Vec<(String, Trigger)> = vec![
             ("trips".into(), Trigger::CriticalDomainNamed),
             ("bunch".into(), Trigger::DomainCouplingAtLeast { ppm: 600 }),
@@ -409,7 +422,8 @@ mod tests {
     }
 
     #[test]
-    fn check_with_me_selects_the_first_candidate_above_the_threshold() {
+    #[tracing::instrument]
+fn check_with_me_selects_the_first_candidate_above_the_threshold() {
         let candidates: Vec<(String, Trigger, i64)> = vec![
             (
                 "heavy".into(),
@@ -442,7 +456,8 @@ mod tests {
     }
 
     #[test]
-    fn motion_is_a_diagnostic_with_a_budget_well_below_a_play() {
+    #[tracing::instrument]
+fn motion_is_a_diagnostic_with_a_budget_well_below_a_play() {
         // A reference full play (the admission fixture's budget) runs
         // 10_000 tokens over 30_000 ms. Motion must sit far under that: a
         // probe that costs a play is a play.
@@ -466,7 +481,8 @@ mod tests {
     }
 
     #[test]
-    fn shifts_apply_in_order_and_may_reference_created_domains() {
+    #[tracing::instrument]
+fn shifts_apply_in_order_and_may_reference_created_domains() {
         let four = crate::domain::PersonnelShape {
             primary_executors: 4,
             support: 0,
@@ -543,7 +559,8 @@ mod tests {
     }
 
     #[test]
-    fn the_audible_refusal_is_structural_even_when_every_candidate_fires() {
+    #[tracing::instrument]
+fn the_audible_refusal_is_structural_even_when_every_candidate_fires() {
         // A candidate list that fires on every observation whatsoever:
         // whatever the field shows, these alternatives want in.
         let always_firing: Vec<(String, Trigger)> = vec![
@@ -575,7 +592,8 @@ mod tests {
     }
 
     #[test]
-    fn check_with_me_wins_only_strictly_above_the_threshold() {
+    #[tracing::instrument]
+fn check_with_me_wins_only_strictly_above_the_threshold() {
         let candidates: Vec<(String, Trigger, i64)> =
             vec![("counter".into(), Trigger::Always, 400)];
         // Exactly at the threshold: the plan stands.
@@ -593,7 +611,8 @@ mod tests {
     }
 
     #[test]
-    fn check_with_me_walks_the_documented_ladder_in_order() {
+    #[tracing::instrument]
+fn check_with_me_walks_the_documented_ladder_in_order() {
         // The mirror of the check_with_me.tov ladder: instability
         // concentrates first (heavy), independent breadth spreads second,
         // and bunch is the unconditional fallback. Order decides — every
@@ -646,7 +665,8 @@ mod tests {
     }
 
     #[test]
-    fn every_planning_function_is_deterministic() {
+    #[tracing::instrument]
+fn every_planning_function_is_deterministic() {
         // Motion plans: identical calls, identical plans.
         let first = plan_motion(&[person("a"), person("b")], &["api", "tests", "deps"]).unwrap();
         assert_eq!(

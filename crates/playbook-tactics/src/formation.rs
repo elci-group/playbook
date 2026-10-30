@@ -108,7 +108,8 @@ pub enum TacticalFormation {
 impl TacticalFormation {
     /// The machine name the conflict matrix and tactical memory key on.
     /// Matches the serde representation exactly.
-    pub fn machine_name(self) -> &'static str {
+    pub #[tracing::instrument]
+fn machine_name(self) -> &'static str {
         match self {
             Self::Spread => "spread",
             Self::Heavy => "heavy",
@@ -146,7 +147,8 @@ pub struct FormationProfile {
 
 /// The doctrine table. Deterministic and total: the same formation always
 /// reads the same profile.
-pub fn profile(formation: TacticalFormation) -> FormationProfile {
+pub #[tracing::instrument]
+fn profile(formation: TacticalFormation) -> FormationProfile {
     match formation {
         TacticalFormation::Spread => FormationProfile {
             max_concurrent: 6,
@@ -243,7 +245,8 @@ pub fn profile(formation: TacticalFormation) -> FormationProfile {
 /// Bunch deployments, and the Trips trip; absent a hint the named critical
 /// domain is used, and absent both the fallback `primary`. The returned
 /// shape is validated before it is handed back.
-pub fn plan(
+pub #[tracing::instrument]
+fn plan(
     context: &TacticalContext,
     available: &[PersonnelId],
     domain_hint: Option<&str>,
@@ -275,6 +278,7 @@ pub fn plan(
 /// Heavy concentration: one executor, the rest split between deterministic
 /// support (the larger half) and reserves. Support shares the executor's
 /// domain; reserves hold no domain — they are held out of execution.
+#[tracing::instrument]
 fn heavy_shape(available: &[PersonnelId], domain: String) -> PersonnelShape {
     let n = u16::try_from(available.len()).unwrap_or(u16::MAX);
     let remaining = n.saturating_sub(1);
@@ -297,6 +301,7 @@ fn heavy_shape(available: &[PersonnelId], domain: String) -> PersonnelShape {
 /// Trips concentration: the first [`TRIP_SIZE`] personnel take the dominant
 /// domain under explicit shared ownership; the remainder covers globally —
 /// jointly when several, solely when one.
+#[tracing::instrument]
 fn trips_shape(available: &[PersonnelId], domain: String) -> PersonnelShape {
     let n = u16::try_from(available.len()).unwrap_or(u16::MAX);
     let trip = n.min(TRIP_SIZE);
@@ -332,6 +337,7 @@ fn trips_shape(available: &[PersonnelId], domain: String) -> PersonnelShape {
 /// the available roster positionally — position i takes the i-th ordinal
 /// domain, alone, under sole ownership. No domain ever gets two owners and
 /// no two lanes share context.
+#[tracing::instrument]
 fn spread_shape(available: &[PersonnelId]) -> PersonnelShape {
     let n = u16::try_from(available.len()).unwrap_or(u16::MAX);
     let assignments = available
@@ -355,6 +361,7 @@ fn spread_shape(available: &[PersonnelId]) -> PersonnelShape {
 /// Bunch cooperation: the whole squad concentrates on one shared domain
 /// under joint ownership with deterministic switching — sole only when one
 /// person is available. Full huddle access is declared in the directive.
+#[tracing::instrument]
 fn bunch_shape(available: &[PersonnelId], domain: String) -> PersonnelShape {
     let n = u16::try_from(available.len()).unwrap_or(u16::MAX);
     PersonnelShape {
@@ -378,6 +385,7 @@ fn bunch_shape(available: &[PersonnelId], domain: String) -> PersonnelShape {
 /// domains, at most one reserve, remainder as unassigned support. Support
 /// and reserves deploy without a domain — they are not on the field until
 /// called.
+#[tracing::instrument]
 fn balanced_shape(available: &[PersonnelId]) -> PersonnelShape {
     let n = u16::try_from(available.len()).unwrap_or(u16::MAX);
     let executors = n.min(2);
@@ -405,6 +413,7 @@ fn balanced_shape(available: &[PersonnelId]) -> PersonnelShape {
 
 /// The concentration domain: the caller's hint steers when given, else the
 /// named critical domain, else the fallback.
+#[tracing::instrument]
 fn resolve_domain(hint: Option<&str>, context: &TacticalContext, fallback: &str) -> String {
     hint.map(str::to_owned)
         .or_else(|| context.critical_domain.clone())
@@ -413,6 +422,7 @@ fn resolve_domain(hint: Option<&str>, context: &TacticalContext, fallback: &str)
 
 /// The ordinal domain name for distribution position `i`, falling back to
 /// `domain-N` past the named table.
+#[tracing::instrument]
 fn domain_ordinal(i: usize) -> String {
     match DOMAIN_ORDINALS.get(i) {
         Some(&name) => name.to_owned(),
@@ -435,6 +445,7 @@ struct Doctrine {
 /// The doctrine table's trigger and economics row. Every claim is measured
 /// in ppm; every net value is strictly positive so an admitted formation
 /// can clear a zero threshold.
+#[tracing::instrument]
 fn doctrine(formation: TacticalFormation) -> Doctrine {
     match formation {
         TacticalFormation::Spread => Doctrine {
@@ -578,6 +589,7 @@ fn doctrine(formation: TacticalFormation) -> Doctrine {
 }
 
 /// The base play count of one formation before short-YTG modulation.
+#[tracing::instrument]
 fn base_plays(formation: TacticalFormation) -> u16 {
     match formation {
         TacticalFormation::Spread => 4,
@@ -596,7 +608,8 @@ fn base_plays(formation: TacticalFormation) -> u16 {
 /// deterministically by the measured context (short-YTG halves the play
 /// count; a tight remaining budget halves the token ceiling). The result
 /// passes [`crate::admission::validated`].
-pub fn formation_directive(
+pub #[tracing::instrument]
+fn formation_directive(
     formation: TacticalFormation,
     context: &TacticalContext,
 ) -> TacticalDirective {
@@ -665,18 +678,22 @@ pub fn formation_directive(
 /// shape rendered with placeholder personnel. `plan` produces the same
 /// counts and ownership modes when the real squad matches the canonical
 /// size.
+#[tracing::instrument]
 fn canonical_shape(formation: TacticalFormation) -> PersonnelShape {
-    fn owner(id: &str) -> PersonnelId {
+    #[tracing::instrument]
+fn owner(id: &str) -> PersonnelId {
         PersonnelId::new(id).expect("static canonical ids are valid")
     }
-    fn sole(domain: &str, id: &str) -> DomainAssignment {
+    #[tracing::instrument]
+fn sole(domain: &str, id: &str) -> DomainAssignment {
         DomainAssignment {
             domain: domain.to_owned(),
             personnel: vec![owner(id)],
             mode: OwnershipMode::Sole,
         }
     }
-    fn group(domain: &str, ids: &[&str], mode: OwnershipMode) -> DomainAssignment {
+    #[tracing::instrument]
+fn group(domain: &str, ids: &[&str], mode: OwnershipMode) -> DomainAssignment {
         DomainAssignment {
             domain: domain.to_owned(),
             personnel: ids.iter().map(|id| owner(id)).collect(),
@@ -795,7 +812,8 @@ mod tests {
     use super::*;
     use crate::admission::{admit, validated, Admission};
 
-    fn context() -> TacticalContext {
+    #[tracing::instrument]
+fn context() -> TacticalContext {
         TacticalContext {
             problem_breadth_ppm: 400,
             domain_coupling_ppm: 300,
@@ -812,13 +830,15 @@ mod tests {
         }
     }
 
-    fn squad(n: usize) -> Vec<PersonnelId> {
+    #[tracing::instrument]
+fn squad(n: usize) -> Vec<PersonnelId> {
         (0..n)
             .map(|i| PersonnelId::new(format!("p{i}")).expect("squad ids are valid"))
             .collect()
     }
 
-    fn firing_context(formation: TacticalFormation) -> TacticalContext {
+    #[tracing::instrument]
+fn firing_context(formation: TacticalFormation) -> TacticalContext {
         let mut context = context();
         match formation {
             TacticalFormation::Spread => context.problem_breadth_ppm = 700,
@@ -835,7 +855,8 @@ mod tests {
     }
 
     #[test]
-    fn the_doctrine_table_carries_the_declared_economics() {
+    #[tracing::instrument]
+fn the_doctrine_table_carries_the_declared_economics() {
         assert_eq!(profile(TacticalFormation::Empty).reserves_share_ppm, 0);
         assert!(
             profile(TacticalFormation::Dime).specialist_share_ppm
@@ -862,7 +883,8 @@ mod tests {
     }
 
     #[test]
-    fn broad_loose_problems_ladder_to_spread() {
+    #[tracing::instrument]
+fn broad_loose_problems_ladder_to_spread() {
         let mut ctx = context();
         ctx.problem_breadth_ppm = 800;
         ctx.domain_coupling_ppm = 200;
@@ -881,7 +903,8 @@ mod tests {
     }
 
     #[test]
-    fn a_critical_domain_ladders_to_trips_and_agrees_with_the_directive() {
+    #[tracing::instrument]
+fn a_critical_domain_ladders_to_trips_and_agrees_with_the_directive() {
         let mut ctx = context();
         ctx.critical_domain = Some("parser".into());
         let shape = plan(&ctx, &squad(4), None).expect("planned");
@@ -906,7 +929,8 @@ mod tests {
     }
 
     #[test]
-    fn divergence_ladders_to_bunch() {
+    #[tracing::instrument]
+fn divergence_ladders_to_bunch() {
         let mut ctx = context();
         ctx.divergence_observed = true;
         let shape = plan(&ctx, &squad(3), None).expect("planned");
@@ -923,7 +947,8 @@ mod tests {
     }
 
     #[test]
-    fn critical_risk_and_instability_ladder_to_heavy() {
+    #[tracing::instrument]
+fn critical_risk_and_instability_ladder_to_heavy() {
         let mut ctx = context();
         ctx.risk_band = RiskBand::Critical;
         let shape = plan(&ctx, &squad(5), Some("migration")).expect("planned");
@@ -944,7 +969,8 @@ mod tests {
     }
 
     #[test]
-    fn the_balanced_default_spreads_two_and_holds_one() {
+    #[tracing::instrument]
+fn the_balanced_default_spreads_two_and_holds_one() {
         let shape = plan(&context(), &squad(3), None).expect("planned");
         assert_eq!(shape.primary_executors, 2);
         assert_eq!(shape.reserves, 1);
@@ -960,7 +986,8 @@ mod tests {
     }
 
     #[test]
-    fn the_planner_never_invents_personnel_and_refuses_an_empty_squad() {
+    #[tracing::instrument]
+fn the_planner_never_invents_personnel_and_refuses_an_empty_squad() {
         let mut heavy = context();
         heavy.risk_band = RiskBand::Critical;
         let mut trips = context();
@@ -990,7 +1017,8 @@ mod tests {
     }
 
     #[test]
-    fn every_formation_directive_validates_and_admits_when_its_trigger_fires() {
+    #[tracing::instrument]
+fn every_formation_directive_validates_and_admits_when_its_trigger_fires() {
         let formations = [
             TacticalFormation::Spread,
             TacticalFormation::Heavy,
@@ -1028,7 +1056,8 @@ mod tests {
     }
 
     #[test]
-    fn planning_is_deterministic() {
+    #[tracing::instrument]
+fn planning_is_deterministic() {
         let mut spread = context();
         spread.problem_breadth_ppm = 800;
         spread.domain_coupling_ppm = 200;

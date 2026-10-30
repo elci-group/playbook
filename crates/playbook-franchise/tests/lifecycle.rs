@@ -11,7 +11,8 @@ struct Fixture {
     franchise: Franchise,
 }
 impl Fixture {
-    fn new(grants: u64) -> Self {
+    #[tracing::instrument]
+fn new(grants: u64) -> Self {
         let directory = std::env::temp_dir().join(format!(
             "franchise-{}-{}",
             std::process::id(),
@@ -47,7 +48,8 @@ impl Fixture {
             franchise,
         }
     }
-    fn objective(&mut self, id: &str) {
+    #[tracing::instrument]
+fn objective(&mut self, id: &str) {
         self.franchise
             .declare_objective(Objective {
                 id: ObjectiveId::new(id).unwrap(),
@@ -57,7 +59,8 @@ impl Fixture {
             })
             .unwrap();
     }
-    fn start(&mut self, objective: &str, drive: &str) -> DriveId {
+    #[tracing::instrument]
+fn start(&mut self, objective: &str, drive: &str) -> DriveId {
         let id = DriveId::new(drive).unwrap();
         self.franchise
             .start_drive(
@@ -69,17 +72,20 @@ impl Fixture {
             .unwrap();
         id
     }
-    fn reopen(&mut self) {
+    #[tracing::instrument]
+fn reopen(&mut self) {
         self.franchise = Franchise::open(&self.directory.join("team.json")).unwrap();
     }
 }
 impl Drop for Fixture {
-    fn drop(&mut self) {
+    #[tracing::instrument]
+fn drop(&mut self) {
         std::fs::remove_dir_all(&self.directory).ok();
     }
 }
 
 #[test]
+#[tracing::instrument]
 fn vanished_player_is_replaced_without_losing_accepted_progress() {
     let mut f = Fixture::new(2);
     f.objective("ship");
@@ -143,15 +149,18 @@ fn vanished_player_is_replaced_without_losing_accepted_progress() {
 
 struct Disappear;
 impl CapabilityPlane for Disappear {
-    fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+    #[tracing::instrument]
+fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
         FixturePlane::mvp().discover()
     }
-    fn execute(&mut self, _: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
+    #[tracing::instrument]
+fn execute(&mut self, _: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
         panic!("player process disappeared")
     }
 }
 
 #[test]
+#[tracing::instrument]
 fn crash_at_dispatch_is_durable_and_requires_reconciliation_before_substitution() {
     let mut f = Fixture::new(3);
     f.objective("first");
@@ -195,6 +204,7 @@ fn crash_at_dispatch_is_durable_and_requires_reconciliation_before_substitution(
 }
 
 #[test]
+#[tracing::instrument]
 fn all_objectives_share_one_cap_and_failed_allocations_are_atomic() {
     let mut f = Fixture::new(1);
     f.objective("first");
@@ -216,6 +226,7 @@ fn all_objectives_share_one_cap_and_failed_allocations_are_atomic() {
 }
 
 #[test]
+#[tracing::instrument]
 fn fourth_down_renews_possession_without_resetting_franchise_spend_or_gates() {
     let mut f = Fixture::new(2);
     f.objective("ship");
@@ -297,6 +308,7 @@ fn fourth_down_renews_possession_without_resetting_franchise_spend_or_gates() {
 }
 
 #[test]
+#[tracing::instrument]
 fn scouting_counts_new_observations_once_across_drives_and_restarts() {
     let mut f = Fixture::new(3);
     f.objective("first");
@@ -329,6 +341,7 @@ fn scouting_counts_new_observations_once_across_drives_and_restarts() {
 }
 
 #[test]
+#[tracing::instrument]
 fn claimed_completion_and_forged_gate_satisfaction_cannot_create_yardage() {
     let mut f = Fixture::new(1);
     let mut gates = playbook_sim::standard_gates().unwrap();
@@ -362,6 +375,7 @@ fn claimed_completion_and_forged_gate_satisfaction_cannot_create_yardage() {
 }
 
 #[test]
+#[tracing::instrument]
 fn tampered_franchise_is_rejected_without_repairing_away_ownership() {
     let f = Fixture::new(1);
     let path = f.directory.join("team.json");
@@ -378,6 +392,7 @@ fn tampered_franchise_is_rejected_without_repairing_away_ownership() {
 }
 
 #[test]
+#[tracing::instrument]
 fn confirming_a_lost_result_reserves_its_unknown_cost_before_clearing_the_invocation() {
     let mut f = Fixture::new(1);
     f.objective("ship");
@@ -418,10 +433,12 @@ fn confirming_a_lost_result_reserves_its_unknown_cost_before_clearing_the_invoca
 
 struct Overrun(FixturePlane);
 impl CapabilityPlane for Overrun {
-    fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+    #[tracing::instrument]
+fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
         self.0.discover()
     }
-    fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
+    #[tracing::instrument]
+fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
         let mut result = self.0.execute(execution)?;
         if let PlaneResult::Done(done) = &mut result {
             done.cost.tokens = 2_000;
@@ -431,6 +448,7 @@ impl CapabilityPlane for Overrun {
 }
 
 #[test]
+#[tracing::instrument]
 fn reported_overrun_stays_in_franchise_accounting_after_reconciliation() {
     let mut f = Fixture::new(1);
     f.objective("ship");
@@ -460,6 +478,7 @@ fn reported_overrun_stays_in_franchise_accounting_after_reconciliation() {
 }
 
 #[test]
+#[tracing::instrument]
 fn future_contracts_are_quarantined_and_live_acquisitions_cannot_change_eligibility() {
     let mut f = Fixture::new(3);
     let input: playbook_front_office::PortfolioInput =
@@ -548,6 +567,7 @@ fn future_contracts_are_quarantined_and_live_acquisitions_cannot_change_eligibil
 }
 
 #[test]
+#[tracing::instrument]
 fn legacy_snapshots_freeze_once_at_recovery_and_keep_the_original_drive_evidence() {
     let mut f = Fixture::new(1);
     f.objective("ship");

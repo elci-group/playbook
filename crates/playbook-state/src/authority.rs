@@ -60,7 +60,8 @@ impl HuddleRequest {
     /// Derive a request from an HTTP body: every roster member becomes a
     /// candidate with neutral relevance, and selection still applies the
     /// policy floor, the envelope cap, and measured disclosure profiles.
-    pub fn from_body(body: playbook_huddle::HuddleRequestBody, roster: &[Personnel]) -> Self {
+    pub #[tracing::instrument]
+fn from_body(body: playbook_huddle::HuddleRequestBody, roster: &[Personnel]) -> Self {
         Self {
             scope: body.scope,
             trigger_kind: body.trigger_kind,
@@ -105,7 +106,8 @@ pub struct Authority {
 }
 
 impl Authority {
-    pub fn start(
+    pub #[tracing::instrument]
+fn start(
         drive_id: DriveId,
         task: TaskContract,
         budget: DriveBudget,
@@ -133,7 +135,8 @@ impl Authority {
 
     /// Start a drive with a durable journal. Every event is journaled before
     /// it joins the log.
-    pub fn start_journaled(
+    pub #[tracing::instrument]
+fn start_journaled(
         drive_id: DriveId,
         task: TaskContract,
         budget: DriveBudget,
@@ -165,7 +168,8 @@ impl Authority {
     /// responsible for durably saving `ToolInvoked` before calling the plane;
     /// attach a durable sink (see `attach_journal`) to obtain the write-ahead
     /// guarantee.
-    pub fn resume(
+    pub #[tracing::instrument]
+fn resume(
         events: Vec<DriveEvent>,
         policy: Policy,
         roster: Vec<Personnel>,
@@ -182,32 +186,39 @@ impl Authority {
 
     /// Attach a durable sink, intended for `Authority::resume`. Events already
     /// in the log are not retro-journaled.
-    pub fn attach_journal(&mut self, journal: Box<dyn EventSink>) {
+    pub #[tracing::instrument]
+fn attach_journal(&mut self, journal: Box<dyn EventSink>) {
         self.journal = Some(journal);
     }
 
-    pub fn state(&self) -> &DriveState {
+    pub #[tracing::instrument]
+fn state(&self) -> &DriveState {
         &self.state
     }
 
-    pub fn log(&self) -> &[DriveEvent] {
+    pub #[tracing::instrument]
+fn log(&self) -> &[DriveEvent] {
         &self.events
     }
 
-    pub fn policy(&self) -> &Policy {
+    pub #[tracing::instrument]
+fn policy(&self) -> &Policy {
         &self.policy
     }
 
-    pub fn roster(&self) -> &[Personnel] {
+    pub #[tracing::instrument]
+fn roster(&self) -> &[Personnel] {
         &self.roster
     }
 
-    pub fn declare_gate(&mut self, gate: Gate) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn declare_gate(&mut self, gate: Gate) -> Result<(), PlaybookError> {
         self.push(DriveEvent::GateDeclared { gate })?;
         self.witnesses()
     }
 
-    pub fn preflight(&mut self, plane: &mut dyn CapabilityPlane) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn preflight(&mut self, plane: &mut dyn CapabilityPlane) -> Result<(), PlaybookError> {
         let snapshot = plane.discover()?;
         for capability in snapshot.capabilities {
             self.push(DriveEvent::CapabilityObserved {
@@ -223,7 +234,8 @@ impl Authority {
         self.witnesses()
     }
 
-    pub fn step(
+    pub #[tracing::instrument]
+fn step(
         &mut self,
         plane: &mut dyn CapabilityPlane,
         at_ms: u64,
@@ -234,7 +246,8 @@ impl Authority {
         self.run_decision(decision, plane, at_ms)
     }
 
-    pub fn try_operation(
+    pub #[tracing::instrument]
+fn try_operation(
         &mut self,
         operation: &str,
         plane: &mut dyn CapabilityPlane,
@@ -268,12 +281,14 @@ impl Authority {
         self.run_decision(decision, plane, at_ms)
     }
 
-    pub fn pressure(&mut self, cost: DriveBudget, at_ms: u64) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn pressure(&mut self, cost: DriveBudget, at_ms: u64) -> Result<(), PlaybookError> {
         self.push(DriveEvent::BudgetConsumed { cost, at_ms })?;
         self.witnesses()
     }
 
-    pub fn punt(&mut self) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn punt(&mut self) -> Result<(), PlaybookError> {
         self.ensure_no_open_execution()?;
         if self.state.down() != Down::FourthDown
             || self.state.disposition() != Some(Disposition::Punt)
@@ -286,7 +301,8 @@ impl Authority {
         })
     }
 
-    pub fn receive(
+    pub #[tracing::instrument]
+fn receive(
         &mut self,
         personnel: Personnel,
         budget: DriveBudget,
@@ -301,7 +317,8 @@ impl Authority {
         self.witnesses()
     }
 
-    pub fn record_assessments(&mut self, personnel: Vec<Personnel>) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn record_assessments(&mut self, personnel: Vec<Personnel>) -> Result<(), PlaybookError> {
         for person in &personnel {
             if let Some(slot) = self
                 .roster
@@ -318,19 +335,22 @@ impl Authority {
 
     /// Seed this drive with history learned by earlier drives. The loaded
     /// table joins the event log, so replays reproduce it exactly.
-    pub fn load_priors(
+    pub #[tracing::instrument]
+fn load_priors(
         &mut self,
         priors: playbook_core::HistoricalPriorTable,
     ) -> Result<(), PlaybookError> {
         self.push(DriveEvent::PriorsLoaded { priors })
     }
 
-    pub fn accept_evidence(&mut self, evidence: Evidence) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn accept_evidence(&mut self, evidence: Evidence) -> Result<(), PlaybookError> {
         self.push(DriveEvent::EvidenceAccepted { evidence })?;
         self.witnesses()
     }
 
-    pub fn claim_complete(&mut self, at_ms: u64) -> Result<bool, PlaybookError> {
+    pub #[tracing::instrument]
+fn claim_complete(&mut self, at_ms: u64) -> Result<bool, PlaybookError> {
         self.ensure_no_open_execution()?;
         if is_complete(self.state.gates()) && self.state.ytg_milli() == 0 {
             self.push(DriveEvent::DriveCompleted { at_ms })?;
@@ -344,7 +364,8 @@ impl Authority {
         }
     }
 
-    pub fn waive(
+    pub #[tracing::instrument]
+fn waive(
         &mut self,
         gate_id: playbook_core::GateId,
         authority: &str,
@@ -358,7 +379,8 @@ impl Authority {
         self.witnesses()
     }
 
-    pub fn select_field_goal(
+    pub #[tracing::instrument]
+fn select_field_goal(
         &mut self,
         gate_id: playbook_core::GateId,
     ) -> Result<(), PlaybookError> {
@@ -366,21 +388,24 @@ impl Authority {
         self.push(DriveEvent::FieldGoalSelected { gate_id })
     }
 
-    pub fn abandon(&mut self, reason: &str) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn abandon(&mut self, reason: &str) -> Result<(), PlaybookError> {
         self.ensure_no_open_execution()?;
         self.push(DriveEvent::AbandonIssued {
             reason: reason.to_string(),
         })
     }
 
-    pub fn produce_artefact(
+    pub #[tracing::instrument]
+fn produce_artefact(
         &mut self,
         artefact: playbook_core::ArtefactRef,
     ) -> Result<(), PlaybookError> {
         self.push(DriveEvent::ArtefactProduced { artefact })
     }
 
-    pub fn validate_artefact(
+    pub #[tracing::instrument]
+fn validate_artefact(
         &mut self,
         artefact_id: playbook_core::ArtefactId,
         evidence_id: playbook_core::EvidenceId,
@@ -391,7 +416,8 @@ impl Authority {
         })
     }
 
-    pub fn reject_artefact(
+    pub #[tracing::instrument]
+fn reject_artefact(
         &mut self,
         artefact_id: playbook_core::ArtefactId,
         evidence_id: playbook_core::EvidenceId,
@@ -403,7 +429,8 @@ impl Authority {
         self.witnesses()
     }
 
-    pub fn reconcile(&mut self, key: &str, occurred: bool) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn reconcile(&mut self, key: &str, occurred: bool) -> Result<(), PlaybookError> {
         self.push(DriveEvent::SideEffectReconciled {
             key: key.to_string(),
             occurred,
@@ -413,7 +440,8 @@ impl Authority {
     /// Request, admit, and open a huddle in one tactical step. Admission
     /// economics and participant selection run here, deterministically; a
     /// refusal is journaled like any other event.
-    pub fn open_huddle(
+    pub #[tracing::instrument]
+fn open_huddle(
         &mut self,
         request: HuddleRequest,
         at_ms: u64,
@@ -486,7 +514,8 @@ impl Authority {
         }
     }
 
-    fn select_huddle_participants(
+    #[tracing::instrument]
+fn select_huddle_participants(
         &self,
         huddle_id: &HuddleId,
         trigger: &HuddleTrigger,
@@ -524,7 +553,8 @@ impl Authority {
     }
 
     /// Invite one roster member into an open huddle.
-    pub fn invite_to_huddle(
+    pub #[tracing::instrument]
+fn invite_to_huddle(
         &mut self,
         huddle_id: &HuddleId,
         personnel_id: &PersonnelId,
@@ -557,7 +587,8 @@ impl Authority {
     /// Submit one schema-valid report, then journal any contradictions the
     /// accumulated reports expose. Returns the contradictions detected by
     /// this submission.
-    pub fn submit_huddle_report(
+    pub #[tracing::instrument]
+fn submit_huddle_report(
         &mut self,
         huddle_id: &HuddleId,
         report: HuddleReport,
@@ -589,7 +620,8 @@ impl Authority {
     }
 
     /// Journal huddle-side consumption against the huddle's own envelope.
-    pub fn consume_huddle_budget(
+    pub #[tracing::instrument]
+fn consume_huddle_budget(
         &mut self,
         huddle_id: &HuddleId,
         cost: HuddleCost,
@@ -603,7 +635,8 @@ impl Authority {
     /// Commit a reconciled outcome. The fold validates every contract:
     /// evidence-grounded resolutions, no field rewrites, no unsafe
     /// progression past a blocking contradiction.
-    pub fn commit_huddle_outcome(
+    pub #[tracing::instrument]
+fn commit_huddle_outcome(
         &mut self,
         huddle_id: &HuddleId,
         outcome: HuddleOutcome,
@@ -615,7 +648,8 @@ impl Authority {
     }
 
     /// Synthesize from accumulated reports after budget exhaustion.
-    pub fn force_huddle_synthesis(&mut self, huddle_id: &HuddleId) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn force_huddle_synthesis(&mut self, huddle_id: &HuddleId) -> Result<(), PlaybookError> {
         let active = self
             .state
             .huddles()
@@ -634,7 +668,8 @@ impl Authority {
     /// malformed output simply leaves no report; the pass continues with
     /// the rest, deterministically. Budget exhaustion terminates the pass
     /// and forces synthesis from the accumulated reports.
-    pub fn collect_huddle_reports(
+    pub #[tracing::instrument]
+fn collect_huddle_reports(
         &mut self,
         huddle_id: &HuddleId,
         plane: &mut dyn HuddleDispatch,
@@ -725,7 +760,8 @@ impl Authority {
     /// reconciliation. Components the drive does not yet track (dependency
     /// staleness, cross-unit change impact) read zero; they are never
     /// guessed.
-    pub fn coherence(&self) -> CoherenceReading {
+    pub #[tracing::instrument]
+fn coherence(&self) -> CoherenceReading {
         let ledger = self.state.huddles();
         let mut divergent_subjects: Vec<&str> = Vec::new();
         let mut blockers = 0u32;
@@ -782,7 +818,8 @@ impl Authority {
     }
 
     /// The huddle trigger the engine currently fires on this live state.
-    fn huddle_condition(&self, debt: u32) -> Option<(HuddleScope, HuddleTriggerKind, String)> {
+    #[tracing::instrument]
+fn huddle_condition(&self, debt: u32) -> Option<(HuddleScope, HuddleTriggerKind, String)> {
         let log = self.log();
         let last_failure = log
             .iter()
@@ -849,7 +886,8 @@ impl Authority {
 
     /// Escalate one scope up the ladder. Returns the new huddle's id; the
     /// child still owes its own admission event.
-    pub fn escalate_huddle(
+    pub #[tracing::instrument]
+fn escalate_huddle(
         &mut self,
         huddle_id: &HuddleId,
         manual: bool,
@@ -885,7 +923,8 @@ impl Authority {
     }
 
     /// Terminate a huddle that cannot reach synthesis.
-    pub fn close_huddle(
+    pub #[tracing::instrument]
+fn close_huddle(
         &mut self,
         huddle_id: &HuddleId,
         reason_code: &str,
@@ -900,7 +939,8 @@ impl Authority {
     /// journaled Bench verdicts. Benched personnel leave the selection pool
     /// until a later reversed verdict returns them. Returns the number of
     /// new verdicts.
-    pub fn bench_from_review(&mut self) -> Result<usize, PlaybookError> {
+    pub #[tracing::instrument]
+fn bench_from_review(&mut self) -> Result<usize, PlaybookError> {
         let pending: Vec<(PersonnelId, String)> = self
             .state
             .huddles()
@@ -924,7 +964,8 @@ impl Authority {
         Ok(verdicts)
     }
 
-    fn run_decision(
+    #[tracing::instrument]
+fn run_decision(
         &mut self,
         decision: DecisionRecord,
         plane: &mut dyn CapabilityPlane,
@@ -952,7 +993,8 @@ impl Authority {
         }
     }
 
-    fn ensure_no_open_execution(&self) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn ensure_no_open_execution(&self) -> Result<(), PlaybookError> {
         if let Some(execution) = &self.state.open_execution {
             return Err(PlaybookError::Reconcile(
                 execution
@@ -967,7 +1009,8 @@ impl Authority {
         Ok(())
     }
 
-    fn commit_decision(
+    #[tracing::instrument]
+fn commit_decision(
         &mut self,
         decision: DecisionRecord,
         plane: &mut dyn CapabilityPlane,
@@ -1073,7 +1116,8 @@ impl Authority {
         Ok(decision)
     }
 
-    fn witnesses(&mut self) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn witnesses(&mut self) -> Result<(), PlaybookError> {
         self.push(DriveEvent::YtgRecalculated {
             ytg_milli: self.state.ytg_milli(),
             previous_milli: self.state.cycle_previous_ytg(),
@@ -1103,7 +1147,8 @@ impl Authority {
         Ok(())
     }
 
-    fn push(&mut self, event: DriveEvent) -> Result<(), PlaybookError> {
+    #[tracing::instrument]
+fn push(&mut self, event: DriveEvent) -> Result<(), PlaybookError> {
         let next = apply(Some(&self.state), &event, &self.policy, ApplyMode::Audit)?;
         if let Some(sink) = self.journal.as_mut() {
             sink.record(&event)?;
@@ -1115,7 +1160,8 @@ impl Authority {
 }
 
 /// Drive creation is the one event applied without a prior state.
-pub fn started_budget(tokens: u64, quota: u64) -> DriveBudget {
+pub #[tracing::instrument]
+fn started_budget(tokens: u64, quota: u64) -> DriveBudget {
     DriveBudget {
         tokens,
         monetary_cost_micros: 1_000_000,
@@ -1149,22 +1195,26 @@ mod tests {
     }
 
     impl MemorySink {
-        fn recorded(&self) -> Vec<DriveEvent> {
+        #[tracing::instrument]
+fn recorded(&self) -> Vec<DriveEvent> {
             self.events.lock().expect("sink lock").clone()
         }
     }
 
     impl EventSink for MemorySink {
-        fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
+        #[tracing::instrument]
+fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
             self.events.lock().expect("sink lock").push(event.clone());
             Ok(())
         }
 
-        fn mark(&self) -> u64 {
+        #[tracing::instrument]
+fn mark(&self) -> u64 {
             self.events.lock().expect("sink lock").len() as u64
         }
 
-        fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
+        #[tracing::instrument]
+fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
             self.events
                 .lock()
                 .expect("sink lock")
@@ -1192,11 +1242,13 @@ mod tests {
     }
 
     impl CapabilityPlane for MutatingPlane {
-        fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+        #[tracing::instrument]
+fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
             self.inner.discover()
         }
 
-        fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
+        #[tracing::instrument]
+fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
             if execution.operation != "compile" {
                 return self.inner.execute(execution);
             }
@@ -1261,7 +1313,8 @@ mod tests {
         }
     }
 
-    fn ready_authority() -> (Authority, MutatingPlane) {
+    #[tracing::instrument]
+fn ready_authority() -> (Authority, MutatingPlane) {
         let policy = Policy::builtin();
         let personnel = Personnel {
             id: PersonnelId::new("cargo-toolchain").unwrap(),
@@ -1312,11 +1365,13 @@ mod tests {
         (authority, plane)
     }
 
-    fn compile(authority: &mut Authority, plane: &mut MutatingPlane) -> PlaybookError {
+    #[tracing::instrument]
+fn compile(authority: &mut Authority, plane: &mut MutatingPlane) -> PlaybookError {
         authority.try_operation("compile", plane, 200).unwrap_err()
     }
 
-    fn journaled_authority() -> (Authority, MutatingPlane, MemorySink) {
+    #[tracing::instrument]
+fn journaled_authority() -> (Authority, MutatingPlane, MemorySink) {
         let sink = MemorySink::default();
         let personnel = Personnel {
             id: PersonnelId::new("cargo-toolchain").unwrap(),
@@ -1369,13 +1424,15 @@ mod tests {
     }
 
     #[test]
-    fn journaled_drive_records_every_committed_event() {
+    #[tracing::instrument]
+fn journaled_drive_records_every_committed_event() {
         let (authority, _plane, sink) = journaled_authority();
         assert_eq!(sink.recorded(), authority.log().to_vec());
     }
 
     #[test]
-    fn plane_error_keeps_journaled_invocation() {
+    #[tracing::instrument]
+fn plane_error_keeps_journaled_invocation() {
         let (mut authority, mut plane, sink) = journaled_authority();
         assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
         let recorded = sink.recorded();
@@ -1397,7 +1454,8 @@ mod tests {
     }
 
     #[test]
-    fn attach_journal_continues_a_resumed_drive() {
+    #[tracing::instrument]
+fn attach_journal_continues_a_resumed_drive() {
         let (authority, _plane) = ready_authority();
         let resumed_from = authority.log().len();
         let events = authority.log().to_vec();
@@ -1414,7 +1472,8 @@ mod tests {
     }
 
     #[test]
-    fn invalid_events_never_reach_the_sink() {
+    #[tracing::instrument]
+fn invalid_events_never_reach_the_sink() {
         let (mut authority, _plane, sink) = journaled_authority();
         let committed = sink.recorded().len();
         assert!(matches!(
@@ -1430,7 +1489,8 @@ mod tests {
     }
 
     #[test]
-    fn plane_error_preserves_open_invocation_and_blocks_reexecution() {
+    #[tracing::instrument]
+fn plane_error_preserves_open_invocation_and_blocks_reexecution() {
         let (mut authority, mut plane) = ready_authority();
         let original_log_len = authority.log().len();
         assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
@@ -1508,7 +1568,8 @@ mod tests {
     }
 
     #[test]
-    fn pending_execution_blocks_terminal_and_handoff_events() {
+    #[tracing::instrument]
+fn pending_execution_blocks_terminal_and_handoff_events() {
         let (mut authority, mut plane) = ready_authority();
         assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
         let state = authority.state();
@@ -1557,7 +1618,8 @@ mod tests {
     }
 
     #[test]
-    fn rejected_invalid_evidence_keeps_observed_cost_and_effects_for_reconciliation() {
+    #[tracing::instrument]
+fn rejected_invalid_evidence_keeps_observed_cost_and_effects_for_reconciliation() {
         let (mut authority, mut plane) = ready_authority();
         plane.mode = ResponseMode::InvalidEvidence;
         assert_eq!(
@@ -1593,7 +1655,8 @@ mod tests {
     }
 
     #[test]
-    fn resume_detects_crash_open_invocation_and_reconciliation_closes_it() {
+    #[tracing::instrument]
+fn resume_detects_crash_open_invocation_and_reconciliation_closes_it() {
         let (mut authority, mut plane) = ready_authority();
         assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
         let invoke_end = authority
@@ -1624,7 +1687,8 @@ mod tests {
     }
 
     #[test]
-    fn a_reconciled_not_occurred_key_is_reinvocable() {
+    #[tracing::instrument]
+fn a_reconciled_not_occurred_key_is_reinvocable() {
         let (mut authority, mut plane) = ready_authority();
         assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
         let invoke_end = authority
@@ -1655,7 +1719,8 @@ mod tests {
     }
 
     #[test]
-    fn rejected_over_budget_response_records_actual_cost_even_past_allocation() {
+    #[tracing::instrument]
+fn rejected_over_budget_response_records_actual_cost_even_past_allocation() {
         let (mut authority, mut plane) = ready_authority();
         plane.mode = ResponseMode::OverBudget;
         assert_eq!(
@@ -1676,7 +1741,8 @@ mod tests {
     }
 
     #[test]
-    fn rejected_mismatched_play_id_is_retained_as_an_observation() {
+    #[tracing::instrument]
+fn rejected_mismatched_play_id_is_retained_as_an_observation() {
         let (mut authority, mut plane) = ready_authority();
         plane.mode = ResponseMode::MismatchedPlayId;
         assert!(matches!(
@@ -1694,7 +1760,8 @@ mod tests {
     }
 
     #[test]
-    fn rejected_mismatched_operation_is_retained_as_an_observation() {
+    #[tracing::instrument]
+fn rejected_mismatched_operation_is_retained_as_an_observation() {
         let (mut authority, mut plane) = ready_authority();
         plane.mode = ResponseMode::MismatchedOperation;
         assert!(matches!(
@@ -1712,7 +1779,8 @@ mod tests {
     }
 
     #[test]
-    fn accepted_success_with_unresolved_effect_blocks_completion_until_reconciled() {
+    #[tracing::instrument]
+fn accepted_success_with_unresolved_effect_blocks_completion_until_reconciled() {
         let (mut authority, mut plane) = ready_authority();
         plane.mode = ResponseMode::UnresolvedEffect;
         authority.try_operation("compile", &mut plane, 200).unwrap();
@@ -1732,7 +1800,8 @@ mod tests {
     }
 
     #[test]
-    fn mismatched_effect_key_is_preserved_and_reconciled_under_invocation_key() {
+    #[tracing::instrument]
+fn mismatched_effect_key_is_preserved_and_reconciled_under_invocation_key() {
         let (mut authority, mut plane) = ready_authority();
         plane.mode = ResponseMode::MismatchedEffectKey;
         assert!(matches!(
@@ -1760,7 +1829,8 @@ mod tests {
     }
 
     #[test]
-    fn failure_with_wrong_play_kind_is_rejected_and_preserved() {
+    #[tracing::instrument]
+fn failure_with_wrong_play_kind_is_rejected_and_preserved() {
         let (mut authority, mut plane) = ready_authority();
         plane.mode = ResponseMode::WrongFailurePlayKind;
         assert!(matches!(
@@ -1777,7 +1847,8 @@ mod tests {
     }
 
     #[test]
-    fn tampered_invocation_contract_is_rejected_by_audit_fold() {
+    #[tracing::instrument]
+fn tampered_invocation_contract_is_rejected_by_audit_fold() {
         let (mut authority, mut plane) = ready_authority();
         assert_eq!(compile(&mut authority, &mut plane), PlaybookError::NoPlay);
         let invoke_index = authority
@@ -1839,7 +1910,8 @@ mod tests {
         rejected(tampered);
     }
 
-    fn huddle_person(id: &str, kind: PersonnelKind) -> Personnel {
+    #[tracing::instrument]
+fn huddle_person(id: &str, kind: PersonnelKind) -> Personnel {
         Personnel {
             id: PersonnelId::new(id).unwrap(),
             kind,
@@ -1854,7 +1926,8 @@ mod tests {
         }
     }
 
-    fn huddle_authority() -> Authority {
+    #[tracing::instrument]
+fn huddle_authority() -> Authority {
         let mut authority = Authority::start(
             DriveId::new("drive-huddle").unwrap(),
             TaskContract {
@@ -1889,7 +1962,8 @@ mod tests {
         authority
     }
 
-    fn candidate(id: &str, relevance: u32) -> ParticipantCandidate {
+    #[tracing::instrument]
+fn candidate(id: &str, relevance: u32) -> ParticipantCandidate {
         ParticipantCandidate {
             personnel_id: PersonnelId::new(id).unwrap(),
             dependency_overlap: relevance,
@@ -1901,7 +1975,8 @@ mod tests {
         }
     }
 
-    fn huddle_value() -> HuddleValue {
+    #[tracing::instrument]
+fn huddle_value() -> HuddleValue {
         HuddleValue {
             predicted_rework_avoided: 600,
             expected_failure_reduction: 300,
@@ -1914,7 +1989,8 @@ mod tests {
         }
     }
 
-    fn huddle_request() -> HuddleRequest {
+    #[tracing::instrument]
+fn huddle_request() -> HuddleRequest {
         HuddleRequest {
             scope: HuddleScope::Position,
             trigger_kind: HuddleTriggerKind::Failure,
@@ -1932,7 +2008,8 @@ mod tests {
         }
     }
 
-    fn drive_evidence(authority: &mut Authority, at_ms: u64) -> EvidenceId {
+    #[tracing::instrument]
+fn drive_evidence(authority: &mut Authority, at_ms: u64) -> EvidenceId {
         let evidence = Evidence::seal(
             EvidenceClass::EnvironmentSnapshot,
             json!({"host": "fixture", "note": "huddle observation"}),
@@ -1944,7 +2021,8 @@ mod tests {
         id
     }
 
-    fn huddle_report(participant: &str, current: &str, evidence: &EvidenceId) -> HuddleReport {
+    #[tracing::instrument]
+fn huddle_report(participant: &str, current: &str, evidence: &EvidenceId) -> HuddleReport {
         HuddleReport {
             participant: PersonnelId::new(participant).unwrap(),
             verified_progress: vec![evidence.clone()],
@@ -1963,7 +2041,8 @@ mod tests {
     }
 
     #[test]
-    fn a_huddle_lifecycle_journals_replays_and_moves_assignments() {
+    #[tracing::instrument]
+fn a_huddle_lifecycle_journals_replays_and_moves_assignments() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let admission = authority.open_huddle(huddle_request(), 100).unwrap();
@@ -2064,7 +2143,8 @@ mod tests {
     }
 
     #[test]
-    fn a_second_huddle_on_an_unchanged_field_is_refused() {
+    #[tracing::instrument]
+fn a_second_huddle_on_an_unchanged_field_is_refused() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let admission = authority.open_huddle(huddle_request(), 100).unwrap();
@@ -2113,7 +2193,8 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_contradictions_escalate_scope_and_spawn_a_child_huddle() {
+    #[tracing::instrument]
+fn unresolved_contradictions_escalate_scope_and_spawn_a_child_huddle() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let HuddleAdmission::Open(huddle_id) =
@@ -2156,7 +2237,8 @@ mod tests {
     }
 
     #[test]
-    fn bench_review_follows_committed_huddle_recommendations() {
+    #[tracing::instrument]
+fn bench_review_follows_committed_huddle_recommendations() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let HuddleAdmission::Open(huddle_id) =
@@ -2198,7 +2280,8 @@ mod tests {
         assert_eq!(&replay, authority.state());
     }
 
-    fn outcome_for_bench_test(huddle_id: &playbook_core::HuddleId, ytg: u32) -> HuddleOutcome {
+    #[tracing::instrument]
+fn outcome_for_bench_test(huddle_id: &playbook_core::HuddleId, ytg: u32) -> HuddleOutcome {
         playbook_huddle::HuddleOutcome {
             huddle_id: huddle_id.clone(),
             reconciled_state: SharedStateDelta {
@@ -2224,7 +2307,8 @@ mod tests {
     }
 
     #[test]
-    fn budget_exhaustion_forces_synthesis_from_accumulated_reports() {
+    #[tracing::instrument]
+fn budget_exhaustion_forces_synthesis_from_accumulated_reports() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let HuddleAdmission::Open(huddle_id) =
@@ -2259,7 +2343,8 @@ mod tests {
     }
 
     #[test]
-    fn coherence_reads_healthy_before_any_huddle() {
+    #[tracing::instrument]
+fn coherence_reads_healthy_before_any_huddle() {
         let authority = huddle_authority();
         let reading = authority.coherence();
         assert_eq!(reading.state.debt, 0);
@@ -2269,7 +2354,8 @@ mod tests {
     }
 
     #[test]
-    fn coherence_withholds_the_failure_trigger_while_the_field_moves() {
+    #[tracing::instrument]
+fn coherence_withholds_the_failure_trigger_while_the_field_moves() {
         let mut authority = huddle_authority();
         let mut plane = FixturePlane::ready();
         plane.push_success(
@@ -2299,7 +2385,8 @@ mod tests {
     }
 
     #[test]
-    fn coherence_debt_climbs_with_unresolved_contradictions() {
+    #[tracing::instrument]
+fn coherence_debt_climbs_with_unresolved_contradictions() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let HuddleAdmission::Open(huddle_id) =
@@ -2358,7 +2445,8 @@ mod tests {
         assert_eq!(&replay, authority.state());
     }
 
-    fn dispatch_report(evidence: &EvidenceId, confidence: u64) -> serde_json::Value {
+    #[tracing::instrument]
+fn dispatch_report(evidence: &EvidenceId, confidence: u64) -> serde_json::Value {
         json!({
             "participant": "dispatched",
             "verified_progress": [evidence.as_str()],
@@ -2372,7 +2460,8 @@ mod tests {
     }
 
     #[test]
-    fn collect_huddle_reports_journals_dispatched_reports_and_charges_the_envelope() {
+    #[tracing::instrument]
+fn collect_huddle_reports_journals_dispatched_reports_and_charges_the_envelope() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let HuddleAdmission::Open(huddle_id) =
@@ -2422,7 +2511,8 @@ mod tests {
     }
 
     #[test]
-    fn collect_huddle_reports_isolates_one_participant_failure() {
+    #[tracing::instrument]
+fn collect_huddle_reports_isolates_one_participant_failure() {
         let mut authority = huddle_authority();
         let evidence = drive_evidence(&mut authority, 50);
         let HuddleAdmission::Open(huddle_id) =
@@ -2465,7 +2555,8 @@ mod tests {
     }
 
     #[test]
-    fn collect_huddle_reports_stops_on_exhaustion_and_forces_synthesis() {
+    #[tracing::instrument]
+fn collect_huddle_reports_stops_on_exhaustion_and_forces_synthesis() {
         let mut authority = huddle_authority();
         drive_evidence(&mut authority, 50);
         let HuddleAdmission::Open(huddle_id) =

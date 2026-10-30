@@ -49,13 +49,15 @@ pub struct CersStore {
 
 impl CersStore {
     /// An empty store.
-    pub fn empty() -> Self {
+    pub #[tracing::instrument]
+fn empty() -> Self {
         Self::default()
     }
 
     /// Records an artefact. A duplicate content address is refused: the
     /// store never shadows itself. Insertion keeps the store sorted by id.
-    pub fn record(&mut self, artefact: RecoveryArtefact) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn record(&mut self, artefact: RecoveryArtefact) -> Result<(), PlaybookError> {
         match self.slot(&artefact.id) {
             Ok(_) => {
                 let id = artefact.id;
@@ -75,7 +77,8 @@ impl CersStore {
     /// an outage. A recovered blitz — no recorded failure — matches no
     /// blitz hint: nothing failed there to hunt. Deterministic,
     /// id-ascending.
-    pub fn matching(&self, hint: &ReuseHint) -> Vec<&RecoveryArtefact> {
+    pub #[tracing::instrument]
+fn matching(&self, hint: &ReuseHint) -> Vec<&RecoveryArtefact> {
         self.artefacts
             .iter()
             .filter(|artefact| matches_hint(&artefact.source, hint))
@@ -83,19 +86,22 @@ impl CersStore {
     }
 
     /// Every recorded artefact, id-ascending.
-    pub fn all(&self) -> &[RecoveryArtefact] {
+    pub #[tracing::instrument]
+fn all(&self) -> &[RecoveryArtefact] {
         &self.artefacts
     }
 
     /// How many artefacts the store holds.
-    pub fn total(&self) -> u32 {
+    pub #[tracing::instrument]
+fn total(&self) -> u32 {
         u32::try_from(self.artefacts.len()).unwrap_or(u32::MAX)
     }
 
     /// Marks an artefact consumed. Unknown ids are refused: the store never
     /// records consumption for residue it does not hold. Returns whether
     /// the id was known.
-    pub fn mark_reused(&mut self, id: &EvidenceId) -> bool {
+    pub #[tracing::instrument]
+fn mark_reused(&mut self, id: &EvidenceId) -> bool {
         let known = self.slot(id).is_ok();
         if known {
             self.consumed.insert(id.clone());
@@ -105,7 +111,8 @@ impl CersStore {
 
     /// Reuse rate in parts per million: how many recorded artefacts have
     /// been consumed at least once. An empty store reuses nothing.
-    pub fn reuse_rate_ppm(&self) -> u32 {
+    pub #[tracing::instrument]
+fn reuse_rate_ppm(&self) -> u32 {
         let total = self.total();
         if total == 0 {
             return 0;
@@ -122,13 +129,15 @@ impl CersStore {
 
     /// The sorted position of an id: `Ok(index)` when already recorded,
     /// `Err(index)` for the insertion point that keeps the store sorted.
-    fn slot(&self, id: &EvidenceId) -> Result<usize, usize> {
+    #[tracing::instrument]
+fn slot(&self, id: &EvidenceId) -> Result<usize, usize> {
         self.artefacts
             .binary_search_by(|artefact| artefact.id.cmp(id))
     }
 }
 
 /// Whether an artefact source satisfies a hunt hint.
+#[tracing::instrument]
 fn matches_hint(source: &RecoverySource, hint: &ReuseHint) -> bool {
     match (source, hint) {
         (RecoverySource::FailedPlay { operation, .. }, ReuseHint::Play { operation: wanted }) => {
@@ -157,7 +166,8 @@ mod tests {
     };
     use playbook_core::BlitzId;
 
-    fn record(failure: Option<BlitzFailure>) -> BlitzRecord {
+    #[tracing::instrument]
+fn record(failure: Option<BlitzFailure>) -> BlitzRecord {
         BlitzRecord {
             id: BlitzId::new("blitz-3").unwrap(),
             class: BlitzClass::Instinctive,
@@ -192,7 +202,8 @@ mod tests {
     }
 
     /// Inserted deliberately out of id order.
-    fn populated() -> CersStore {
+    #[tracing::instrument]
+fn populated() -> CersStore {
         let mut store = CersStore::empty();
         store.record(harvest_outage("provider-b", 1)).unwrap();
         store
@@ -203,7 +214,8 @@ mod tests {
     }
 
     #[test]
-    fn the_store_sorts_dedups_and_matches() {
+    #[tracing::instrument]
+fn the_store_sorts_dedups_and_matches() {
         let mut store = populated();
         let ids: Vec<&EvidenceId> = store.all().iter().map(|artefact| &artefact.id).collect();
         let mut sorted = ids.clone();
@@ -258,7 +270,8 @@ mod tests {
     }
 
     #[test]
-    fn reuse_rate_tracks_consumption() {
+    #[tracing::instrument]
+fn reuse_rate_tracks_consumption() {
         let mut store = populated();
         assert_eq!(store.reuse_rate_ppm(), 0);
         let outage = store.matching(&ReuseHint::Outage {

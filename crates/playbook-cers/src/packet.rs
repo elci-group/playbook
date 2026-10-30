@@ -20,7 +20,8 @@ use crate::artefact::{RecoveryArtefact, RecoverySource};
 /// order; the id, failure class, reuse hint, context digest, and timestamp
 /// are never truncated. The serialized packet is scanned for competitive
 /// metadata and refused with [`PlaybookError::AmnesiaLeak`] if it leaks.
-pub fn packet(
+pub #[tracing::instrument]
+fn packet(
     artefact: &RecoveryArtefact,
     max_items_per_list: usize,
 ) -> Result<Value, PlaybookError> {
@@ -49,6 +50,7 @@ pub fn packet(
 
 /// The hunt key a consumer needs to find this artefact again, without the
 /// failed context that produced it.
+#[tracing::instrument]
 fn reuse_hint(source: &RecoverySource) -> Value {
     match source {
         RecoverySource::FailedPlay { operation, .. } => {
@@ -72,7 +74,8 @@ mod tests {
         ToolFailure, ToolFailureKind,
     };
 
-    fn play_artefact(diagnostics: Vec<String>, output_refs: Vec<String>) -> RecoveryArtefact {
+    #[tracing::instrument]
+fn play_artefact(diagnostics: Vec<String>, output_refs: Vec<String>) -> RecoveryArtefact {
         let failure = ToolFailure {
             play_id: PlayId::new("play-7").unwrap(),
             play_kind: PlayKind::TargetedInference,
@@ -103,7 +106,8 @@ mod tests {
     }
 
     #[test]
-    fn packet_truncates_deterministically() {
+    #[tracing::instrument]
+fn packet_truncates_deterministically() {
         let artefact = play_artefact(
             vec!["fact-1".into(), "fact-2".into(), "fact-3".into()],
             vec!["patch-1".into(), "patch-2".into()],
@@ -134,7 +138,8 @@ mod tests {
     }
 
     #[test]
-    fn packet_refuses_competitive_metadata() {
+    #[tracing::instrument]
+fn packet_refuses_competitive_metadata() {
         let clean = play_artefact(vec!["provider returned 503".into()], Vec::new());
         assert!(packet(&clean, 4).is_ok());
         let leaking = play_artefact(

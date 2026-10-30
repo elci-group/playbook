@@ -14,7 +14,8 @@ use crate::domain::BlitzCost;
 /// pass its ceiling is refused; the caller must stop the race instead.
 /// Workers and waves saturate at their ceilings the way huddle rounds do:
 /// counting past the cap is a no-op, not an expansion.
-pub fn consume(
+pub #[tracing::instrument]
+fn consume(
     spent: BlitzCost,
     budget: &BlitzBudget,
     delta: &BlitzCost,
@@ -50,7 +51,8 @@ pub fn consume(
 
 /// True once any budget dimension has reached its ceiling. After this the
 /// race buys nothing further; only the defensive exits remain.
-pub fn exhausted(spent: &BlitzCost, budget: &BlitzBudget) -> bool {
+pub #[tracing::instrument]
+fn exhausted(spent: &BlitzCost, budget: &BlitzBudget) -> bool {
     spent.tokens >= budget.max_tokens
         || spent.cost_microunits >= budget.max_cost_microunits
         || spent.duration_ms >= budget.max_duration_ms
@@ -62,7 +64,8 @@ pub fn exhausted(spent: &BlitzCost, budget: &BlitzBudget) -> bool {
 mod tests {
     use super::*;
 
-    fn envelope() -> BlitzBudget {
+    #[tracing::instrument]
+fn envelope() -> BlitzBudget {
         BlitzBudget {
             max_tokens: 4_000,
             max_cost_microunits: 400_000,
@@ -73,7 +76,8 @@ mod tests {
     }
 
     #[test]
-    fn consumption_stops_at_the_envelope() {
+    #[tracing::instrument]
+fn consumption_stops_at_the_envelope() {
         let budget = envelope();
         let first = consume(
             BlitzCost::zero(),
@@ -121,7 +125,8 @@ mod tests {
     }
 
     #[test]
-    fn workers_and_waves_never_pass_the_ceiling() {
+    #[tracing::instrument]
+fn workers_and_waves_never_pass_the_ceiling() {
         let budget = envelope();
         let spent = consume(
             BlitzCost::zero(),

@@ -7,6 +7,7 @@ use std::time::Duration;
 use playbook_observability::SpanNode;
 use playbook_otlp::{export, wire_span_id, wire_trace_id, OtlpConfig, TimeWindow};
 
+#[tracing::instrument]
 fn trace() -> Vec<SpanNode> {
     vec![
         SpanNode {
@@ -33,6 +34,7 @@ fn trace() -> Vec<SpanNode> {
     ]
 }
 
+#[tracing::instrument]
 fn serve_once(listener: TcpListener, body: &str) -> Vec<u8> {
     let (mut stream, _) = listener.accept().expect("accept");
     stream
@@ -58,6 +60,7 @@ fn serve_once(listener: TcpListener, body: &str) -> Vec<u8> {
 }
 
 #[test]
+#[tracing::instrument]
 fn the_collector_receives_a_valid_otlp_trace() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let port = listener.local_addr().expect("addr").port();
@@ -131,6 +134,7 @@ fn the_collector_receives_a_valid_otlp_trace() {
 }
 
 #[test]
+#[tracing::instrument]
 fn a_failing_collector_reports_its_partial_success() {
     let body = r#"{"partialSuccess":{"errorMessage":"one span dropped"}}"#;
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");

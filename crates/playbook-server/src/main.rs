@@ -4,6 +4,7 @@ use std::process::Command;
 
 const RESTART_GUARD: &str = "PLAYBOOK_THEOSIS_RESTARTED";
 
+#[tracing::instrument]
 fn main() {
     if std::env::args().any(|arg| arg == "--version") {
         println!("playbook-server {}", env!("PLAYBOOK_VERSION"));
@@ -97,6 +98,7 @@ fn main() {
     }
 }
 
+#[tracing::instrument]
 fn automatic_update_check(remote: &str, reference: &str, args: &[String]) -> Result<(), String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
     let installed_before = server_version(&executable)?;
@@ -147,6 +149,7 @@ fn automatic_update_check(remote: &str, reference: &str, args: &[String]) -> Res
     Ok(())
 }
 
+#[tracing::instrument]
 fn server_version(executable: &std::path::Path) -> Result<String, String> {
     let output = Command::new(executable)
         .arg("--version")
@@ -163,6 +166,7 @@ fn server_version(executable: &std::path::Path) -> Result<String, String> {
     Ok(version.to_string())
 }
 
+#[tracing::instrument]
 fn is_semver(value: &str) -> bool {
     let mut components = value.split('.');
     components
@@ -172,6 +176,7 @@ fn is_semver(value: &str) -> bool {
         && value.split('.').count() == 3
 }
 
+#[tracing::instrument]
 fn usage() {
     eprintln!(
         "usage: playbook-server [--bind ADDR] [--port PORT] [--journal-dir DIR] [--otlp URL] [--auto-update --update-remote URL [--update-ref REF]]"

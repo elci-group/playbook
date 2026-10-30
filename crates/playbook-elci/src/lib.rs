@@ -30,8 +30,10 @@ pub enum PlaneResult {
 }
 
 pub trait CapabilityPlane {
-    fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError>;
-    fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError>;
+    #[tracing::instrument]
+fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError>;
+    #[tracing::instrument]
+fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError>;
 }
 
 /// ELCI metadata for huddle-capable personnel. A plane that cannot hold a
@@ -65,7 +67,8 @@ pub enum CostClass {
 /// schema-valid report body comes back. Timeouts, cancellation, and malformed
 /// output are the plane's to report.
 pub trait HuddleDispatch {
-    fn huddle_dispatch(
+    #[tracing::instrument]
+fn huddle_dispatch(
         &mut self,
         packet: &serde_json::Value,
     ) -> Result<serde_json::Value, PlaybookError>;
@@ -79,24 +82,28 @@ pub struct FixtureHuddlePlane {
 }
 
 impl FixtureHuddlePlane {
-    pub fn responding(responses: Vec<Result<Value, String>>) -> Self {
+    pub #[tracing::instrument]
+fn responding(responses: Vec<Result<Value, String>>) -> Self {
         Self {
             responses: responses.into(),
         }
     }
 
-    pub fn push_ok(&mut self, response: Value) {
+    pub #[tracing::instrument]
+fn push_ok(&mut self, response: Value) {
         self.responses.push_back(Ok(response));
     }
 
-    pub fn push_timeout(&mut self) {
+    pub #[tracing::instrument]
+fn push_timeout(&mut self) {
         self.responses
             .push_back(Err("participant timed out".into()));
     }
 }
 
 impl HuddleDispatch for FixtureHuddlePlane {
-    fn huddle_dispatch(&mut self, _packet: &Value) -> Result<Value, PlaybookError> {
+    #[tracing::instrument]
+fn huddle_dispatch(&mut self, _packet: &Value) -> Result<Value, PlaybookError> {
         match self.responses.pop_front() {
             Some(Ok(response)) => Ok(response),
             Some(Err(reason)) => Err(PlaybookError::Reconcile(reason)),
@@ -130,7 +137,8 @@ pub struct FixturePlane {
 }
 
 impl FixturePlane {
-    pub fn mvp() -> Self {
+    pub #[tracing::instrument]
+fn mvp() -> Self {
         let mut plane = Self::base();
         plane.push(
             "inspect",
@@ -189,7 +197,8 @@ impl FixturePlane {
     }
 
     /// Two timeouts, then a pass. Used to measure a control loop's duplicate failures.
-    pub fn failing_twice() -> Self {
+    pub #[tracing::instrument]
+fn failing_twice() -> Self {
         let mut plane = Self::base();
         plane.push(
             "test.integration",
@@ -223,11 +232,13 @@ impl FixturePlane {
         plane
     }
 
-    pub fn ready() -> Self {
+    pub #[tracing::instrument]
+fn ready() -> Self {
         Self::base()
     }
 
-    pub fn empty() -> Self {
+    pub #[tracing::instrument]
+fn empty() -> Self {
         Self {
             generation: 0,
             capabilities: Vec::new(),
@@ -237,11 +248,13 @@ impl FixturePlane {
 
     /// Align a recovered plane with the drive's capability generation. The
     /// script queue restarts; only the staleness check is resumed.
-    pub fn resume_generation(&mut self, generation: u64) {
+    pub #[tracing::instrument]
+fn resume_generation(&mut self, generation: u64) {
         self.generation = generation;
     }
 
-    pub fn push_failure(&mut self, operation: &str, kind: ToolFailureKind) {
+    pub #[tracing::instrument]
+fn push_failure(&mut self, operation: &str, kind: ToolFailureKind) {
         self.push(
             operation,
             Script::Failure {
@@ -252,7 +265,8 @@ impl FixturePlane {
         );
     }
 
-    pub fn push_success(&mut self, operation: &str, evidence: Evidence, cost: DriveBudget) {
+    pub #[tracing::instrument]
+fn push_success(&mut self, operation: &str, evidence: Evidence, cost: DriveBudget) {
         self.push(
             operation,
             Script::Success {
@@ -264,7 +278,8 @@ impl FixturePlane {
         );
     }
 
-    pub fn push_unresolved(&mut self, operation: &str, evidence: Evidence, cost: DriveBudget) {
+    pub #[tracing::instrument]
+fn push_unresolved(&mut self, operation: &str, evidence: Evidence, cost: DriveBudget) {
         self.push(
             operation,
             Script::Success {
@@ -282,7 +297,8 @@ impl FixturePlane {
         );
     }
 
-    fn base() -> Self {
+    #[tracing::instrument]
+fn base() -> Self {
         let capability = Capability {
             id: CapabilityId::new("elci.cargo").expect("static id"),
             version: "1".into(),
@@ -316,7 +332,8 @@ impl FixturePlane {
         }
     }
 
-    fn push(&mut self, operation: &str, script: Script) {
+    #[tracing::instrument]
+fn push(&mut self, operation: &str, script: Script) {
         self.scripts
             .entry(operation.to_string())
             .or_default()
@@ -325,7 +342,8 @@ impl FixturePlane {
 }
 
 impl CapabilityPlane for FixturePlane {
-    fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+    #[tracing::instrument]
+fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
         self.generation = self.generation.saturating_add(1);
         Ok(CapabilitySnapshot {
             generation: self.generation,
@@ -333,7 +351,8 @@ impl CapabilityPlane for FixturePlane {
         })
     }
 
-    fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
+    #[tracing::instrument]
+fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
         if execution.capability_generation != self.generation {
             return Err(PlaybookError::StaleCapability);
         }
@@ -386,7 +405,8 @@ impl CapabilityPlane for FixturePlane {
     }
 }
 
-pub fn missing_evidence(gates: &[Gate], capabilities: &[Capability]) -> Vec<EvidenceClass> {
+pub #[tracing::instrument]
+fn missing_evidence(gates: &[Gate], capabilities: &[Capability]) -> Vec<EvidenceClass> {
     let mut missing = Vec::new();
     for gate in gates {
         if !gate.mandatory || gate.is_terminal() {
@@ -406,7 +426,8 @@ pub fn missing_evidence(gates: &[Gate], capabilities: &[Capability]) -> Vec<Evid
     missing
 }
 
-pub fn classify_status(code: u16) -> ToolFailureKind {
+pub #[tracing::instrument]
+fn classify_status(code: u16) -> ToolFailureKind {
     match code {
         429 => ToolFailureKind::RateLimit,
         401 | 403 => ToolFailureKind::Authorization,
@@ -418,6 +439,7 @@ pub fn classify_status(code: u16) -> ToolFailureKind {
     }
 }
 
+#[tracing::instrument]
 fn failure(
     execution: &PlayExecution,
     kind: ToolFailureKind,
@@ -439,6 +461,7 @@ fn failure(
     }
 }
 
+#[tracing::instrument]
 fn tokens(tokens: u64) -> DriveBudget {
     DriveBudget {
         tokens,
@@ -448,10 +471,12 @@ fn tokens(tokens: u64) -> DriveBudget {
     }
 }
 
+#[tracing::instrument]
 fn seal(class: EvidenceClass, body: Value, at_ms: u64) -> Evidence {
     Evidence::seal(class, body, at_ms).expect("fixture evidence")
 }
 
+#[tracing::instrument]
 fn test_body(gate: &str, suite: &str, exit_code: i64, passed: u64, failed: u64) -> Value {
     json!({
         "gate_id": gate,
@@ -471,7 +496,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn status_codes_map_to_failure_kinds() {
+    #[tracing::instrument]
+fn status_codes_map_to_failure_kinds() {
         assert_eq!(classify_status(429), ToolFailureKind::RateLimit);
         assert_eq!(classify_status(401), ToolFailureKind::Authorization);
         assert_eq!(classify_status(403), ToolFailureKind::Authorization);
@@ -486,7 +512,8 @@ mod tests {
     }
 
     #[test]
-    fn fixture_plane_exposes_verified_compiler_evidence() {
+    #[tracing::instrument]
+fn fixture_plane_exposes_verified_compiler_evidence() {
         use playbook_core::{
             CapabilityId, DriveId, PersonnelId, PlayId, PlayKind, RetryPolicy, SideEffectClass,
         };

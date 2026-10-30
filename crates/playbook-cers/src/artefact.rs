@@ -76,14 +76,16 @@ pub struct RecoveryArtefact {
 impl RecoveryArtefact {
     /// The placeholder id of a not-yet-sealed artefact. [`Self::seal`]
     /// replaces it with the content address.
-    pub(crate) fn unsealed_id() -> EvidenceId {
+    pub(crate) #[tracing::instrument]
+fn unsealed_id() -> EvidenceId {
         EvidenceId::new("unsealed").expect("the unsealed marker is a valid id")
     }
 
     /// Seal: compute the content-addressed id from the canonical bytes of
     /// the whole artefact. The context digest is recomputed first, so a
     /// sealed artefact never carries a stale digest. Deterministic.
-    pub fn seal(mut self) -> Result<Self, PlaybookError> {
+    pub #[tracing::instrument]
+fn seal(mut self) -> Result<Self, PlaybookError> {
         self.context_digest = sha256_hex(&canonical_bytes(&self.content_fingerprint())?);
         let mut whole = serde_json::to_value(&self).map_err(PlaybookError::json)?;
         if let Value::Object(ref mut fields) = whole {
@@ -95,7 +97,8 @@ impl RecoveryArtefact {
 
     /// The artefact is intact: the context digest matches the harvested
     /// content and the id matches the whole.
-    pub fn verify(&self) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn verify(&self) -> Result<(), PlaybookError> {
         let sealed = self.clone().seal()?;
         if sealed.id != self.id || sealed.context_digest != self.context_digest {
             return Err(PlaybookError::DigestMismatch);
@@ -105,7 +108,8 @@ impl RecoveryArtefact {
 
     /// The canonical fingerprint over the harvested content: everything
     /// except the id and the context digest itself.
-    fn content_fingerprint(&self) -> Value {
+    #[tracing::instrument]
+fn content_fingerprint(&self) -> Value {
         serde_json::json!({
             "schema_version": SCHEMA_VERSION,
             "source": self.source,
@@ -125,7 +129,8 @@ impl RecoveryArtefact {
 mod tests {
     use super::*;
 
-    fn artefact(fact: &str) -> RecoveryArtefact {
+    #[tracing::instrument]
+fn artefact(fact: &str) -> RecoveryArtefact {
         RecoveryArtefact {
             id: RecoveryArtefact::unsealed_id(),
             source: RecoverySource::ProviderOutage {
@@ -146,7 +151,8 @@ mod tests {
     }
 
     #[test]
-    fn sealing_is_deterministic_and_content_addressed() {
+    #[tracing::instrument]
+fn sealing_is_deterministic_and_content_addressed() {
         let left = artefact("outage recorded");
         let right = artefact("outage recorded");
         assert_eq!(left, right);
@@ -156,7 +162,8 @@ mod tests {
     }
 
     #[test]
-    fn verify_refuses_tampering() {
+    #[tracing::instrument]
+fn verify_refuses_tampering() {
         let sealed = artefact("outage recorded");
         sealed.verify().unwrap();
 

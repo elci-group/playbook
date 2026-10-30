@@ -58,7 +58,8 @@ pub struct ToolPlane {
 impl ToolPlane {
     /// Build a plane bound to a real working directory and a real
     /// allowlist. An empty allowlist is a plane that can only refuse.
-    pub fn new(working_dir: impl Into<PathBuf>, commands: BTreeMap<String, ToolCommand>) -> Self {
+    pub #[tracing::instrument]
+fn new(working_dir: impl Into<PathBuf>, commands: BTreeMap<String, ToolCommand>) -> Self {
         Self {
             working_dir: working_dir.into(),
             generation: 1,
@@ -67,23 +68,27 @@ impl ToolPlane {
         }
     }
 
-    pub fn with_generation(mut self, generation: u64) -> Self {
+    pub #[tracing::instrument]
+fn with_generation(mut self, generation: u64) -> Self {
         self.generation = generation.max(1);
         self
     }
 
-    pub fn generation(&self) -> u64 {
+    pub #[tracing::instrument]
+fn generation(&self) -> u64 {
         self.generation
     }
 
-    pub fn executed(&self) -> u32 {
+    pub #[tracing::instrument]
+fn executed(&self) -> u32 {
         self.executed
     }
 
     /// The capabilities this plane actually offers, derived from the
     /// allowlist. `discover` runs no command: the allowlist is observable
     /// without executing anything.
-    fn capabilities(&self) -> Vec<Capability> {
+    #[tracing::instrument]
+fn capabilities(&self) -> Vec<Capability> {
         vec![Capability {
             id: CapabilityId::new("live.tool")
                 .unwrap_or_else(|_| CapabilityId::new("live.tool.fallback").expect("fallback id")),
@@ -109,7 +114,8 @@ impl ToolPlane {
         }]
     }
 
-    fn failure(
+    #[tracing::instrument]
+fn failure(
         &self,
         execution: &playbook_core::PlayExecution,
         kind: ToolFailureKind,
@@ -136,6 +142,7 @@ impl ToolPlane {
     }
 }
 
+#[tracing::instrument]
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -143,6 +150,7 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+#[tracing::instrument]
 fn rfc3339_now() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -154,6 +162,7 @@ fn rfc3339_now() -> String {
 /// Run one command under a hard deadline. Polls rather than blocking so the
 /// timeout is enforced by this plane; a timed-out process is killed, and
 /// its effect is unknown.
+#[tracing::instrument]
 fn run_under_deadline(
     program: &str,
     args: &[String],
@@ -208,19 +217,22 @@ fn run_under_deadline(
     }
 }
 
+#[tracing::instrument]
 fn timeout_marker() -> PlaybookError {
     PlaybookError::Io("__timeout__".into())
 }
 
 impl CapabilityPlane for ToolPlane {
-    fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+    #[tracing::instrument]
+fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
         Ok(CapabilitySnapshot {
             generation: self.generation,
             capabilities: self.capabilities(),
         })
     }
 
-    fn execute(
+    #[tracing::instrument]
+fn execute(
         &mut self,
         execution: &playbook_core::PlayExecution,
     ) -> Result<PlaneResult, PlaybookError> {
@@ -306,6 +318,7 @@ impl CapabilityPlane for ToolPlane {
     }
 }
 
+#[tracing::instrument]
 fn diagnostics_from(stderr: &str, exit_code: i32) -> Vec<String> {
     let mut lines: Vec<String> = stderr
         .lines()
@@ -322,6 +335,7 @@ fn diagnostics_from(stderr: &str, exit_code: i32) -> Vec<String> {
 /// Seal the observed outcome as the evidence class the command declared.
 /// The sealed body binds the report to the run: its output digest, its exit
 /// code, and the gate it targets.
+#[tracing::instrument]
 fn seal_outcome(
     command: &ToolCommand,
     exit_code: i32,
@@ -369,7 +383,8 @@ mod tests {
     use super::*;
     use playbook_core::{Down, DriveId, PersonnelId, PlayId, RetryPolicy};
 
-    fn command(program: &str, args: &[&str], class: EvidenceClass) -> (String, ToolCommand) {
+    #[tracing::instrument]
+fn command(program: &str, args: &[&str], class: EvidenceClass) -> (String, ToolCommand) {
         (
             "demo".into(),
             ToolCommand {
@@ -381,7 +396,8 @@ mod tests {
         )
     }
 
-    fn execution(operation: &str, timeout_ms: u64) -> playbook_core::PlayExecution {
+    #[tracing::instrument]
+fn execution(operation: &str, timeout_ms: u64) -> playbook_core::PlayExecution {
         playbook_core::PlayExecution {
             drive_id: DriveId::new("drive-live").unwrap(),
             play_id: PlayId::new("play-1").unwrap(),
@@ -407,12 +423,14 @@ mod tests {
         }
     }
 
-    fn plane(pairs: Vec<(String, ToolCommand)>) -> ToolPlane {
+    #[tracing::instrument]
+fn plane(pairs: Vec<(String, ToolCommand)>) -> ToolPlane {
         ToolPlane::new("/tmp", pairs.into_iter().collect())
     }
 
     #[test]
-    fn a_real_command_runs_and_seals_its_outcome() {
+    #[tracing::instrument]
+fn a_real_command_runs_and_seals_its_outcome() {
         let mut commands = BTreeMap::new();
         commands.insert(
             "demo".into(),
@@ -446,7 +464,8 @@ mod tests {
     }
 
     #[test]
-    fn a_failing_command_is_a_measured_failure_with_diagnostics() {
+    #[tracing::instrument]
+fn a_failing_command_is_a_measured_failure_with_diagnostics() {
         let mut commands = BTreeMap::new();
         commands.insert(
             "demo".into(),
@@ -467,7 +486,8 @@ mod tests {
     }
 
     #[test]
-    fn the_deadline_is_enforced_by_the_plane_and_the_effect_is_unknown() {
+    #[tracing::instrument]
+fn the_deadline_is_enforced_by_the_plane_and_the_effect_is_unknown() {
         let mut commands = BTreeMap::new();
         commands.insert(
             "demo".into(),
@@ -494,7 +514,8 @@ mod tests {
     }
 
     #[test]
-    fn an_unallowlisted_operation_is_refused_not_improvised() {
+    #[tracing::instrument]
+fn an_unallowlisted_operation_is_refused_not_improvised() {
         let mut live = plane(vec![command(
             "/bin/echo",
             &["x"],
@@ -510,7 +531,8 @@ mod tests {
     }
 
     #[test]
-    fn discover_offers_exactly_the_allowlist_and_nothing_else() {
+    #[tracing::instrument]
+fn discover_offers_exactly_the_allowlist_and_nothing_else() {
         let mut live = plane(vec![command(
             "/bin/echo",
             &["x"],
@@ -528,7 +550,8 @@ mod tests {
     }
 
     #[test]
-    fn test_reports_seal_the_full_scored_shape() {
+    #[tracing::instrument]
+fn test_reports_seal_the_full_scored_shape() {
         let mut commands = BTreeMap::new();
         commands.insert(
             "demo".into(),

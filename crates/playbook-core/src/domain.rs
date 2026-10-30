@@ -19,7 +19,8 @@ pub enum Down {
 }
 
 impl Down {
-    pub fn machine_id(self) -> &'static str {
+    pub #[tracing::instrument]
+fn machine_id(self) -> &'static str {
         match self {
             Self::FirstDown => "FIRST_DOWN",
             Self::SecondDownLoss => "SECOND_DOWN_LOSS",
@@ -31,7 +32,8 @@ impl Down {
         }
     }
 
-    pub fn presentation(self) -> &'static str {
+    pub #[tracing::instrument]
+fn presentation(self) -> &'static str {
         match self {
             Self::FirstDown => "1st Down",
             Self::SecondDownLoss => "2nd Down — Negative Yardage",
@@ -69,7 +71,8 @@ pub enum ToolFailureKind {
 }
 
 impl ToolFailureKind {
-    pub fn failure_class(self) -> FailureClass {
+    pub #[tracing::instrument]
+fn failure_class(self) -> FailureClass {
         match self {
             Self::InvalidInput => FailureClass::ValidationFailure,
             Self::Environment => FailureClass::EnvironmentFailure,
@@ -83,7 +86,8 @@ impl ToolFailureKind {
         }
     }
 
-    pub fn stops_repetition(self) -> bool {
+    pub #[tracing::instrument]
+fn stops_repetition(self) -> bool {
         matches!(self, Self::Authorization)
     }
 }
@@ -113,7 +117,8 @@ pub enum PersonnelKind {
 
 impl PersonnelKind {
     /// Lower tiers are asked first. Deterministic capability outranks model prestige.
-    pub fn tier(self) -> u8 {
+    pub #[tracing::instrument]
+fn tier(self) -> u8 {
         match self {
             Self::Tool | Self::Toolchain | Self::DeterministicProcedure => 0,
             Self::Model => 1,
@@ -122,7 +127,8 @@ impl PersonnelKind {
         }
     }
 
-    pub fn deterministic(self) -> bool {
+    pub #[tracing::instrument]
+fn deterministic(self) -> bool {
         self.tier() == 0
     }
 }
@@ -196,7 +202,8 @@ pub enum EvidenceClass {
 }
 
 impl EvidenceClass {
-    pub fn can_satisfy_gate(self) -> bool {
+    pub #[tracing::instrument]
+fn can_satisfy_gate(self) -> bool {
         !matches!(
             self,
             Self::NarrativeClaim | Self::GateTransition | Self::CapabilitySnapshot
@@ -279,7 +286,8 @@ pub struct Waiver {
 }
 
 impl Waiver {
-    pub fn new(
+    pub #[tracing::instrument]
+fn new(
         authority: impl Into<String>,
         reason: impl Into<String>,
     ) -> Result<Self, PlaybookError> {
@@ -310,7 +318,8 @@ pub struct Gate {
 }
 
 impl Gate {
-    pub fn declare(
+    pub #[tracing::instrument]
+fn declare(
         id: GateId,
         description: impl Into<String>,
         weight_ppm: u32,
@@ -339,7 +348,8 @@ impl Gate {
         })
     }
 
-    pub fn effective_satisfaction_ppm(&self) -> u32 {
+    pub #[tracing::instrument]
+fn effective_satisfaction_ppm(&self) -> u32 {
         if self.state == GateState::Waived {
             PPM_SCALE
         } else {
@@ -347,7 +357,8 @@ impl Gate {
         }
     }
 
-    pub fn is_terminal(&self) -> bool {
+    pub #[tracing::instrument]
+fn is_terminal(&self) -> bool {
         matches!(self.state, GateState::Satisfied | GateState::Waived)
     }
 }
@@ -366,11 +377,13 @@ pub struct DriveBudget {
 }
 
 impl DriveBudget {
-    pub fn zero() -> Self {
+    pub #[tracing::instrument]
+fn zero() -> Self {
         Self::default()
     }
 
-    pub fn any_positive(self) -> bool {
+    pub #[tracing::instrument]
+fn any_positive(self) -> bool {
         self.tokens > 0
             || self.monetary_cost_micros > 0
             || self.wall_clock_ms > 0
@@ -381,7 +394,8 @@ impl DriveBudget {
             || self.provider_quota > 0
     }
 
-    pub fn checked_add(self, other: Self) -> Result<Self, PlaybookError> {
+    pub #[tracing::instrument]
+fn checked_add(self, other: Self) -> Result<Self, PlaybookError> {
         Ok(Self {
             tokens: add_dim(self.tokens, other.tokens)?,
             monetary_cost_micros: add_dim(self.monetary_cost_micros, other.monetary_cost_micros)?,
@@ -394,7 +408,8 @@ impl DriveBudget {
         })
     }
 
-    pub fn fits_within(self, ceiling: Self) -> bool {
+    pub #[tracing::instrument]
+fn fits_within(self, ceiling: Self) -> bool {
         self.tokens <= ceiling.tokens
             && self.monetary_cost_micros <= ceiling.monetary_cost_micros
             && self.wall_clock_ms <= ceiling.wall_clock_ms
@@ -405,7 +420,8 @@ impl DriveBudget {
             && self.provider_quota <= ceiling.provider_quota
     }
 
-    pub fn remaining(self, consumed: Self) -> Self {
+    pub #[tracing::instrument]
+fn remaining(self, consumed: Self) -> Self {
         Self {
             tokens: self.tokens.saturating_sub(consumed.tokens),
             monetary_cost_micros: self
@@ -425,6 +441,7 @@ impl DriveBudget {
     }
 }
 
+#[tracing::instrument]
 fn add_dim(left: u64, right: u64) -> Result<u64, PlaybookError> {
     left.checked_add(right)
         .ok_or(PlaybookError::BudgetExhausted)
@@ -444,11 +461,13 @@ pub struct HuddleBudget {
 }
 
 impl HuddleBudget {
-    pub fn zero() -> Self {
+    pub #[tracing::instrument]
+fn zero() -> Self {
         Self::default()
     }
 
-    pub fn fits(&self, tokens: u64, cost_microunits: u64, duration_ms: u64, rounds: u16) -> bool {
+    pub #[tracing::instrument]
+fn fits(&self, tokens: u64, cost_microunits: u64, duration_ms: u64, rounds: u16) -> bool {
         tokens <= self.max_tokens
             && cost_microunits <= self.max_cost_microunits
             && duration_ms <= self.max_duration_ms
@@ -470,11 +489,13 @@ pub struct BlitzBudget {
 }
 
 impl BlitzBudget {
-    pub fn zero() -> Self {
+    pub #[tracing::instrument]
+fn zero() -> Self {
         Self::default()
     }
 
-    pub fn fits(
+    pub #[tracing::instrument]
+fn fits(
         &self,
         tokens: u64,
         cost_microunits: u64,
@@ -512,7 +533,8 @@ pub struct BudgetWeights {
 }
 
 impl BudgetWeights {
-    pub fn pairs(self, initial: DriveBudget, remaining: DriveBudget) -> Vec<(u32, u64, u64)> {
+    pub #[tracing::instrument]
+fn pairs(self, initial: DriveBudget, remaining: DriveBudget) -> Vec<(u32, u64, u64)> {
         vec![
             (self.tokens, initial.tokens, remaining.tokens),
             (
@@ -556,7 +578,8 @@ pub struct Evidence {
 }
 
 impl Evidence {
-    pub fn seal(
+    pub #[tracing::instrument]
+fn seal(
         class: EvidenceClass,
         body: Value,
         observed_at_ms: u64,
@@ -582,7 +605,8 @@ impl Evidence {
         })
     }
 
-    pub fn verify(&self) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn verify(&self) -> Result<(), PlaybookError> {
         let sealed = Self::seal(self.class, self.body.clone(), self.observed_at_ms)?;
         if sealed.id != self.id {
             Err(PlaybookError::DigestMismatch)
@@ -779,7 +803,8 @@ pub struct ContinuationPackage {
 }
 
 impl ContinuationPackage {
-    pub fn seal_unchecked(mut self) -> Result<Self, PlaybookError> {
+    pub #[tracing::instrument]
+fn seal_unchecked(mut self) -> Result<Self, PlaybookError> {
         accept_schema(self.schema_version)?;
         if self.magic != SCHEMA_MAGIC {
             return Err(PlaybookError::Schema(self.schema_version));
@@ -794,7 +819,8 @@ impl ContinuationPackage {
     }
 }
 
-pub fn forbidden_competitive_keys() -> &'static [&'static str] {
+pub #[tracing::instrument]
+fn forbidden_competitive_keys() -> &'static [&'static str] {
     &[
         "previous_model_identity",
         "previous_model_self_assessed_confidence",
@@ -814,7 +840,8 @@ pub fn forbidden_competitive_keys() -> &'static [&'static str] {
     ]
 }
 
-pub fn leaks_competitive_metadata(bytes: &[u8]) -> bool {
+pub #[tracing::instrument]
+fn leaks_competitive_metadata(bytes: &[u8]) -> bool {
     let text = String::from_utf8_lossy(bytes);
     forbidden_competitive_keys()
         .iter()
@@ -905,7 +932,8 @@ pub enum EvaluationBranch {
 
 impl EvaluationBranch {
     /// The journal key.
-    pub fn key(self) -> &'static str {
+    pub #[tracing::instrument]
+fn key(self) -> &'static str {
         match self {
             Self::Advance => "advance",
             Self::Huddle => "huddle",
@@ -917,7 +945,8 @@ impl EvaluationBranch {
     }
 
     /// Parse a journal key back.
-    pub fn from_key(key: &str) -> Option<Self> {
+    pub #[tracing::instrument]
+fn from_key(key: &str) -> Option<Self> {
         match key {
             "advance" => Some(Self::Advance),
             "huddle" => Some(Self::Huddle),
@@ -931,7 +960,8 @@ impl EvaluationBranch {
 }
 
 /// Keys a model must not be able to mark complete by assertion.
-pub fn narrative_has_no_weight(class: EvidenceClass) -> bool {
+pub #[tracing::instrument]
+fn narrative_has_no_weight(class: EvidenceClass) -> bool {
     matches!(class, EvidenceClass::NarrativeClaim)
 }
 
@@ -952,7 +982,8 @@ pub struct TtDirective {
 
 impl TtDirective {
     /// Seal the specification. An empty specification is no directive.
-    pub fn seal(mut self) -> Result<Self, PlaybookError> {
+    pub #[tracing::instrument]
+fn seal(mut self) -> Result<Self, PlaybookError> {
         if self.specification.trim().is_empty() {
             return Err(PlaybookError::Evidence(
                 "a directive requires a specification".into(),
@@ -969,7 +1000,8 @@ impl TtDirective {
     }
 
     /// The reported specification is exactly the sealed one.
-    pub fn spec_matches(&self, reported_hash: &str) -> bool {
+    pub #[tracing::instrument]
+fn spec_matches(&self, reported_hash: &str) -> bool {
         reported_hash == self.specification_hash
     }
 }
@@ -986,6 +1018,7 @@ pub struct TinkerReport {
     pub evidence_refs: Vec<EvidenceId>,
 }
 
-pub fn check_ppm(value: u32) -> Result<Ppm, PlaybookError> {
+pub #[tracing::instrument]
+fn check_ppm(value: u32) -> Result<Ppm, PlaybookError> {
     Ppm::new(value)
 }

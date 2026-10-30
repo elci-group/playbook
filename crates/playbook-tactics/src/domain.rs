@@ -69,7 +69,8 @@ pub struct TacticalContext {
 impl TacticalContext {
     /// Short-YTG derivation: within the last quarter of the reference
     /// distance, completion is near and concentration outranks breadth.
-    pub fn is_short_ytg(ytg_milli: u32, reference_milli: u32) -> bool {
+    pub #[tracing::instrument]
+fn is_short_ytg(ytg_milli: u32, reference_milli: u32) -> bool {
         reference_milli > 0 && ytg_milli * 4 <= reference_milli
     }
 }
@@ -109,7 +110,8 @@ pub enum TacticalTrigger {
 
 impl TacticalTrigger {
     /// Evaluate against the measured context. Deterministic and total.
-    pub fn evaluate(&self, context: &TacticalContext) -> bool {
+    pub #[tracing::instrument]
+fn evaluate(&self, context: &TacticalContext) -> bool {
         match self {
             Self::Always => true,
             Self::ProblemBreadthAtLeast { ppm } => context.problem_breadth_ppm >= *ppm,
@@ -152,7 +154,8 @@ pub struct PersonnelShape {
 
 impl PersonnelShape {
     /// Total deployed personnel.
-    pub fn deployed(&self) -> u16 {
+    pub #[tracing::instrument]
+fn deployed(&self) -> u16 {
         self.primary_executors
             .saturating_add(self.support)
             .saturating_add(self.reserves)
@@ -164,7 +167,8 @@ impl PersonnelShape {
     /// assigns an empty domain, never double-books one person into the same
     /// domain, and leaves no domain jointly owned without at least two
     /// owners.
-    pub fn validate(&self) -> Result<(), PlaybookError> {
+    pub #[tracing::instrument]
+fn validate(&self) -> Result<(), PlaybookError> {
         if self.primary_executors == 0 && self.observers == 0 {
             return Err(tactics_refusal("formation deploys nobody"));
         }
@@ -197,7 +201,8 @@ impl PersonnelShape {
 use playbook_core::PlaybookError;
 
 /// The error a tactical rule records when it refuses.
-pub fn tactics_refusal(reason: &str) -> PlaybookError {
+pub #[tracing::instrument]
+fn tactics_refusal(reason: &str) -> PlaybookError {
     PlaybookError::Inadmissible("tactics".into(), reason.into())
 }
 
@@ -276,7 +281,8 @@ pub struct TacticalBudget {
 }
 
 impl TacticalBudget {
-    pub fn exhausted(&self, spent_tokens: u64, spent_micros: u64, plays: u16) -> bool {
+    pub #[tracing::instrument]
+fn exhausted(&self, spent_tokens: u64, spent_micros: u64, plays: u16) -> bool {
         spent_tokens >= self.max_tokens
             || spent_micros >= self.max_cost_microunits
             || plays >= self.max_plays
@@ -349,12 +355,14 @@ pub struct TacticalDirective {
 
 impl TacticalDirective {
     /// Trigger holds AND the economics clear the threshold.
-    pub fn evaluate_admission(&self, context: &TacticalContext, threshold_ppm: u32) -> Admission {
+    pub #[tracing::instrument]
+fn evaluate_admission(&self, context: &TacticalContext, threshold_ppm: u32) -> Admission {
         crate::admission::admit(self, context, threshold_ppm)
     }
 
     /// The net expected value in ppm: benefit minus cost minus risk.
-    pub fn net_value_ppm(&self) -> i64 {
+    pub #[tracing::instrument]
+fn net_value_ppm(&self) -> i64 {
         i64::from(self.benefit_ppm.min(1_000))
             - i64::from(self.cost_ppm.min(1_000))
             - i64::from(self.risk_ppm.min(1_000))
@@ -383,7 +391,8 @@ pub struct TacticalOutcome {
 mod tests {
     use super::*;
 
-    fn context() -> TacticalContext {
+    #[tracing::instrument]
+fn context() -> TacticalContext {
         TacticalContext {
             problem_breadth_ppm: 400,
             domain_coupling_ppm: 300,
@@ -401,7 +410,8 @@ mod tests {
     }
 
     #[test]
-    fn triggers_evaluate_deterministically_and_compositionally() {
+    #[tracing::instrument]
+fn triggers_evaluate_deterministically_and_compositionally() {
         let broad = TacticalTrigger::ProblemBreadthAtLeast { ppm: 300 };
         assert!(broad.evaluate(&context()));
         let loose_and_broad = TacticalTrigger::All(vec![
@@ -423,7 +433,8 @@ mod tests {
     }
 
     #[test]
-    fn shapes_validate_ownership_rules() {
+    #[tracing::instrument]
+fn shapes_validate_ownership_rules() {
         let shape = PersonnelShape {
             primary_executors: 2,
             support: 1,
@@ -457,7 +468,8 @@ mod tests {
     }
 
     #[test]
-    fn budgets_exhaust_at_their_ceilings() {
+    #[tracing::instrument]
+fn budgets_exhaust_at_their_ceilings() {
         let budget = TacticalBudget {
             max_tokens: 1_000,
             max_cost_microunits: 100_000,
@@ -470,7 +482,8 @@ mod tests {
     }
 
     #[test]
-    fn short_ytg_is_the_last_quarter_of_the_reference() {
+    #[tracing::instrument]
+fn short_ytg_is_the_last_quarter_of_the_reference() {
         assert!(!TacticalContext::is_short_ytg(3_000, 10_000));
         assert!(TacticalContext::is_short_ytg(2_500, 10_000));
         assert!(!TacticalContext::is_short_ytg(2_500, 0));

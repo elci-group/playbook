@@ -14,6 +14,7 @@ use playbook_core::{
     PersonnelKind, PlayDefinition, PlayKind, PlaybookError, SideEffectClass, SCHEMA_VERSION,
 };
 
+#[tracing::instrument]
 fn default_prior_min_samples() -> u32 {
     3
 }
@@ -88,7 +89,8 @@ pub struct HuddlePolicy {
 impl HuddlePolicy {
     /// The envelope for a scope key: position, unit, coordinator, team, or
     /// franchise.
-    pub fn budget(&self, scope: &str) -> HuddleBudget {
+    pub #[tracing::instrument]
+fn budget(&self, scope: &str) -> HuddleBudget {
         match scope {
             "position" => self.budgets.position,
             "unit" => self.budgets.unit,
@@ -182,7 +184,8 @@ pub struct BlitzPolicy {
 
 impl BlitzPolicy {
     /// The envelope for a resource-mode key.
-    pub fn budget(&self, mode: &str) -> BlitzBudget {
+    pub #[tracing::instrument]
+fn budget(&self, mode: &str) -> BlitzBudget {
         match mode {
             "latency_critical" => self.budgets.latency_critical,
             "power_critical" => self.budgets.power_critical,
@@ -220,18 +223,21 @@ pub struct Policy {
 }
 
 impl Policy {
-    pub fn conversion_threshold(&self, workload_class: &str) -> u32 {
+    pub #[tracing::instrument]
+fn conversion_threshold(&self, workload_class: &str) -> u32 {
         self.workload_thresholds
             .get(workload_class)
             .copied()
             .unwrap_or(self.conversion_threshold_ppm)
     }
 
-    pub fn play(&self, operation: &str) -> Option<&PlayDefinition> {
+    pub #[tracing::instrument]
+fn play(&self, operation: &str) -> Option<&PlayDefinition> {
         self.plays.iter().find(|play| play.operation == operation)
     }
 
-    pub fn builtin() -> Self {
+    pub #[tracing::instrument]
+fn builtin() -> Self {
         let mut workload_thresholds = BTreeMap::new();
         workload_thresholds.insert("engineering".to_string(), 450_000);
         Self {
@@ -410,7 +416,8 @@ impl Policy {
     }
 
     /// Same plays, with the rush line low enough that a 40% reserve still rushes.
-    pub fn pass_heavy_contrast() -> Self {
+    pub #[tracing::instrument]
+fn pass_heavy_contrast() -> Self {
         let mut policy = Self::builtin();
         policy.version = "playbook-policy-pass-heavy".to_string();
         policy.rush_budget_fraction_ppm = 100_000;
@@ -418,7 +425,8 @@ impl Policy {
     }
 }
 
-pub fn from_str(text: &str) -> Result<Policy, PlaybookError> {
+pub #[tracing::instrument]
+fn from_str(text: &str) -> Result<Policy, PlaybookError> {
     let policy: Policy = serde_json::from_str(text).map_err(PlaybookError::json)?;
     accept_schema(policy.schema_version)?;
     if policy.version.is_empty() || policy.plays.is_empty() {
@@ -468,6 +476,7 @@ pub fn from_str(text: &str) -> Result<Policy, PlaybookError> {
     Ok(policy)
 }
 
+#[tracing::instrument]
 fn cost(tokens: u64) -> DriveBudget {
     DriveBudget {
         tokens,
@@ -491,6 +500,7 @@ struct PlaySeed {
     survey: bool,
 }
 
+#[tracing::instrument]
 fn play(seed: PlaySeed) -> PlayDefinition {
     PlayDefinition {
         kind: seed.kind,
@@ -508,6 +518,7 @@ fn play(seed: PlaySeed) -> PlayDefinition {
     }
 }
 
+#[tracing::instrument]
 fn builtin_plays() -> Vec<PlayDefinition> {
     vec![
         play(PlaySeed {
@@ -596,7 +607,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn builtin_policy_round_trips() {
+    #[tracing::instrument]
+fn builtin_policy_round_trips() {
         let text = serde_json::to_string(&Policy::builtin()).unwrap();
         let loaded = from_str(&text).unwrap();
         assert_eq!(loaded, Policy::builtin());
@@ -606,7 +618,8 @@ mod tests {
     /// cargo test -p playbook-policy --offline -- --ignored regenerate_policy_fixtures
     #[test]
     #[ignore]
-    fn regenerate_policy_fixtures() {
+    #[tracing::instrument]
+fn regenerate_policy_fixtures() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         for (name, policy) in [
             ("policy.json", Policy::builtin()),

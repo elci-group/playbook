@@ -40,7 +40,8 @@ pub enum HuddleRegime {
 }
 
 impl HuddleRegime {
-    pub fn name(self) -> &'static str {
+    pub #[tracing::instrument]
+fn name(self) -> &'static str {
         match self {
             Self::Control => "A_control",
             Self::Periodic => "B_periodic",
@@ -116,7 +117,8 @@ struct StudyPlane {
 }
 
 impl StudyPlane {
-    fn new(flaky: bool) -> Self {
+    #[tracing::instrument]
+fn new(flaky: bool) -> Self {
         let capability = Capability {
             id: CapabilityId::new("elci.cargo").expect("static id"),
             version: "1".into(),
@@ -155,7 +157,8 @@ impl StudyPlane {
         }
     }
 
-    fn success(
+    #[tracing::instrument]
+fn success(
         &self,
         execution: &PlayExecution,
         class: EvidenceClass,
@@ -179,7 +182,8 @@ impl StudyPlane {
         })
     }
 
-    fn failure(&self, execution: &PlayExecution, cost: DriveBudget, why: &str) -> PlaneResult {
+    #[tracing::instrument]
+fn failure(&self, execution: &PlayExecution, cost: DriveBudget, why: &str) -> PlaneResult {
         PlaneResult::Failed(playbook_core::ToolFailure {
             play_id: execution.play_id.clone(),
             play_kind: execution.play_kind,
@@ -195,7 +199,8 @@ impl StudyPlane {
         })
     }
 
-    fn cost(tokens: u64) -> DriveBudget {
+    #[tracing::instrument]
+fn cost(tokens: u64) -> DriveBudget {
         DriveBudget {
             tokens,
             monetary_cost_micros: tokens.saturating_mul(100),
@@ -206,7 +211,8 @@ impl StudyPlane {
 }
 
 impl CapabilityPlane for StudyPlane {
-    fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+    #[tracing::instrument]
+fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
         self.generation += 1;
         Ok(CapabilitySnapshot {
             generation: self.generation,
@@ -214,7 +220,8 @@ impl CapabilityPlane for StudyPlane {
         })
     }
 
-    fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
+    #[tracing::instrument]
+fn execute(&mut self, execution: &PlayExecution) -> Result<PlaneResult, PlaybookError> {
         match execution.operation.as_str() {
             "inspect" => Ok(self.success(
                 execution,
@@ -275,6 +282,7 @@ impl CapabilityPlane for StudyPlane {
     }
 }
 
+#[tracing::instrument]
 fn roster() -> Vec<playbook_core::Personnel> {
     vec![
         person(
@@ -292,6 +300,7 @@ fn roster() -> Vec<playbook_core::Personnel> {
     ]
 }
 
+#[tracing::instrument]
 fn study_gates() -> Vec<playbook_core::Gate> {
     vec![
         weighted_gate(
@@ -315,6 +324,7 @@ fn study_gates() -> Vec<playbook_core::Gate> {
     ]
 }
 
+#[tracing::instrument]
 fn scenario_value() -> HuddleValue {
     HuddleValue {
         predicted_rework_avoided: REWORK_AVOIDED_PER_HUDDLE,
@@ -328,6 +338,7 @@ fn scenario_value() -> HuddleValue {
     }
 }
 
+#[tracing::instrument]
 fn trailing_failures(events: &[DriveEvent]) -> u32 {
     let mut count = 0;
     for event in events.iter().rev() {
@@ -344,6 +355,7 @@ fn trailing_failures(events: &[DriveEvent]) -> u32 {
 
 /// The number of times the most-failed operation failed. Repeated failed
 /// plays are the waste a reconciliation is supposed to remove.
+#[tracing::instrument]
 fn most_failed_operation_count(events: &[DriveEvent]) -> u32 {
     use std::collections::BTreeMap;
     let mut counts: BTreeMap<&str, u32> = BTreeMap::new();
@@ -365,6 +377,7 @@ struct HuddleTrackers {
     success_fired: bool,
 }
 
+#[tracing::instrument]
 fn debt_proxy(total_failures: u32, contradictions: usize) -> u32 {
     (total_failures.saturating_mul(200) + contradictions.saturating_mul(250) as u32).min(1_000)
 }
@@ -373,6 +386,7 @@ fn debt_proxy(total_failures: u32, contradictions: usize) -> u32 {
 /// charge the envelope, commit an outcome, and hand the reconciled plan to
 /// the harness. Returns true when a proposal to retry the failed operation
 /// was committed.
+#[tracing::instrument]
 fn run_huddle(
     authority: &mut Authority,
     plane: &mut StudyPlane,
@@ -511,6 +525,7 @@ fn run_huddle(
     steered
 }
 
+#[tracing::instrument]
 fn trailing_failure_operation(events: &[DriveEvent]) -> Option<String> {
     events
         .iter()
@@ -523,12 +538,14 @@ fn trailing_failure_operation(events: &[DriveEvent]) -> Option<String> {
         .filter(|operation| operation != "none")
 }
 
+#[tracing::instrument]
 fn clock_of(events: &[DriveEvent]) -> u64 {
     1_000 + events.len() as u64 * 100
 }
 
 /// Run one scenario once under one regime.
-pub fn run_once(config: &StudyConfig) -> RunReport {
+pub #[tracing::instrument]
+fn run_once(config: &StudyConfig) -> RunReport {
     let policy = Policy::builtin();
     let mut plane = StudyPlane::new(config.flaky);
     let mut authority = Authority::start(
@@ -738,6 +755,7 @@ pub fn run_once(config: &StudyConfig) -> RunReport {
     )
 }
 
+#[tracing::instrument]
 fn last_failure_of(events: &[DriveEvent]) -> Option<String> {
     events.iter().rev().find_map(|event| match event {
         DriveEvent::ToolFailed { .. } => Some("failure".to_string()),
@@ -746,6 +764,7 @@ fn last_failure_of(events: &[DriveEvent]) -> Option<String> {
 }
 
 #[allow(clippy::too_many_lines)]
+#[tracing::instrument]
 fn report_of(
     regime: HuddleRegime,
     authority: &Authority,
@@ -847,7 +866,8 @@ pub struct ScenarioReport {
 }
 
 impl ScenarioReport {
-    pub fn run(&self, regime: HuddleRegime) -> &RunReport {
+    pub #[tracing::instrument]
+fn run(&self, regime: HuddleRegime) -> &RunReport {
         self.runs
             .iter()
             .find(|run| run.regime == regime.name())
@@ -855,6 +875,7 @@ impl ScenarioReport {
     }
 }
 
+#[tracing::instrument]
 fn flaky_integration() -> ScenarioReport {
     let budget = DriveBudget {
         tokens: 10_000,
@@ -893,6 +914,7 @@ fn flaky_integration() -> ScenarioReport {
     }
 }
 
+#[tracing::instrument]
 fn clean_delivery() -> ScenarioReport {
     let budget = DriveBudget {
         tokens: 10_000,
@@ -932,12 +954,14 @@ fn clean_delivery() -> ScenarioReport {
 }
 
 /// The full Phase 8 programme.
-pub fn phase_eight_study() -> Vec<ScenarioReport> {
+pub #[tracing::instrument]
+fn phase_eight_study() -> Vec<ScenarioReport> {
     vec![flaky_integration(), clean_delivery()]
 }
 
 /// A fixed-width comparison table over the §24 measures.
-pub fn study_table(scenarios: &[ScenarioReport]) -> String {
+pub #[tracing::instrument]
+fn study_table(scenarios: &[ScenarioReport]) -> String {
     let mut text = String::from(
         "scenario            regime                   completed terminal          steps plays fails rep_fail drive_tok huddle_tok total_tok gain_milli eff_milli roi_pm\n",
     );
@@ -970,7 +994,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn regimes_differ_only_by_their_schedule_and_participation() {
+    #[tracing::instrument]
+fn regimes_differ_only_by_their_schedule_and_participation() {
         let report = phase_eight_study();
         let text = study_table(&report);
         println!("{text}");
@@ -1038,14 +1063,16 @@ mod tests {
     }
 
     #[test]
-    fn the_programme_is_deterministic() {
+    #[tracing::instrument]
+fn the_programme_is_deterministic() {
         let first = phase_eight_study();
         let second = phase_eight_study();
         assert_eq!(first, second);
     }
 
     #[test]
-    fn every_run_stays_inside_the_step_cap_and_journals_replayably() {
+    #[tracing::instrument]
+fn every_run_stays_inside_the_step_cap_and_journals_replayably() {
         for scenario in phase_eight_study() {
             for run in &scenario.runs {
                 assert!(run.steps <= STEP_CAP);
