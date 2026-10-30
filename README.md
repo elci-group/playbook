@@ -46,6 +46,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 `playbook-tactics` adds the organisational-shape layer above personnel selection: formations (Spread, Heavy, Trips, Bunch), adjustment plays (Motion, Shift, Audible, Check-With-Me), diagnostic attack patterns (Mesh, Flood, Levels), conservative doctrines (Prevent, Make Them Drive), surveillance (Spy, Bracket), and responsibility exchange (Banjo, Scrape Exchange). Every tactic is a bounded, deterministically admitted directive with a declared counter; the conflict matrix composes them and fails closed. The contract, admission economics and the conflict matrix are specified in [the tactics contract](docs/tactics.md).
 
+## Documentation anthology
+
+The [documentation anthology](docs/anthology/README.md) is the enterprise supporting set: an executive overview, the system architecture, the authority and governance model, evidence/journal/replay semantics, an operations runbook, the security and boundary model, the metrics and quality gates, a complete glossary and journal-event index, and the personnel/organisation guide. Each document is grounded in the crates it describes; the contract documents remain normative.
+
 ## Layout
 
 ```text

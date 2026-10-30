@@ -385,3 +385,53 @@ name = "tov check tactics check with me"
 cmd = ["tov", "check", "--json", "tov/tactics/check_with_me.tov"]
 expect_exit = 0
 timeout_secs = 120
+
+[[file]]
+path = "docs/anthology/README.md"
+required = true
+min_size_bytes = 1000
+
+[[file]]
+path = "docs/anthology/00-executive-overview.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/01-system-architecture.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/02-authority-and-governance.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/03-evidence-journal-replay.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/04-operations-runbook.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/05-security-and-boundaries.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/06-metrics-and-quality-gates.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/07-glossary-and-event-index.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/anthology/08-personnel-and-organisation.md"
+required = true
+min_size_bytes = 2000

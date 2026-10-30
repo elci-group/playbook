@@ -1,0 +1,48 @@
+# Goglz configuration for the Playbook documentation anthology.
+# Applied via: goglz revise -d docs/anthology
+
+purpose: "Raise the Playbook documentation anthology to enterprise grade: precise, consistent, complete, and trustworthy for engineering, operations, security, and executive readers"
+
+scope: "All documents under docs/anthology — the supporting documentation set for the Playbook deterministic organisational control plane"
+
+writing_style:
+  tone: "Formal, precise, enterprise-technical"
+  voice: "Active and direct; the system and its authorities are the actors"
+  audience: "Engineering leads, platform operators, security reviewers, and executive stakeholders evaluating Playbook"
+  guidelines:
+    - "Prefer precise institutional vocabulary: franchise, drive, play, tactic, evidence, authority, journal"
+    - "Never soften guarantees: if a rule is enforced at fold time, say enforced at fold time"
+    - "Keep football terms only where they are the system's own vocabulary, and always pair them with the computational meaning"
+    - "One idea per paragraph; no marketing language"
+    - "Quantify wherever the codebase quantifies (thresholds, envelopes, per-mille scales)"
+    - "Cross-reference the contract documents rather than restating rule text twice"
+
+formatting_rules:
+  headings: true
+  bullet_points: true
+  numbered_lists: true
+  code_blocks: true
+  max_line_length: 90
+  custom_rules:
+    - "Markdown only, with a title, purpose, scope, and body sections per document"
+    - "Tables for enumerations and mappings"
+    - "Fenced code blocks with language tags"
+    - "Every document ends with a cross-reference section naming the contract documents it summarises"
+
+global_assets:
+  - "README.md"
+
+local_assets: []
+
+languages:
+  - code: "en"
+    name: "English"
+    enabled: true
+    output_pattern: "{filename}.{ext}"
+
+anti_hunking:
+  enabled: true
+  max_section_lines: 80
+  split_on_headings:
+    - "##"
+    - "###"
