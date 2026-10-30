@@ -47,6 +47,7 @@ id_type!(EvidenceId);
 id_type!(ArtefactId);
 id_type!(HuddleId);
 id_type!(GameId);
+id_type!(ExecutionId);
 id_type!(WinConditionId);
 id_type!(DirectiveId);
 id_type!(BlitzId);

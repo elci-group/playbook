@@ -59,6 +59,7 @@ playbook-front-office = { path = "crates/playbook-front-office" }
 playbook-huddle = { path = "crates/playbook-huddle" }
 playbook-blitz = { path = "crates/playbook-blitz" }
 playbook-cers = { path = "crates/playbook-cers" }
+playbook-live = { path = "crates/playbook-live" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
