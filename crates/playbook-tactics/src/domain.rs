@@ -161,8 +161,9 @@ impl PersonnelShape {
 
     /// A shape is valid when it deploys at least one person (executors or
     /// observers — an all-observer surveillance shape is legitimate), never
-    /// assigns an empty domain, and leaves no domain jointly owned without
-    /// at least two owners.
+    /// assigns an empty domain, never double-books one person into the same
+    /// domain, and leaves no domain jointly owned without at least two
+    /// owners.
     pub fn validate(&self) -> Result<(), PlaybookError> {
         if self.primary_executors == 0 && self.observers == 0 {
             return Err(tactics_refusal("formation deploys nobody"));
@@ -173,6 +174,17 @@ impl PersonnelShape {
             }
             if assignment.personnel.is_empty() {
                 return Err(tactics_refusal("domain has no owner"));
+            }
+            let mut holders: Vec<&str> = assignment
+                .personnel
+                .iter()
+                .map(PersonnelId::as_str)
+                .collect();
+            let listed = holders.len();
+            holders.sort_unstable();
+            holders.dedup();
+            if holders.len() != listed {
+                return Err(tactics_refusal("a person is double-booked on one domain"));
             }
             if assignment.mode == OwnershipMode::Joint && assignment.personnel.len() < 2 {
                 return Err(tactics_refusal("joint ownership requires two owners"));
@@ -433,9 +445,15 @@ mod tests {
         joint.assignments[0].mode = OwnershipMode::Joint;
         assert!(joint.validate().is_err());
         // An empty domain is a gap, and gaps are refused.
-        let mut gap = shape;
+        let mut gap = shape.clone();
         gap.assignments[0].personnel.clear();
         assert!(gap.validate().is_err());
+        // One person listed twice on one domain is a double booking.
+        let mut double_booked = shape.clone();
+        double_booked.assignments[0]
+            .personnel
+            .push(PersonnelId::new("a").unwrap());
+        assert!(double_booked.validate().is_err());
     }
 
     #[test]
