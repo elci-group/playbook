@@ -63,7 +63,9 @@ impl Fault {
             Self::MalformedResponse | Self::ReconciliationAmbiguity => {
                 ToolFailureKind::InvalidInput
             }
-            Self::StaleAgentState => ToolFailureKind::Stale,
+            // A stale worker refuses until its capability snapshot is
+            // refreshed: the environment must catch up before it plays.
+            Self::StaleAgentState => ToolFailureKind::Environment,
             Self::PartialOutput
             | Self::CostUnavailable
             | Self::DuplicateResult
