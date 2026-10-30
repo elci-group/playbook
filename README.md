@@ -38,6 +38,10 @@ readiness and Playbook deployment remain live coaching decisions. See
 
 Journal events, eligibility, envelopes and the state machine are specified in [the blitz contract](docs/blitz.md).
 
+## Live runtime
+
+`playbook-live` begins the v0.2.x series: real execution through a non-fixture `CapabilityPlane`. Tool personnel run actual commands under enforced deadlines with sealed outcomes, model personnel sit behind a provider transport seam that packages their responses as claims, dispatch is durable at-least-once with explicit reconciliation, cancellation is a six-state conservative answer, and the directive's full fault list is scripted against any plane in `FaultPlane`. Journal events, envelopes, identity, and the fault table are specified in [the live runtime contract](docs/live-runtime.md).
+
 ## Layout
 
 ```text

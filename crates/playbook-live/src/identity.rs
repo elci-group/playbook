@@ -26,7 +26,13 @@ pub struct LiveIdentity {
 fn slug(part: &str) -> Result<String, PlaybookError> {
     let cleaned: String = part
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect();
     let collapsed = cleaned
         .split('-')
@@ -120,16 +126,25 @@ mod tests {
 
         // Same model on another provider is NOT the same player.
         let other_provider = LiveIdentity::new("beta", "model-x", "v1", "shell").unwrap();
-        assert_ne!(base.personnel_id().unwrap(), other_provider.personnel_id().unwrap());
+        assert_ne!(
+            base.personnel_id().unwrap(),
+            other_provider.personnel_id().unwrap()
+        );
         assert!(!base.comparable(&other_provider));
 
         // A major profile bump is a different worker.
         let new_profile = LiveIdentity::new("alpha", "model-x", "v2", "shell").unwrap();
-        assert_ne!(base.personnel_id().unwrap(), new_profile.personnel_id().unwrap());
+        assert_ne!(
+            base.personnel_id().unwrap(),
+            new_profile.personnel_id().unwrap()
+        );
 
         // A materially different tool envelope is a different worker.
         let new_tools = LiveIdentity::new("alpha", "model-x", "v1", "shell+network").unwrap();
-        assert_ne!(base.personnel_id().unwrap(), new_tools.personnel_id().unwrap());
+        assert_ne!(
+            base.personnel_id().unwrap(),
+            new_tools.personnel_id().unwrap()
+        );
     }
 
     #[test]

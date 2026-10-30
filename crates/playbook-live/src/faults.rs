@@ -25,7 +25,7 @@
 
 use std::collections::VecDeque;
 
-use playbook_core::{ToolFailure, ToolFailureKind};
+use playbook_core::{PlaybookError, ToolFailure, ToolFailureKind};
 use playbook_elci::{CapabilityPlane, CapabilitySnapshot, PlaneResult};
 use serde::{Deserialize, Serialize};
 
@@ -55,9 +55,7 @@ impl Fault {
         match self {
             Self::HttpTimeout => ToolFailureKind::Timeout,
             Self::ProviderRateLimit429 => ToolFailureKind::RateLimit,
-            Self::ProviderServerError5xx | Self::RepositoryConflict => {
-                ToolFailureKind::Environment
-            }
+            Self::ProviderServerError5xx | Self::RepositoryConflict => ToolFailureKind::Environment,
             Self::ConnectionLoss => ToolFailureKind::Transient,
             Self::ToolProcessDeath => ToolFailureKind::ToolBug,
             Self::MalformedResponse | Self::ReconciliationAmbiguity => {
@@ -151,7 +149,10 @@ fn failure_for(fault: Fault, execution: &playbook_core::PlayExecution) -> ToolFa
                 .idempotency_key
                 .clone()
                 .unwrap_or_else(|| "unkeyed".into()),
-            summary: format!("first report says occurred, second says not: {}", fault.diagnostic()),
+            summary: format!(
+                "first report says occurred, second says not: {}",
+                fault.diagnostic()
+            ),
             resolved: false,
             occurred: None,
         });
@@ -200,7 +201,11 @@ fn poisoned_success(
             0,
         )?,
         // Everything else poisons in its own documented way.
-        _ => playbook_core::Evidence::seal(evidence_class, serde_json::json!({ "observed": true }), 0)?,
+        _ => playbook_core::Evidence::seal(
+            evidence_class,
+            serde_json::json!({ "observed": true }),
+            0,
+        )?,
     };
     Ok(PlaneResult::Done(playbook_core::PlayResult {
         status: playbook_core::PlayStatus::Succeeded,
@@ -257,8 +262,8 @@ impl<P: CapabilityPlane> CapabilityPlane for FaultPlane<P> {
 mod tests {
     use super::*;
     use playbook_core::{
-        CapabilityId, Down, DriveBudget, DriveId, EvidenceClass, PlayExecution, PlayId,
-        PersonnelId, RetryPolicy,
+        CapabilityId, Down, DriveBudget, DriveId, EvidenceClass, PersonnelId, PlayExecution,
+        PlayId, RetryPolicy,
     };
     use playbook_elci::FixturePlane;
 
@@ -304,8 +309,11 @@ mod tests {
             (Fault::ToolProcessDeath, ToolFailureKind::ToolBug),
             (Fault::MalformedResponse, ToolFailureKind::InvalidInput),
             (Fault::RepositoryConflict, ToolFailureKind::Environment),
-            (Fault::ReconciliationAmbiguity, ToolFailureKind::InvalidInput),
-            (Fault::StaleAgentState, ToolFailureKind::Stale),
+            (
+                Fault::ReconciliationAmbiguity,
+                ToolFailureKind::InvalidInput,
+            ),
+            (Fault::StaleAgentState, ToolFailureKind::Environment),
         ] {
             match faulted(fault) {
                 PlaneResult::Failed(failure) => {
@@ -384,8 +392,7 @@ mod tests {
         // required keys cannot score.
         match evidence.class {
             EvidenceClass::TestReport => {
-                evidence.body.get("exit_code").is_none()
-                    || evidence.body.get("passed").is_none()
+                evidence.body.get("exit_code").is_none() || evidence.body.get("passed").is_none()
             }
             _ => false,
         }

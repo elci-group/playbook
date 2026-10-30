@@ -339,3 +339,23 @@ forbid_regex = ["TODO", "FIXME", "unimplemented!"]
 path = "crates/playbook-sim/tests/canonical_game.rs"
 required = true
 min_size_bytes = 2000
+
+[[file]]
+path = "crates/playbook-live/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-live/src/toolplane.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-live/tests/live_runtime.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/live-runtime.md"
+required = true
+min_size_bytes = 2000

@@ -666,6 +666,7 @@ fn the_canonical_franchise_game_completes_without_human_intervention() {
                 recent_gate_failures: 1,
                 cost_micros_per_play: 200_000,
                 available: true,
+                busy: false,
             },
             required_fit_ppm: 700_000,
             budget_remaining: playbook_core::DriveBudget {
@@ -688,6 +689,7 @@ fn the_canonical_franchise_game_completes_without_human_intervention() {
                 recent_gate_failures: 0,
                 cost_micros_per_play: 40_000,
                 available: true,
+                busy: false,
             },
             bench::BenchCandidate {
                 personnel: person("specialist", PersonnelKind::SpecialistAgent),
@@ -695,6 +697,7 @@ fn the_canonical_franchise_game_completes_without_human_intervention() {
                 recent_gate_failures: 0,
                 cost_micros_per_play: 120_000,
                 available: true,
+                busy: false,
             },
         ],
     )

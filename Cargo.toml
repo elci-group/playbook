@@ -24,6 +24,7 @@ members = [
     "crates/playbook-huddle",
     "crates/playbook-blitz",
     "crates/playbook-cers",
+    "crates/playbook-live",
 ]
 
 [workspace.package]

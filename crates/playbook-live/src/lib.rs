@@ -42,8 +42,10 @@ pub use dispatch::{DispatchLedger, DispatchRecord, DispatchStage};
 pub use envelope::{CostReport, ExecutionEnvelope};
 pub use faults::{Fault, FaultPlane};
 pub use identity::LiveIdentity;
-pub use provider::{ModelRequest, ModelResponse, ModelTransport, ProviderPlane, UnimplementedTransport};
-pub use toolplane::{ToolCommand, ToolPlane, ToolOutcome};
+pub use provider::{
+    ModelRequest, ModelResponse, ModelTransport, ProviderPlane, UnimplementedTransport,
+};
+pub use toolplane::{ToolCommand, ToolPlane};
 
 #[cfg(test)]
 mod tests {

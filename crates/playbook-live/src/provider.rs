@@ -15,8 +15,8 @@
 use serde::{Deserialize, Serialize};
 
 use playbook_core::{
-    Capability, CapabilityId, DriveBudget, Evidence, EvidenceClass, PlaybookError,
-    SideEffectClass, ToolFailureKind,
+    Capability, CapabilityId, DriveBudget, Evidence, EvidenceClass, PlaybookError, SideEffectClass,
+    ToolFailureKind,
 };
 use playbook_elci::{CapabilityPlane, CapabilitySnapshot, PlaneResult};
 
@@ -102,9 +102,8 @@ impl<T: ModelTransport> ProviderPlane<T> {
 
     fn capability(&self) -> Capability {
         Capability {
-            id: CapabilityId::new("live.model").unwrap_or_else(|_| {
-                CapabilityId::new("live.model.fallback").expect("fallback id")
-            }),
+            id: CapabilityId::new("live.model")
+                .unwrap_or_else(|_| CapabilityId::new("live.model.fallback").expect("fallback id")),
             version: "1".into(),
             provider: self.identity.provider.clone(),
             operations: vec!["targeted_inference".into()],
@@ -255,7 +254,7 @@ pub fn cancellation_report<T: ModelTransport>(
     note: &str,
 ) -> CancellationReport {
     CancellationReport::new(
-        execution_id,
+        execution_id.clone(),
         transport.cancellation(execution_id.as_str()),
         note,
     )
@@ -356,7 +355,10 @@ mod tests {
                 assert_eq!(result.status, playbook_core::PlayStatus::Succeeded);
                 // The invocation is evidenced.
                 assert_eq!(result.evidence[0].class, EvidenceClass::ToolInvocation);
-                assert_eq!(result.evidence[0].body["usage_tokens"], serde_json::json!(311));
+                assert_eq!(
+                    result.evidence[0].body["usage_tokens"],
+                    serde_json::json!(311)
+                );
                 // The claim itself travels as a digest reference only.
                 assert_eq!(result.output_refs.len(), 1);
                 assert_eq!(result.output_refs[0].len(), 64);

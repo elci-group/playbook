@@ -30,7 +30,9 @@
 //!    prestige does not — personnel kind and tier are never consulted.
 //!
 //! A replacement is eligible only while it is `available` (`false` covers
-//! both benched and unavailable roster states) and is never the starter
+//! both benched and unavailable roster states), is not carrying an
+//! unresolved invocation (`busy` — default policy: unresolved means no
+//! reassignment until reconciliation), and is never the starter
 //! itself. Every candidate is ranked by the same total order — fit
 //! descending, provider health descending, gate failures ascending, per-play
 //! cost ascending, personnel id ascending — so bench order never matters
@@ -79,6 +81,9 @@ pub struct BenchCandidate {
     pub cost_micros_per_play: u64,
     /// Ready in the roster sense; `false` covers benched and unavailable.
     pub available: bool,
+    /// The member has an unresolved invocation: its effect occurrence is
+    /// unknown. Default policy forbids reassignment until reconciliation.
+    pub busy: bool,
 }
 
 /// The measured situation the ladder decides over.
@@ -132,7 +137,9 @@ fn best_replacement(
 ) -> Option<PersonnelId> {
     bench
         .iter()
-        .filter(|candidate| candidate.available && &candidate.personnel.id != current)
+        .filter(|candidate| {
+            candidate.available && !candidate.busy && &candidate.personnel.id != current
+        })
         .filter(|candidate| qualifies(candidate))
         .min_by_key(|candidate| rank(candidate))
         .map(|candidate| candidate.personnel.id.clone())
@@ -143,6 +150,13 @@ fn best_replacement(
 pub fn decide(input: &BenchInput, bench: &[BenchCandidate]) -> Option<SubstitutionDecision> {
     let current = &input.current;
     let current_id = &current.personnel.id;
+    // Default policy (busy exclusion): an unresolved invocation means the
+    // player is busy — its effect occurrence is unknown, and substituting
+    // around an unknown effect corrupts the record. Reconciliation comes
+    // first; the ladder does not run at all until then.
+    if current.busy {
+        return None;
+    }
     let starter_fallen =
         !current.available || current.provider_health_ppm < MIN_PROVIDER_HEALTH_PPM;
 
@@ -276,6 +290,7 @@ mod tests {
             recent_gate_failures: 0,
             cost_micros_per_play: 500,
             available: true,
+            busy: false,
         }
     }
 
@@ -495,5 +510,36 @@ mod tests {
         permuted.reverse();
         assert_eq!(decide(&situation, &permuted), Some(first.clone()));
         assert_eq!(first.class, SubstitutionClass::Emergency);
+    }
+
+    #[test]
+    fn a_busy_starter_is_not_substituted_until_reconciliation() {
+        // Default policy: an unresolved invocation means the player is busy.
+        // The ladder keeps the starter — reconciliation answers first.
+        let mut starter = candidate("starter", 400_000);
+        starter.busy = true;
+        assert!(decide(&input(starter, 600_000), &[candidate("bench-a", 900_000)]).is_none());
+        // Reconciliation answered: the invocation resolved as a failed
+        // attempt. The starter is no longer busy and the ladder may fire.
+        let mut resolved = candidate("starter", 400_000);
+        resolved.busy = false;
+        let decision = decide(&input(resolved, 600_000), &[candidate("bench-a", 900_000)])
+            .expect("a resolved failure substitutes");
+        assert_eq!(
+            decision.replacement,
+            Some(PersonnelId::new("bench-a").unwrap())
+        );
+    }
+
+    #[test]
+    fn busy_players_are_never_selected_as_replacements() {
+        // The perfect-fit replacement is mid-invocation: ineligible until
+        // its own effect reconciles, even though it is available.
+        let mut busy = candidate("perfect-fit", 900_000);
+        busy.busy = true;
+        assert_eq!(
+            decide(&input(candidate("starter", 400_000), 600_000), &[busy]),
+            None
+        );
     }
 }

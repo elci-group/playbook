@@ -8,11 +8,7 @@
 //! its timeout. The executor SHALL NOT infer missing authority: an envelope
 //! that fails validation is refused, never completed by guesswork.
 
-use std::collections::BTreeSet;
-
-use playbook_core::{
-    DriveBudget, EvidenceClass, PlayExecution, PlaybookError, SideEffectClass,
-};
+use playbook_core::{DriveBudget, EvidenceClass, PlayExecution, PlaybookError, SideEffectClass};
 use playbook_security::authorize;
 
 use serde::{Deserialize, Serialize};
@@ -27,9 +23,9 @@ pub struct ExecutionEnvelope {
     pub objective_id: Option<playbook_core::ObjectiveId>,
     /// The operations this invocation may invoke. A capability outside this
     /// set is refused even if the personnel could otherwise perform it.
-    pub allowed_operations: BTreeSet<String>,
+    pub allowed_operations: Vec<String>,
     /// The side effects this invocation may carry.
-    pub allowed_side_effects: BTreeSet<SideEffectClass>,
+    pub allowed_side_effects: Vec<SideEffectClass>,
     /// The schema key the result must satisfy. The executor reports against
     /// it; it does not invent a looser one.
     pub expected_result_schema: String,
@@ -87,7 +83,8 @@ impl ExecutionEnvelope {
                 "live invocation requires a timeout".into(),
             ));
         }
-        if self.working_directory.is_none() && self.execution.side_effect != SideEffectClass::ReadOnly
+        if self.working_directory.is_none()
+            && self.execution.side_effect != SideEffectClass::ReadOnly
         {
             return Err(PlaybookError::Inadmissible(
                 self.execution.operation.clone(),
@@ -162,7 +159,7 @@ impl CostReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use playbook_core::{CapabilityId, Down, DriveId, PlayId, PersonnelId, RetryPolicy};
+    use playbook_core::{CapabilityId, Down, DriveId, PersonnelId, PlayId, RetryPolicy};
 
     fn execution(operation: &str, side_effect: SideEffectClass) -> PlayExecution {
         PlayExecution {
@@ -201,8 +198,8 @@ mod tests {
             execution: execution(operation, side_effect),
             personnel_id: PersonnelId::new("live-local-cargo-v1").unwrap(),
             objective_id: None,
-            allowed_operations: BTreeSet::from([operation.to_string()]),
-            allowed_side_effects: BTreeSet::from([side_effect]),
+            allowed_operations: vec![operation.to_string()],
+            allowed_side_effects: vec![side_effect],
             expected_result_schema: "compiler_result/1".into(),
             expected_evidence: vec![EvidenceClass::CompilerResult],
             budget_envelope: DriveBudget {
@@ -250,14 +247,14 @@ mod tests {
         // A mutating invocation must be bound to a working directory.
         let mut roaming = envelope("compile", SideEffectClass::ReadOnly);
         roaming.execution.side_effect = SideEffectClass::LocalMutation;
-        roaming.allowed_side_effects = BTreeSet::from([SideEffectClass::LocalMutation]);
+        roaming.allowed_side_effects = vec![SideEffectClass::LocalMutation];
         roaming.working_directory = None;
         assert!(roaming.validate(&policy_effects).is_err());
 
         // Side effects outside the drive policy are refused by the
         // security seam, not by the envelope's own say-so.
         let mut dangerous = envelope("compile", SideEffectClass::Deployment);
-        dangerous.allowed_side_effects = BTreeSet::from([SideEffectClass::Deployment]);
+        dangerous.allowed_side_effects = vec![SideEffectClass::Deployment];
         assert!(dangerous.validate(&policy_effects).is_err());
     }
 

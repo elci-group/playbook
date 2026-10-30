@@ -37,9 +37,7 @@ impl CancellationState {
     pub fn leaves_effect_unknown(self) -> bool {
         matches!(
             self,
-            Self::CancelledDuringExecution
-                | Self::CancellationRequested
-                | Self::Unknown
+            Self::CancelledDuringExecution | Self::CancellationRequested | Self::Unknown
         )
     }
 
@@ -95,6 +93,16 @@ impl CancellationReport {
     /// invocation in `EffectUnknown` until reconciliation.
     pub fn effect_unknown(&self) -> bool {
         self.state.leaves_effect_unknown()
+    }
+
+    /// Whether avoided-spend may be booked for this report.
+    pub fn may_book_avoided_spend(&self) -> bool {
+        self.state.may_book_avoided_spend()
+    }
+
+    /// Whether a late result may still arrive for this report.
+    pub fn late_result_possible(&self) -> bool {
+        self.state.late_result_possible()
     }
 }
 

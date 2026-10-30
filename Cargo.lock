@@ -225,6 +225,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-live"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-elci",
+ "playbook-franchise",
+ "playbook-policy",
+ "playbook-security",
+ "playbook-state",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-observability"
 version = "0.1.0"
 dependencies = [

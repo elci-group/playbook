@@ -58,10 +58,7 @@ pub struct ToolPlane {
 impl ToolPlane {
     /// Build a plane bound to a real working directory and a real
     /// allowlist. An empty allowlist is a plane that can only refuse.
-    pub fn new(
-        working_dir: impl Into<PathBuf>,
-        commands: BTreeMap<String, ToolCommand>,
-    ) -> Self {
+    pub fn new(working_dir: impl Into<PathBuf>, commands: BTreeMap<String, ToolCommand>) -> Self {
         Self {
             working_dir: working_dir.into(),
             generation: 1,
@@ -88,7 +85,8 @@ impl ToolPlane {
     /// without executing anything.
     fn capabilities(&self) -> Vec<Capability> {
         vec![Capability {
-            id: CapabilityId::new("live.tool").unwrap_or_else(|_| CapabilityId::new("live.tool.fallback").expect("fallback id")),
+            id: CapabilityId::new("live.tool")
+                .unwrap_or_else(|_| CapabilityId::new("live.tool.fallback").expect("fallback id")),
             version: "1".into(),
             provider: "local".into(),
             operations: self.commands.keys().cloned().collect(),
@@ -170,12 +168,13 @@ fn run_under_deadline(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| {
-            PlaybookError::Io(format!("cannot spawn {program}: {error}"))
-        })?;
+        .map_err(|error| PlaybookError::Io(format!("cannot spawn {program}: {error}")))?;
     let deadline = Duration::from_millis(timeout_ms);
     let status = loop {
-        if let Some(status) = child.try_wait()? {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| PlaybookError::Io(error.to_string()))?
+        {
             break Some(status);
         }
         if started.elapsed() >= deadline {
@@ -264,6 +263,7 @@ impl CapabilityPlane for ToolPlane {
             }
         };
         let (exit_code, stdout, stderr, wall_clock_ms) = outcome;
+        let exit_code = exit_code.unwrap_or(-1);
         self.executed = self.executed.saturating_add(1);
 
         let evidence = seal_outcome(&command, exit_code, &stdout, &stderr)?;
@@ -328,11 +328,9 @@ fn seal_outcome(
     stdout: &str,
     stderr: &str,
 ) -> Result<Evidence, PlaybookError> {
-    let run_digest = playbook_core::sha256_hex(format!("{stdout}\n{stderr}\n{exit_code}").as_bytes());
-    let gate = command
-        .gate
-        .clone()
-        .unwrap_or_else(|| "build".to_string());
+    let run_digest =
+        playbook_core::sha256_hex(format!("{stdout}\n{stderr}\n{exit_code}").as_bytes());
+    let gate = command.gate.clone().unwrap_or_else(|| "build".to_string());
     let body = match command.evidence_class {
         EvidenceClass::CompilerResult => serde_json::json!({
             "success": exit_code == 0,
@@ -369,7 +367,7 @@ fn seal_outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use playbook_core::{DriveId, Down, PersonnelId, PlayId, RetryPolicy};
+    use playbook_core::{Down, DriveId, PersonnelId, PlayId, RetryPolicy};
 
     fn command(program: &str, args: &[&str], class: EvidenceClass) -> (String, ToolCommand) {
         (
@@ -450,7 +448,10 @@ mod tests {
     #[test]
     fn a_failing_command_is_a_measured_failure_with_diagnostics() {
         let mut commands = BTreeMap::new();
-        commands.insert("demo".into(), command("/bin/false", &[], EvidenceClass::CompilerResult).1);
+        commands.insert(
+            "demo".into(),
+            command("/bin/false", &[], EvidenceClass::CompilerResult).1,
+        );
         let mut live = ToolPlane::new("/tmp", commands);
         match live.execute(&execution("demo", 5_000)).unwrap() {
             PlaneResult::Failed(failure) => {
@@ -494,7 +495,11 @@ mod tests {
 
     #[test]
     fn an_unallowlisted_operation_is_refused_not_improvised() {
-        let mut live = plane(vec![command("/bin/echo", &["x"], EvidenceClass::CompilerResult)]);
+        let mut live = plane(vec![command(
+            "/bin/echo",
+            &["x"],
+            EvidenceClass::CompilerResult,
+        )]);
         match live.execute(&execution("rm -rf", 1_000)).unwrap() {
             PlaneResult::Failed(failure) => {
                 assert_eq!(failure.kind, ToolFailureKind::Unsupported);
@@ -506,12 +511,18 @@ mod tests {
 
     #[test]
     fn discover_offers_exactly_the_allowlist_and_nothing_else() {
-        let mut live = plane(vec![command("/bin/echo", &["x"], EvidenceClass::CompilerResult)]);
+        let mut live = plane(vec![command(
+            "/bin/echo",
+            &["x"],
+            EvidenceClass::CompilerResult,
+        )]);
         let snapshot = live.discover().unwrap();
         assert_eq!(snapshot.generation, 1);
         let capability = &snapshot.capabilities[0];
         assert_eq!(capability.operations, vec!["demo".to_string()]);
-        assert!(capability.evidence_classes.contains(&EvidenceClass::CompilerResult));
+        assert!(capability
+            .evidence_classes
+            .contains(&EvidenceClass::CompilerResult));
         // Discover observes the allowlist without executing anything.
         assert_eq!(live.executed(), 0);
     }
@@ -545,10 +556,7 @@ mod tests {
                     "failed",
                     "ignored",
                 ] {
-                    assert!(
-                        report.body.get(key).is_some(),
-                        "test report missing {key}"
-                    );
+                    assert!(report.body.get(key).is_some(), "test report missing {key}");
                 }
                 assert_eq!(report.body["passed"], serde_json::json!(1));
             }

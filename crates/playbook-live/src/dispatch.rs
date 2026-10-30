@@ -147,7 +147,11 @@ impl DispatchLedger {
     }
 
     /// The outcome arrived normally.
-    pub fn mark_outcome(&mut self, execution_id: &ExecutionId, accepted: bool) -> Result<(), PlaybookError> {
+    pub fn mark_outcome(
+        &mut self,
+        execution_id: &ExecutionId,
+        accepted: bool,
+    ) -> Result<(), PlaybookError> {
         let record = self
             .records
             .get_mut(execution_id.as_str())
@@ -310,9 +314,7 @@ mod tests {
         // rejected, and only then may it be re-persisted under the same
         // idempotency key.
         ledger.reconcile(&exec("e-2"), false, false).unwrap();
-        ledger
-            .re_persist(&exec("e-2"), "play-2-compile")
-            .unwrap();
+        ledger.re_persist(&exec("e-2"), "play-2-compile").unwrap();
         assert_eq!(
             ledger.record(&exec("e-2")).unwrap().stage,
             DispatchStage::Persisted
@@ -347,9 +349,7 @@ mod tests {
             ledger.mark_dispatched(&exec("e-4")).unwrap_err(),
             unknown(&exec("e-4"))
         );
-        assert!(ledger
-            .persist(exec("e-4"), "   ")
-            .is_err());
+        assert!(ledger.persist(exec("e-4"), "   ").is_err());
         assert!(ledger.persist(exec("e-4"), "key-4").is_ok());
         assert!(ledger.persist(exec("e-4"), "key-4").is_err());
     }
