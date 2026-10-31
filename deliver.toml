@@ -734,3 +734,44 @@ name = "value-lab tests"
 cmd = ["cargo", "test", "-p", "value-lab", "--offline"]
 expect_exit = 0
 timeout_secs = 300
+
+[[file]]
+path = "crates/value-lab/src/derive.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/main.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-ci/Cargo.toml"
+required = true
+
+[[file]]
+path = "crates/playbook-ci/src/main.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-ci/src/registry.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-ci/tests/adversarial.rs"
+required = true
+min_size_bytes = 500
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/ci.md"
+required = true
+min_size_bytes = 2000
+
+[[command]]
+name = "playbook-ci tests"
+cmd = ["cargo", "test", "-p", "playbook-ci", "--offline"]
+expect_exit = 0
+timeout_secs = 300

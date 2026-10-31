@@ -1,0 +1,22 @@
+[package]
+name = "playbook-integrity"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+# Not yet a workspace member (registration pending). The empty 
+# table keeps this crate an independent root so the parent workspace's
+# member list stays untouched; dependencies are pinned to the same
+# workspace versions via path.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+playbook-core = { path = "../playbook-core", version = "0.1.0" }
+playbook-events = { path = "../playbook-events", version = "0.1.0" }
+playbook-state = { path = "../playbook-state", version = "0.1.0" }
+playbook-policy = { path = "../playbook-policy", version = "0.1.0" }
+playbook-sim = { path = "../playbook-sim", version = "0.1.0" }
+playbook-journal = { path = "../playbook-journal", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"

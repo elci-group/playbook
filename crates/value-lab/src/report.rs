@@ -100,6 +100,204 @@ fn percent_delta(playbook_value: u64, control_value: u64) -> f64 {
     (playbook_value as f64 - control_value as f64) / control_value as f64 * 100.0
 }
 
+/// VALUE_CORPUS.jsonl (§32): the frozen corpus, one assignment per line.
+pub fn emit_corpus(corpus: &crate::corpus::Corpus) -> Result<String, playbook_core::PlaybookError> {
+    let mut out = String::new();
+    for assignment in corpus.assignments() {
+        let line = serde_json::to_string(assignment).map_err(playbook_core::PlaybookError::json)?;
+        out.push_str(&line);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+/// VALUE_ABLATIONS.md (§32): the subsystem contribution study.
+pub fn emit_ablations(rows: &[crate::lab::AblationRow]) -> String {
+    let mut out = String::new();
+    out.push_str("# VALUE_ABLATIONS\n\n");
+    out.push_str("| Mechanism | With | Without | Marginal |\n|---|---:|---:|---:|\n");
+    for row in rows {
+        out.push_str(&format!(
+            "| {} | {} | {} | {:+} |\n",
+            row.mechanism, row.with_value, row.without_value, row.marginal
+        ));
+    }
+    let earned: Vec<&crate::lab::AblationRow> =
+        rows.iter().filter(|row| row.marginal > 0).collect();
+    out.push_str(&format!(
+        "\nMechanisms with measured marginal value: {}.\n",
+        if earned.is_empty() {
+            "none".to_string()
+        } else {
+            earned
+                .iter()
+                .map(|row| row.mechanism.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    ));
+    out
+}
+
+/// VALUE_FAILURES.md (§32): the fault-injection analysis.
+pub fn emit_failures(runs: &[crate::run::RunRecord]) -> String {
+    let mut out = String::new();
+    out.push_str("# VALUE_FAILURES\n\n");
+    let faulted: Vec<&crate::run::RunRecord> =
+        runs.iter().filter(|run| run.fault_injected).collect();
+    out.push_str(&format!(
+        "Faulted runs: {} of {} ({} ppm of the study).\n\n",
+        faulted.len(),
+        runs.len(),
+        if runs.is_empty() {
+            0
+        } else {
+            faulted.len() * 1_000_000 / runs.len()
+        }
+    ));
+    out.push_str("| Regime | Faulted | Recovered | Rate |\n|---|---:|---:|---:|\n");
+    for regime in crate::frozen::Regime::all() {
+        let selected: Vec<&crate::run::RunRecord> = faulted
+            .iter()
+            .filter(|run| run.regime == regime)
+            .copied()
+            .collect();
+        if selected.is_empty() {
+            continue;
+        }
+        let recovered = selected.iter().filter(|run| run.recovered).count();
+        out.push_str(&format!(
+            "| {} | {} | {} | {:.1}% |\n",
+            regime.key(),
+            selected.len(),
+            recovered,
+            recovered as f64 / selected.len() as f64 * 100.0
+        ));
+    }
+    out
+}
+
+/// VALUE_SHADOW_DEFENCE.md (§32): counterfactual accuracy and regret,
+/// including the lab-subject agreement rate (§3).
+pub fn emit_shadow(card: &crate::value::ShadowScorecard) -> String {
+    let mut out = String::new();
+    out.push_str("# VALUE_SHADOW_DEFENCE\n\n");
+    out.push_str(&format!(
+        "| Measure | Value |\n|---|---:|\n| Predictions scored | {} |\n| Mean calibration error | {} |\n| Ranking accuracy | {:.1}% |\n| Mean regret estimate error | {} |\n| Lab agreement | {:.1}% |\n",
+        card.predictions,
+        card.calibration_error_mean,
+        card.ranking_accuracy_ppm as f64 / 10_000.0,
+        card.regret_error_mean,
+        card.agreement_ppm as f64 / 10_000.0,
+    ));
+    out.push_str(
+        "\nShadow Defence does not validate itself: every number above is the lab's\nscoring of frozen predictions against measured outcomes.\n",
+    );
+    out
+}
+
+/// VALUE_ECONOMICS.md (§32): cost and efficiency, with the complexity tax
+/// on the record (§29).
+pub fn emit_economics(runs: &[crate::run::RunRecord]) -> String {
+    let mut out = String::new();
+    out.push_str("# VALUE_ECONOMICS\n\n");
+    out.push_str("| Regime | Median cost/run | Complexity tax | Median cost/completion |\n|---|---:|---:|---:|\n");
+    for regime in crate::frozen::Regime::all() {
+        let selected: Vec<&crate::run::RunRecord> =
+            runs.iter().filter(|run| run.regime == regime).collect();
+        if selected.is_empty() {
+            continue;
+        }
+        let mut costs: Vec<u64> = selected.iter().map(|run| run.cost_micros).collect();
+        costs.sort();
+        let mut taxes: Vec<u64> = selected
+            .iter()
+            .map(|run| run.complexity_tax_micros)
+            .collect();
+        taxes.sort();
+        let completions: Vec<u64> = selected
+            .iter()
+            .filter_map(|run| run.completion_cost_micros())
+            .collect();
+        let mut completions = completions;
+        completions.sort();
+        out.push_str(&format!(
+            "| {} | {} | {} | {} |\n",
+            regime.key(),
+            costs.get(costs.len() / 2).copied().unwrap_or(0),
+            taxes.get(taxes.len() / 2).copied().unwrap_or(0),
+            completions.get(completions.len() / 2).copied().unwrap_or(0),
+        ));
+    }
+    out
+}
+
+/// VALUE_REPORT.md (§38): the final statement, filled with measured
+/// numbers wherever the study has them — and honest dashes where it does
+/// not. Until every dash is a number, no superiority claim is made.
+pub fn emit_report(board: &Scoreboard, protocol_hash: &str) -> String {
+    let playbook = board
+        .rows
+        .iter()
+        .find(|row| row.regime == crate::frozen::Regime::P0);
+    let control = board
+        .rows
+        .iter()
+        .filter(|row| row.regime.deployable() && row.regime != crate::frozen::Regime::P0)
+        .max_by_key(|row| row.completion_rate_ppm);
+    let fill = |value: Option<String>| value.unwrap_or_else(|| "—".to_string());
+    let (n, x, y, a, b, t_a, t_b, r, c, v) = match (playbook, control) {
+        (Some(pb), Some(ct)) => (
+            format!("{}", pb.runs),
+            Some(format!("{:.1}", pb.completion_rate_ppm as f64 / 10_000.0)),
+            Some(format!("{:.1}", ct.completion_rate_ppm as f64 / 10_000.0)),
+            pb.median_completion_cost_micros
+                .map(|cost| format!("{}m¢", cost / 1_000)),
+            ct.median_completion_cost_micros
+                .map(|cost| format!("{}m¢", cost / 1_000)),
+            pb.median_wall_time_ms.map(|ms| format!("{ms}ms")),
+            ct.median_wall_time_ms.map(|ms| format!("{ms}ms")),
+            pb.recovery_rate_ppm
+                .map(|rate| format!("{:.1}", rate as f64 / 10_000.0)),
+            ct.recovery_rate_ppm
+                .map(|rate| format!("{:.1}", rate as f64 / 10_000.0)),
+            pb.median_ocav.map(|ocav| format!("{ocav}")),
+        ),
+        _ => (
+            "—".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ),
+    };
+    format!(
+        "# VALUE_REPORT\n\nProtocol hash: `{protocol_hash}`\n\n> Across **{n}** previously unseen assignments, Playbook achieved **{}%**          independently validated completion compared with **{}%** for the strongest deployable control,          at **{}** versus **{}** median cost per completion and **{}** versus **{}** median completion time.          Under controlled failure, Playbook recovered **{}%** of interrupted drives versus **{}%** for the control.          Its median opportunity-cost-adjusted value was **{}**, while ablation testing attributed the largest          marginal gains to **[mechanisms — see VALUE_ABLATIONS]**. These results were obtained under protocol          `{protocol_hash}`, using frozen task, model, pricing and evaluation conditions.\n\nVerdict: {}\n",
+        fill(x),
+        fill(y),
+        fill(a),
+        fill(b),
+        fill(t_a),
+        fill(t_b),
+        fill(r),
+        fill(c),
+        fill(v),
+        board.verdict.key(),
+    )
+}
+
+/// VALUE_REPLICATION.md (§32): the independent replication instructions.
+pub fn emit_replication(protocol_hash: &str) -> String {
+    format!(
+        "# VALUE_REPLICATION\n\n1. Check out the repository at the policy and Playbook versions recorded in each evidence package.\n2. Regenerate the fault schedule: `FaultSchedule::from_seed(SEED).assign(&corpus, fraction)` — the seed and fraction are in the protocol.\n3. Re-run every regime of record against the frozen corpus; the snaps hash to `{protocol_hash}`.\n4. Fold each run's journal and confirm the recorded decisions match `derive::decision_snapshots`.\n5. Recompute the scoreboard and verdict with `value-lab scoreboard` — the numbers must reproduce exactly; the lab is deterministic by construction.\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

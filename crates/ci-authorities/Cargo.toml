@@ -1,0 +1,25 @@
+[package]
+name = "ci-authorities"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+rust-version = "1.85"
+
+# Not a workspace member yet (standalone build), so workspace
+# inheritance is unavailable; dependency versions mirror the workspace
+# lockfile exactly so --offline resolution is shared.
+
+[dependencies]
+ci-evidence = { path = "../ci-evidence" }
+playbook-core = { path = "../playbook-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+# Standalone until registered as a workspace member.

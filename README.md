@@ -56,6 +56,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 ![Matchday: the dugout, the broadcast and the film room](docs/assets/matchday-manager.gif)
 
+## Evidence-gated CI
+
+`ci-evidence` is the canonical `CI_EVIDENCE/1` contract for Playbook's evidence-gated continuous integration: a federation of independently scoped engineering authorities — Scrawny, UNI, Traci, Amber, Verity, Ferret, tests, Deliver, Tov, VALUE — whose results converge on one machine-readable envelope. The verdict is mechanically derivable from the evidence object; prose never overrides it. Failure semantics are closed (`ERROR` never equals `PASS`, `INCONCLUSIVE` never equals `PASS`), waivers are explicit, attributable and expiring, evidence generated against one revision never authorises another, and `playbook-ci` runs the gate matrix — deterministic build/test gates, Playbook's own replay/recovery determinism checks, and conditional dependency and claim gates — before Kaptaind's admission question is even asked: *does this exact revision possess the evidence required by the current policy?* `playbook` may report its own interpretation; the evidence decides. The campaign contract is specified in [the CI contract](docs/ci.md).
+
 ## Project VALUE: the research apparatus
 
 `value-lab` is the independent evaluator that exists so Playbook can be proven wrong. Playbook is the experimental subject; the lab freezes the experimental conditions (same model pool for every regime, hashed snaps, decision snapshots with no hindsight), reconstructs counterfactuals, computes opportunity-cost-adjusted value and cumulative regret, scores Shadow Defence's predictions against outcomes — its agreement with the lab is itself a measured variable — classifies the study verdict against pre-registered thresholds, and pauses fail-closed on any stop condition including subject-controls-authority. A feature existing in the architecture is not evidence; ablations rank each subsystem's marginal contribution. The contract, the value math and the verdict mechanics are specified in [the VALUE contract](docs/value.md).

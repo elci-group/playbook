@@ -72,6 +72,24 @@ integration test (`a_miniature_season_produces_a_defensible_scoreboard`)
 runs the whole §37 pipeline: frozen corpus → fault schedule → two regimes
 → verdict → rendered table → bootstrap interval over completion cost.
 
+The full artifact set (§32) is wired to the results file:
+`VALUE_RESULTS.jsonl` round-trips the run records byte-exactly (a torn
+line is an error, never a skip); `corpus`, `scoreboard`, `verdict`,
+`report`, `ablations`, `failures`, `economics` and `replication` are
+`value-lab` subcommands over that file. The §38 statement is filled with
+measured numbers wherever the study has them — and honest dashes where it
+does not. The synthetic fixture season is deliberately single-stratum and
+therefore classifies `VALUE_CONDITIONAL`, not `VALUE_PROVEN`: the
+multi-stratum requirement is enforced against convenience.
+
+**From journal to counterfactual.** `decision_snapshots` folds a real
+Playbook journal and freezes a `DecisionSnapshot` at every
+personnel-selection moment — YTG, gate digest, the assessed options with
+their measured scores, the selection, the named alternatives (§13→§14).
+The subject's own journal becomes the experimental instrument, read by
+the lab's rules, and the derivation is deterministic: the same journal
+always yields the same decision history.
+
 **Evaluation.** Until §38's statement contains measured numbers from the
 frozen corpus, Playbook makes no claim of demonstrated superiority — the
 crate's own tests assert the *mechanics* of honest classification

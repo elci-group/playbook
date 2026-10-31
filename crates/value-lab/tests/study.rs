@@ -3,8 +3,9 @@
 //! pipeline in one honest loop.
 
 use value_lab::{
-    bootstrap_ci, classify, corpus_for_study, emit_protocol, emit_scoreboard, median, scoreboard,
-    FaultSchedule, FrozenThresholds, Regime, RunRecord, Scoreboard, Stratum, Verdict,
+    bootstrap_ci, classify, corpus_for_study, emit_protocol, emit_scoreboard, median,
+    pareto_frontier, read_results, scoreboard, write_results, FaultSchedule, FrozenThresholds,
+    Regime, RunRecord, Scoreboard, Stratum, Verdict,
 };
 
 fn run(
@@ -104,4 +105,68 @@ fn a_miniature_season_produces_a_defensible_scoreboard() {
     let protocol = emit_protocol();
     assert!(protocol.contains("100000 ppm"));
     assert!(protocol.contains("OCAV"));
+}
+
+#[test]
+fn results_round_trip_and_the_pareto_frontier_hold() {
+    let mut runs = Vec::new();
+    for index in 0..20 {
+        let id = format!("value-{index:03}");
+        // P0: strong all-round. C1: pricier, no better. C5: cheap but weak.
+        runs.push(run(
+            &id,
+            Regime::P0,
+            index % 10 != 9,
+            1_500,
+            Stratum::Routine,
+            false,
+        ));
+        runs.push(run(
+            &id,
+            Regime::C1Strongest,
+            index % 10 != 9,
+            3_000,
+            Stratum::Routine,
+            false,
+        ));
+        runs.push(run(
+            &id,
+            Regime::C5Random,
+            index % 4 == 0,
+            400,
+            Stratum::Routine,
+            false,
+        ));
+    }
+    // Round trip: the results file is the record (§31).
+    let path = std::env::temp_dir().join("value-lab-roundtrip.jsonl");
+    write_results(&path, &runs).unwrap();
+    let read_back = read_results(&path).unwrap();
+    assert_eq!(read_back, runs, "the results file reproduces the runs");
+    let _ = std::fs::remove_file(&path);
+
+    // The frontier keeps the efficient shapes and drops the dominated one
+    // (§25): C1 is never better than P0, so it leaves the frontier.
+    let frontier = pareto_frontier(&runs);
+    let on_frontier: Vec<&str> = frontier.iter().map(|vector| vector.regime.key()).collect();
+    assert!(on_frontier.contains(&"P0_playbook"));
+    assert!(
+        on_frontier.contains(&"C5_random"),
+        "cheap-and-weak can be efficient"
+    );
+    assert!(
+        !on_frontier.contains(&"C1_strongest"),
+        "dominated on every axis"
+    );
+}
+
+#[test]
+fn a_real_journal_feeds_the_counterfactual_pipeline() {
+    let path = std::env::temp_dir().join("value-lab-pipeline.jsonl");
+    let _ = std::fs::remove_file(&path);
+    let report = playbook_sim::run_mvp_with_journal(&path).unwrap();
+    let snapshots =
+        value_lab::decision_snapshots(&report.events, &playbook_policy::Policy::builtin()).unwrap();
+    let _ = std::fs::remove_file(&path);
+    assert!(!snapshots.is_empty());
 }

@@ -304,3 +304,115 @@ mod tests {
         assert!(board.iter().all(|row| row.regime != Regime::C6Oracle));
     }
 }
+
+/// The machine-readable results file (§32 VALUE_RESULTS.jsonl): one run
+/// record per line, append-only, readable back into the scoreboard.
+pub fn write_results(
+    path: &std::path::Path,
+    runs: &[RunRecord],
+) -> Result<(), playbook_core::PlaybookError> {
+    use std::io::Write;
+    let mut file = std::fs::File::create(path)
+        .map_err(|error| playbook_core::PlaybookError::Io(error.to_string()))?;
+    for run in runs {
+        let line = serde_json::to_string(run).map_err(playbook_core::PlaybookError::json)?;
+        writeln!(file, "{line}")
+            .map_err(|error| playbook_core::PlaybookError::Io(error.to_string()))?;
+    }
+    Ok(())
+}
+
+/// Read a results file back. Every line must parse; a torn line is an
+/// error, never a silent skip (§31: the record is the evidence).
+pub fn read_results(
+    path: &std::path::Path,
+) -> Result<Vec<RunRecord>, playbook_core::PlaybookError> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| playbook_core::PlaybookError::Io(error.to_string()))?;
+    let mut runs = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let run: RunRecord = serde_json::from_str(line).map_err(|error| {
+            playbook_core::PlaybookError::ReplayDivergence(format!(
+                "results line {} does not parse: {error}",
+                index + 1
+            ))
+        })?;
+        runs.push(run);
+    }
+    Ok(runs)
+}
+
+/// An aggregate per-regime performance vector for the Pareto analysis
+/// (§25): completion ↑, progress ↑, cost ↓, latency ↓, catastrophe ↓.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegimeVector {
+    pub regime: Regime,
+    pub completion_rate_ppm: u32,
+    pub median_progress_milli: u32,
+    pub median_cost_micros: u64,
+    pub median_latency_ms: u64,
+    pub catastrophe_rate_ppm: u32,
+}
+
+/// The performance vectors of every regime present in the results.
+pub fn vectors(runs: &[RunRecord]) -> Vec<RegimeVector> {
+    crate::run::scoreboard(runs)
+        .into_iter()
+        .map(|row| {
+            let selected: Vec<&RunRecord> =
+                runs.iter().filter(|run| run.regime == row.regime).collect();
+            let catastrophes = selected
+                .iter()
+                .filter(|run| run.catastrophic_failure)
+                .count();
+            let mut costs: Vec<u64> = selected.iter().map(|run| run.cost_micros).collect();
+            costs.sort();
+            let mut latencies: Vec<u64> = selected.iter().map(|run| run.latency_ms).collect();
+            latencies.sort();
+            RegimeVector {
+                regime: row.regime,
+                completion_rate_ppm: row.completion_rate_ppm,
+                median_progress_milli: row.median_progress_milli.unwrap_or(0),
+                median_cost_micros: costs.get(costs.len() / 2).copied().unwrap_or(0),
+                median_latency_ms: latencies.get(latencies.len() / 2).copied().unwrap_or(0),
+                catastrophe_rate_ppm: ((catastrophes as u64 * 1_000_000)
+                    / selected.len().max(1) as u64) as u32,
+            }
+        })
+        .collect()
+}
+
+fn dominates(a: &RegimeVector, b: &RegimeVector) -> bool {
+    let at_least = a.completion_rate_ppm >= b.completion_rate_ppm
+        && a.median_progress_milli >= b.median_progress_milli
+        && a.median_cost_micros <= b.median_cost_micros
+        && a.median_latency_ms <= b.median_latency_ms
+        && a.catastrophe_rate_ppm <= b.catastrophe_rate_ppm;
+    let strictly = a.completion_rate_ppm > b.completion_rate_ppm
+        || a.median_progress_milli > b.median_progress_milli
+        || a.median_cost_micros < b.median_cost_micros
+        || a.median_latency_ms < b.median_latency_ms
+        || a.catastrophe_rate_ppm < b.catastrophe_rate_ppm;
+    at_least && strictly
+}
+
+/// The Pareto frontier over regimes (§25): every regime not dominated by
+/// another. Playbook's strongest possible showing is to move this
+/// frontier, not to win one weighted score. The oracle bound (C6) is
+/// reported on the frontier when present but is not a competitor.
+pub fn pareto_frontier(runs: &[RunRecord]) -> Vec<RegimeVector> {
+    let vectors = vectors(runs);
+    vectors
+        .iter()
+        .filter(|candidate| {
+            !vectors
+                .iter()
+                .any(|other| other.regime != candidate.regime && dominates(other, candidate))
+        })
+        .cloned()
+        .collect()
+}
