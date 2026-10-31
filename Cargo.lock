@@ -633,6 +633,7 @@ version = "0.1.0"
 dependencies = [
  "playbook-core",
  "playbook-events",
+ "playbook-franchise",
  "playbook-lastdown",
  "playbook-policy",
  "playbook-sim",

@@ -18,12 +18,14 @@ pub mod derive;
 pub mod frozen;
 pub mod integrity;
 pub mod lab;
+pub mod live;
 pub mod report;
 pub mod run;
 pub mod stats;
 pub mod value;
 
 pub use corpus::{corpus_for_study, Assignment, Corpus, Stratum, TaskClass};
+pub use live::{chat, corpus, free_models, play, validated, Completion, DraftRow, LiveTask};
 pub use derive::decision_snapshots;
 pub use frozen::{DecisionSnapshot, ExperimentalSnap, ModelEntry, PersonnelOption, Regime};
 pub use integrity::{
