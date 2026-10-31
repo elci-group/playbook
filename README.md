@@ -58,7 +58,9 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 ## The command surface
 
-The `playbook` CLI renders every human-readable output through the real [3form](../3form) presentation library: a bold cyan `▌ PLAYBOOK` headline, dimmed keys, green ✓ / red ✗ verdicts and the broadcast stage bar. Colour resolves against stdout — piped output and `NO_COLOR` strip to plain text automatically, `--form3` emits the machine-readable HUD event grammar, and `--basic` is the plainest text a pipe can read. The styled surface and the machine grammars carry the same facts; they cannot disagree because they are projected from the same report.
+The `playbook` CLI renders every human-readable output through the real [3form](../3form) presentation library: a bold cyan `▌ PLAYBOOK` headline, dimmed keys, green ✓ / red ✗ verdicts and the broadcast stage bar. Colour resolves against stdout — piped output and `NO_COLOR` strip to plain text automatically, `--form3` emits the machine-readable HUD event grammar, and `--basic` is the plainest text a pipe can read. The styled surface and the machine grammars carry the same facts; they cannot disagree because they are projected from the same report. `playbook --help` opens with the same treatment — an animated, plain-English tour of every command:
+
+![playbook --help: the animated command surface](docs/assets/cli-help.gif)
 
 ## The play-card gallery
 

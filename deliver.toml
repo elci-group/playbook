@@ -652,3 +652,8 @@ min_size_bytes = 2000
 path = ".baby-tui.toml"
 required = true
 min_size_bytes = 50
+
+[[file]]
+path = "docs/tapes/help.tape"
+required = true
+min_size_bytes = 100
