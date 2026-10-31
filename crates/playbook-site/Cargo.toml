@@ -1,0 +1,13 @@
+[package]
+name = "playbook-site"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json.workspace = true
+
+[dev-dependencies]
+playbook-core.workspace = true
+playbook-franchise.workspace = true
+playbook-policy.workspace = true
+playbook-sim.workspace = true

@@ -17,6 +17,7 @@ members = [
     "crates/ci-authorities",
     "crates/playbook-ci",
     "crates/ci-evidence",
+    "crates/playbook-site",
     "crates/playbook-elci",
     "crates/playbook-state",
     "crates/playbook-journal",

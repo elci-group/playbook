@@ -438,6 +438,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-site"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-franchise",
+ "playbook-policy",
+ "playbook-sim",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-state"
 version = "0.1.0"
 dependencies = [

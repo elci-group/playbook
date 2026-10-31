@@ -832,3 +832,35 @@ timeout_secs = 300
 
 # value-lab + ci campaign registered
 
+
+[[file]]
+path = "crates/playbook-site/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-site/src/main.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-site/tests/site_drive.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "site/index.html"
+required = true
+min_size_bytes = 3000
+
+[[command]]
+name = "playbook-site governed workflow"
+cmd = ["cargo", "test", "-p", "playbook-site", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "playbook-site generation"
+cmd = ["target/debug/playbook-site", "--workspace", ".", "--out", "site"]
+expect_exit = 0
+timeout_secs = 120
