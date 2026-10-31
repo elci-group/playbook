@@ -450,3 +450,13 @@ min_size_bytes = 2000
 path = "crates/playbook-cards/src/svg.rs"
 required = true
 forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-observability/tests/threeform_campaign.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "artifacts/3form/benchmark.json"
+required = true
+min_size_bytes = 500

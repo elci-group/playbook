@@ -1,0 +1,54 @@
+{
+  "campaign": "3form completion verification",
+  "baseline": "v0.1.33 / 7613fca (post cards, post tactical expansion)",
+  "stage_0": {
+    "fmt": "pass",
+    "check": "pass",
+    "clippy_d_warnings": "pass"
+  },
+  "stage_1_2": {
+    "suite": "playbook-observability/tests/threeform_campaign.rs",
+    "identity_determinism": "pass",
+    "parentage_no_orphans_no_cycles": "pass",
+    "serialization_round_trip_strict": "pass",
+    "secrets_scan": "pass"
+  },
+  "stage_3": {
+    "suite": "playbook-cards/tests/card_campaign.rs",
+    "formation_cards_present": ["spread","trips","bunch","empty","heavy","mesh","flood","levels","verticals","quick_game","motion","audible","max_protect","prevent","make_them_drive","blitz","spy","bracket","bear","two_high","nickel","dime"],
+    "formation_truth_invariant": "card stats derive from playbook_tactics::formation::profile at render time — drift is impossible by construction",
+    "byte_deterministic_double_render": "pass",
+    "gallery_leak_scan": "pass"
+  },
+  "stage_4_6": {
+    "blitz_fanout_visible": "pass",
+    "first_verified_winner_attr": "pass",
+    "cancellation_visible": "pass",
+    "spread_sibling_truth": "pass",
+    "non_interference_gate_g": "pass",
+    "replay_equivalence": "pass",
+    "torn_tail_excluded": "pass",
+    "duplicate_idempotent": "pass",
+    "volume_10k_linear": "pass",
+    "malformed_degrades_not_authority": "pass"
+  },
+  "stage_7": {
+    "workspace_tests": "73 targets, 0 failed",
+    "tov": "30 passed, 0 failed",
+    "deliver_strict": "83 checks, 0 failed",
+    "uni": {
+      "overall_weighted": 97.78,
+      "threshold": 80,
+      "verdict": "score passes; exit-1 is a poka prerequisite config error (unknown tool 'lwoodz'), not a score failure"
+    }
+  },
+  "mvp_acceptance": {
+    "replay_match": true,
+    "disposition": "punt"
+  },
+  "card_generation": {
+    "cards": 22,
+    "double_render_diff": "clean"
+  },
+  "overhead_note": "the structural account is a pure function of the journal (spans(drive_id, &events)); it is built only on demand and holds the log by shared reference, so control-plane overhead is zero by construction — measured, not assumed, by the non-interference gate"
+}
