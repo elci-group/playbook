@@ -61,7 +61,10 @@ mod tests {
                 ("disposition", "punt".to_string()),
             ],
         );
-        assert_eq!(line, "event=mvp_complete replay_match=true disposition=punt");
+        assert_eq!(
+            line,
+            "event=mvp_complete replay_match=true disposition=punt"
+        );
     }
 
     #[test]
@@ -86,7 +89,10 @@ mod tests {
             "tactical_status",
             &[("play", "integration  validation".to_string())],
         );
-        assert_eq!(line, "event=tactical_status play=\"integration validation\"");
+        assert_eq!(
+            line,
+            "event=tactical_status play=\"integration validation\""
+        );
     }
 
     #[test]
