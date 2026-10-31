@@ -19,7 +19,9 @@ use crate::artefact::{RecoveryArtefact, RecoverySource};
 /// deterministically to the first `max_items_per_list` entries, in harvest
 /// order; the id, failure class, reuse hint, context digest, and timestamp
 /// are never truncated. The serialized packet is scanned for competitive
-/// metadata and refused with [`PlaybookError::AmnesiaLeak`] if it leaks.
+/// metadata — and for credential-shaped material — and refused with
+/// [`PlaybookError::AmnesiaLeak`] if it leaks. Credentials never travel in
+/// a packet: facts reference secrets by digest, never by value.
 pub fn packet(
     artefact: &RecoveryArtefact,
     max_items_per_list: usize,
@@ -41,10 +43,31 @@ pub fn packet(
         "at_ms": artefact.at_ms,
     });
     let bytes = serde_json::to_vec(&value).map_err(PlaybookError::json)?;
-    if leaks_competitive_metadata(&bytes) {
+    if leaks_competitive_metadata(&bytes) || leaks_credentials(&bytes) {
         return Err(PlaybookError::AmnesiaLeak);
     }
     Ok(value)
+}
+
+/// Credential-shaped needles a leaked fact must never carry. The scan is
+/// deliberately textual: a fact that names a credential value — however
+/// innocently phrased — does not travel.
+const CREDENTIAL_NEEDLES: &[&str] = &[
+    "api_key=",
+    "apikey=",
+    "bearer ",
+    "authorization:",
+    "password=",
+    "private_key=",
+    "sk-",
+];
+
+/// True when the serialized packet carries credential-shaped material.
+fn leaks_credentials(bytes: &[u8]) -> bool {
+    let lowered = String::from_utf8_lossy(bytes).to_lowercase();
+    CREDENTIAL_NEEDLES
+        .iter()
+        .any(|needle| lowered.contains(needle))
 }
 
 /// The hunt key a consumer needs to find this artefact again, without the
@@ -131,6 +154,21 @@ mod tests {
             full["confirmed_facts"].as_array().map(|items| items.len()),
             Some(3)
         );
+    }
+
+    #[test]
+    fn packet_refuses_credential_shaped_facts() {
+        let credentialed = play_artefact(
+            vec!["the endpoint requires api_key=SK-live-9f2c7 for auth".into()],
+            Vec::new(),
+        );
+        assert!(matches!(
+            packet(&credentialed, 4),
+            Err(PlaybookError::AmnesiaLeak)
+        ));
+        // A clean fact of the same shape still travels.
+        let clean = play_artefact(vec!["the endpoint returned 503 twice".into()], Vec::new());
+        assert!(packet(&clean, 4).is_ok());
     }
 
     #[test]
