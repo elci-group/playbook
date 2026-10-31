@@ -9,6 +9,7 @@ description = "Deterministic drive replay, policy comparison, and the MVP accept
 
 [dependencies]
 playbook-blitz.workspace = true
+playbook-integration.workspace = true
 playbook-cers.workspace = true
 playbook-core.workspace = true
 playbook-franchise.workspace = true

@@ -978,6 +978,217 @@ fn apply_open(
             });
             next.at_ms = *at_ms;
         }
+        DriveEvent::MesutExecutionRouted {
+            execution_id,
+            substrate,
+            queue_position,
+            reason_code,
+        } => {
+            ensure_active(&next)?;
+            if substrate.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "a routed execution names its substrate".into(),
+                ));
+            }
+            next.integrations.push(
+                "mesut_execution_routed",
+                execution_id,
+                &format!("{substrate} q={queue_position} {reason_code}"),
+            );
+        }
+        DriveEvent::MesutScrambleStarted {
+            execution_id,
+            reason,
+            from_substrate,
+            to_substrate,
+        } => {
+            ensure_active(&next)?;
+            if from_substrate == to_substrate {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "a scramble that goes nowhere is not a scramble".into(),
+                ));
+            }
+            next.integrations.push(
+                "mesut_scramble_started",
+                execution_id,
+                &format!("{reason}: {from_substrate} to {to_substrate}"),
+            );
+        }
+        DriveEvent::MesutScrambleCompleted { execution_id } => {
+            ensure_active(&next)?;
+            next.integrations.push(
+                "mesut_scramble_completed",
+                execution_id,
+                "substrate change settled",
+            );
+        }
+        DriveEvent::ConsolidationRequested {
+            objective_id,
+            candidate_count,
+        } => {
+            ensure_active(&next)?;
+            if *candidate_count < 2 {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "consolidation requires actual divergence: at least two candidates".into(),
+                ));
+            }
+            next.integrations.push(
+                "consolidation_requested",
+                &objective_id.clone(),
+                &format!("{candidate_count} candidates"),
+            );
+        }
+        DriveEvent::HybreedPlanGenerated {
+            confidence_ppm,
+            retained,
+            rejected,
+        } => {
+            ensure_active(&next)?;
+            if *confidence_ppm > playbook_core::PPM_SCALE {
+                return Err(PlaybookError::Probability(*confidence_ppm));
+            }
+            next.integrations.push(
+                "hybreed_plan_generated",
+                "hybreed",
+                &format!("confidence={confidence_ppm} retained={retained} rejected={rejected}"),
+            );
+        }
+        DriveEvent::EmulsifyPlanGenerated {
+            compatibility_class,
+            merge_units,
+        } => {
+            ensure_active(&next)?;
+            if !matches!(
+                compatibility_class.as_str(),
+                "mix" | "emulsify" | "suspend" | "separate"
+            ) {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "unknown compatibility class".into(),
+                ));
+            }
+            next.integrations.push(
+                "emulsify_plan_generated",
+                compatibility_class,
+                &format!("{merge_units} merge units"),
+            );
+        }
+        DriveEvent::KaptaindConsolidationAccepted { plan_digest } => {
+            ensure_active(&next)?;
+            if plan_digest.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "an accepted consolidation carries its plan digest".into(),
+                ));
+            }
+            next.integrations.push(
+                "kaptaind_consolidation_accepted",
+                plan_digest,
+                "transaction applied",
+            );
+        }
+        DriveEvent::KaptaindConsolidationRejected {
+            plan_digest,
+            reason_code,
+        } => {
+            ensure_active(&next)?;
+            if reason_code.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "a rejected consolidation names its reason".into(),
+                ));
+            }
+            next.integrations
+                .push("kaptaind_consolidation_rejected", plan_digest, reason_code);
+        }
+        DriveEvent::TheosisPreflightCompleted {
+            current,
+            update_available,
+            update_required,
+            unavailable,
+        } => {
+            ensure_active(&next)?;
+            next.integrations.push(
+                "theosis_preflight_completed",
+                "theosis",
+                &format!(
+                    "current={current} available={update_available} required={update_required} unavailable={unavailable}"
+                ),
+            );
+        }
+        DriveEvent::TheosisUpdateApplied { tool, to_version } => {
+            ensure_active(&next)?;
+            if to_version.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "an applied update names its version".into(),
+                ));
+            }
+            next.integrations
+                .push("theosis_update_applied", tool, &format!("to {to_version}"));
+        }
+        DriveEvent::TheosisUpdateRefused { tool, reason_code } => {
+            ensure_active(&next)?;
+            if reason_code.trim().is_empty() {
+                return Err(PlaybookError::Inadmissible(
+                    "integration".into(),
+                    "a refused update names its reason".into(),
+                ));
+            }
+            next.integrations
+                .push("theosis_update_refused", tool, reason_code);
+        }
+        DriveEvent::DreamseqDriveReviewRequested { drive_id } => {
+            ensure_active(&next)?;
+            next.integrations.push(
+                "dreamseq_drive_review_requested",
+                &drive_id.clone(),
+                "post-drive review opened",
+            );
+        }
+        DriveEvent::DreamseqDriveReviewCompleted {
+            drive_id,
+            personnel_adjustments,
+            infrastructure_opportunities,
+        } => {
+            ensure_active(&next)?;
+            next.integrations.push(
+                "dreamseq_drive_review_completed",
+                &drive_id.clone(),
+                &format!(
+                    "personnel_adjustments={personnel_adjustments} infrastructure_opportunities={infrastructure_opportunities}"
+                ),
+            );
+        }
+        DriveEvent::ReeceQbQueryRequested {
+            objective_id,
+            proposed_action,
+        } => {
+            ensure_active(&next)?;
+            next.integrations.push(
+                "reece_qb_query_requested",
+                &objective_id.clone(),
+                proposed_action,
+            );
+        }
+        DriveEvent::ReeceQbConsiderationReturned {
+            objective_id,
+            confidence_ppm,
+            conflicts,
+        } => {
+            ensure_active(&next)?;
+            if *confidence_ppm > playbook_core::PPM_SCALE {
+                return Err(PlaybookError::Probability(*confidence_ppm));
+            }
+            next.integrations.push(
+                "reece_qb_consideration_returned",
+                &objective_id.clone(),
+                &format!("confidence={confidence_ppm} conflicts={conflicts}"),
+            );
+        }
         DriveEvent::DirectiveExecuted { report, at_ms } => {
             ensure_active(&next)?;
             let directive = next.directive.as_ref().ok_or_else(|| {

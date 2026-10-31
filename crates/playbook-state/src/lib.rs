@@ -167,6 +167,45 @@ impl TacticsLedger {
     }
 }
 
+/// One journalled integration observation: an external system surface
+/// (Mesut, REECE, Dreamseq, Hybreed/Emulsify/Kaptaind, Theosis) reporting
+/// what it observed. Integration records never alter game truth — they are
+/// the advisory plane's receipt.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IntegrationRecord {
+    pub kind: String,
+    pub subject: String,
+    pub detail: String,
+}
+
+/// Event-sourced integration ledger: what the advisory plane observed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct IntegrationLedger {
+    records: Vec<IntegrationRecord>,
+    totals: BTreeMap<String, u32>,
+}
+
+impl IntegrationLedger {
+    pub fn empty() -> Self {
+        Self::default()
+    }
+    pub fn records(&self) -> &[IntegrationRecord] {
+        &self.records
+    }
+    /// How many observations of one kind are on the record.
+    pub fn total(&self, kind: &str) -> u32 {
+        self.totals.get(kind).copied().unwrap_or(0)
+    }
+    pub(crate) fn push(&mut self, kind: &str, subject: &str, detail: &str) {
+        *self.totals.entry(kind.to_string()).or_insert(0) += 1;
+        self.records.push(IntegrationRecord {
+            kind: kind.to_string(),
+            subject: subject.to_string(),
+            detail: detail.to_string(),
+        });
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DriveState {
     pub(crate) drive_id: DriveId,
@@ -234,6 +273,7 @@ pub struct DriveState {
     pub(crate) tinker_conformances: u32,
     pub(crate) tinker_deviations: u32,
     pub(crate) tactics: TacticsLedger,
+    pub(crate) integrations: IntegrationLedger,
 }
 
 impl DriveState {
@@ -309,6 +349,7 @@ impl DriveState {
             tinker_conformances: 0,
             tinker_deviations: 0,
             tactics: TacticsLedger::empty(),
+            integrations: IntegrationLedger::empty(),
         }
     }
 
@@ -394,6 +435,10 @@ impl DriveState {
     /// Event-sourced tactical memory.
     pub fn tactics(&self) -> &TacticsLedger {
         &self.tactics
+    }
+    /// Event-sourced integration ledger: what the advisory plane observed.
+    pub fn integrations(&self) -> &IntegrationLedger {
+        &self.integrations
     }
     /// Personnel the Bench has benched. They are excluded from the
     /// selection pool until the verdict is reversed.

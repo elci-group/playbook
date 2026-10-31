@@ -460,3 +460,23 @@ min_size_bytes = 2000
 path = "artifacts/3form/benchmark.json"
 required = true
 min_size_bytes = 500
+
+[[file]]
+path = "crates/playbook-integration/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-integration/src/mesut.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-sim/tests/integration_gauntlet.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/integrations.md"
+required = true
+min_size_bytes = 2000

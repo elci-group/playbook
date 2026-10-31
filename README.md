@@ -50,6 +50,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 `playbook-cards` renders the NFL-playbook view of the tactical repertoire: X-and-O alignments on chalk-green fields, animated routes, dynamic domain labels, and a 3form event line per card. `playbook cards --out <dir>` writes the gallery; the drive service serves it live at `GET /playbook`. The cards are generated from the same directive data the authorities execute — the diagrams cannot drift from the doctrine.
 
+## Enterprise integrations
+
+`playbook-integration` connects six external systems without surrendering authority: Mesut routes and scrambles local execution beneath the capability plane, REECE reads the ecosystem before the snap, Dreamseq reviews closed drives into structured findings, Hybreed and Emulsify plan consolidations that only Kaptaind applies transactionally, and Theosis keeps tooling fresh through preflight and maintenance windows. Every surface is advisory, journalled, and fails independently. The contracts, authority matrix, and failure policy are specified in [the integrations contract](docs/integrations.md).
+
 ## Documentation anthology
 
 The [documentation anthology](docs/anthology/README.md) is the enterprise supporting set: an executive overview, the system architecture, the authority and governance model, evidence/journal/replay semantics, an operations runbook, the security and boundary model, the metrics and quality gates, a complete glossary and journal-event index, and the personnel/organisation guide. Each document is grounded in the crates it describes; the contract documents remain normative.

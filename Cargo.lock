@@ -217,6 +217,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-integration"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-events",
+ "playbook-policy",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-journal"
 version = "0.1.0"
 dependencies = [
@@ -333,6 +344,7 @@ dependencies = [
  "playbook-evidence",
  "playbook-franchise",
  "playbook-huddle",
+ "playbook-integration",
  "playbook-journal",
  "playbook-lastdown",
  "playbook-observability",

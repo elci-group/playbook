@@ -619,6 +619,84 @@ pub fn spans(drive_id: &str, events: &[DriveEvent]) -> Vec<SpanNode> {
                     ]),
                 });
             }
+            DriveEvent::MesutExecutionRouted {
+                execution_id,
+                substrate,
+                ..
+            }
+            | DriveEvent::MesutScrambleStarted {
+                execution_id,
+                to_substrate: substrate,
+                ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:mesut:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "mesut_execution".into(),
+                    attributes: BTreeMap::from([
+                        ("advisory".into(), "true".into()),
+                        ("execution_id".into(), execution_id.clone()),
+                        ("substrate".into(), substrate.clone()),
+                    ]),
+                });
+            }
+            DriveEvent::DreamseqDriveReviewCompleted {
+                drive_id: reviewed, ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:dreamseq:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "dreamseq_review".into(),
+                    attributes: BTreeMap::from([
+                        ("advisory".into(), "true".into()),
+                        ("reviewed_drive".into(), reviewed.clone()),
+                    ]),
+                });
+            }
+            DriveEvent::ReeceQbConsiderationReturned {
+                objective_id,
+                confidence_ppm,
+                ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:reece:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "reece_read".into(),
+                    attributes: BTreeMap::from([
+                        ("advisory".into(), "true".into()),
+                        ("objective_id".into(), objective_id.clone()),
+                        ("confidence_ppm".into(), confidence_ppm.to_string()),
+                    ]),
+                });
+            }
+            DriveEvent::KaptaindConsolidationAccepted { plan_digest }
+            | DriveEvent::KaptaindConsolidationRejected { plan_digest, .. } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:kaptaind:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "kaptaind_consolidation".into(),
+                    attributes: BTreeMap::from([
+                        ("advisory".into(), "true".into()),
+                        ("plan_digest".into(), plan_digest.clone()),
+                    ]),
+                });
+            }
+            DriveEvent::TheosisPreflightCompleted { current, .. } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:theosis:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "theosis_preflight".into(),
+                    attributes: BTreeMap::from([
+                        ("advisory".into(), "true".into()),
+                        ("current".into(), current.to_string()),
+                    ]),
+                });
+            }
             _ => {}
         }
     }

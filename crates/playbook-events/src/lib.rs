@@ -382,6 +382,72 @@ pub enum DriveEvent {
         counter: String,
         at_ms: u64,
     },
+    MesutExecutionRouted {
+        execution_id: String,
+        substrate: String,
+        queue_position: u16,
+        reason_code: String,
+    },
+    MesutScrambleStarted {
+        execution_id: String,
+        reason: String,
+        from_substrate: String,
+        to_substrate: String,
+    },
+    MesutScrambleCompleted {
+        execution_id: String,
+    },
+    ConsolidationRequested {
+        objective_id: String,
+        candidate_count: u32,
+    },
+    HybreedPlanGenerated {
+        confidence_ppm: u32,
+        retained: u32,
+        rejected: u32,
+    },
+    EmulsifyPlanGenerated {
+        compatibility_class: String,
+        merge_units: u32,
+    },
+    KaptaindConsolidationAccepted {
+        plan_digest: String,
+    },
+    KaptaindConsolidationRejected {
+        plan_digest: String,
+        reason_code: String,
+    },
+    TheosisPreflightCompleted {
+        current: u32,
+        update_available: u32,
+        update_required: u32,
+        unavailable: u32,
+    },
+    TheosisUpdateApplied {
+        tool: String,
+        to_version: String,
+    },
+    TheosisUpdateRefused {
+        tool: String,
+        reason_code: String,
+    },
+    DreamseqDriveReviewRequested {
+        drive_id: String,
+    },
+    DreamseqDriveReviewCompleted {
+        drive_id: String,
+        personnel_adjustments: u32,
+        infrastructure_opportunities: u32,
+    },
+    ReeceQbQueryRequested {
+        objective_id: String,
+        proposed_action: String,
+    },
+    ReeceQbConsiderationReturned {
+        objective_id: String,
+        confidence_ppm: u32,
+        conflicts: u32,
+    },
 }
 
 impl DriveEvent {
@@ -467,6 +533,21 @@ impl DriveEvent {
             Self::TacticCompleted { .. } => "tactic_completed",
             Self::TacticFailed { .. } => "tactic_failed",
             Self::TacticCountered { .. } => "tactic_countered",
+            Self::MesutExecutionRouted { .. } => "mesut_execution_routed",
+            Self::MesutScrambleStarted { .. } => "mesut_scramble_started",
+            Self::MesutScrambleCompleted { .. } => "mesut_scramble_completed",
+            Self::ConsolidationRequested { .. } => "consolidation_requested",
+            Self::HybreedPlanGenerated { .. } => "hybreed_plan_generated",
+            Self::EmulsifyPlanGenerated { .. } => "emulsify_plan_generated",
+            Self::KaptaindConsolidationAccepted { .. } => "kaptaind_consolidation_accepted",
+            Self::KaptaindConsolidationRejected { .. } => "kaptaind_consolidation_rejected",
+            Self::TheosisPreflightCompleted { .. } => "theosis_preflight_completed",
+            Self::TheosisUpdateApplied { .. } => "theosis_update_applied",
+            Self::TheosisUpdateRefused { .. } => "theosis_update_refused",
+            Self::DreamseqDriveReviewRequested { .. } => "dreamseq_drive_review_requested",
+            Self::DreamseqDriveReviewCompleted { .. } => "dreamseq_drive_review_completed",
+            Self::ReeceQbQueryRequested { .. } => "reece_qb_query_requested",
+            Self::ReeceQbConsiderationReturned { .. } => "reece_qb_consideration_returned",
         }
     }
 }
