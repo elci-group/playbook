@@ -5,10 +5,13 @@
 //! (one 3form event line per fact, in the [`form3`] grammar, ready for the
 //! HUD), or `--basic` (the plainest text a pipe can read). The styles are
 //! mutually exclusive; asking for both is a usage error. The banner help is
-//! never restyled. `sprint`, `policy` and `otlp-bench` are machine contracts
+//! never restyled, and reveals line-by-line on a terminal. `sprint`, `policy` and `otlp-bench` are machine contracts
 //! already, so `--basic` leaves them exactly as they are.
 
 #![forbid(unsafe_code)]
+
+use ::form3::compat::Colorize;
+use std::io::Write;
 
 use playbook_core::PlaybookError;
 use playbook_observability::{audit_text, stage_line};
@@ -34,7 +37,8 @@ enum OutputStyle {
 pub fn run(args: &[impl AsRef<str>]) -> i32 {
     let args: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
     let (code, output) = execute(&args);
-    print!("{output}");
+    // A closed pipe (playbook --help | head) is not an error: end quietly.
+    let _ = std::io::stdout().lock().write_all(output.as_bytes());
     code
 }
 
@@ -51,7 +55,8 @@ fn execute(args: &[&str]) -> (i32, String) {
     };
     match args.first().copied() {
         Some("--help") | Some("-h") | Some("help") => {
-            print_usage();
+            let text = build_help(style);
+            reveal_help(&text, style);
             (0, String::new())
         }
         Some("mvp") => rendered(print_mvp(style, &args[1..])),
@@ -67,7 +72,12 @@ fn execute(args: &[&str]) -> (i32, String) {
         Some("huddle-study") => rendered(print_huddle_study(style)),
         Some("cards") => rendered(print_cards(style, &args[1..])),
         _ => {
-            print_usage();
+            let painter = form3::Painter::detect();
+            eprintln!(
+                "{} {}",
+                painter.fail("unknown command"),
+                painter.kv("try", "playbook --help for the full command surface")
+            );
             (2, String::new())
         }
     }
@@ -117,19 +127,209 @@ fn line(out: &mut String, text: impl std::fmt::Display) {
     out.push('\n');
 }
 
-fn print_usage() {
-    eprintln!("usage: playbook <mvp|sim|sprint|priors|explain|status|policy|recover|otlp|otlp-bench|huddle-study|cards>");
-    eprintln!("  cards [--out <dir>] [--threeform] renders the animated X-and-O playbook gallery; with --threeform, prints one 3form event line per card");
-    eprintln!(
-        "  mvp [--journal <path>] runs the acceptance drive, optionally through a durable journal"
+/// The full command surface, written for a person meeting Playbook for the
+/// first time. Styled through the 3form painter (plain when piped); the
+/// `--basic` style skips the paint entirely.
+fn build_help(style: OutputStyle) -> String {
+    let painter = match style {
+        OutputStyle::Basic => form3::Painter::plain(),
+        _ => form3::Painter::detect(),
+    };
+    let mut out = String::new();
+    let section = |title: &str, out: &mut String| {
+        line(out, String::new());
+        line(
+            out,
+            painter.accent_row(&format!(
+                "── {title} {}",
+                "─".repeat(46usize.saturating_sub(title.chars().count()))
+            )),
+        );
+    };
+
+    // Banner.
+    let banner = if painter_is_colored(&painter) {
+        "▌ PLAYBOOK".bright_cyan().bold().to_string()
+    } else {
+        "▌ PLAYBOOK".to_string()
+    };
+    line(&mut out, banner);
+    line(
+        &mut out,
+        painter.kv(
+            "the franchise command surface",
+            "run drives, read the field, and replay any game ever played",
+        ),
     );
-    eprintln!("  recover <journal> folds a recovered drive and reports what the host owes");
-    eprintln!("  otlp <endpoint> exports the acceptance drive trace over OTLP/HTTP JSON");
-    eprintln!(
-        "  otlp-bench --spans N [--endpoint url] [--runs R] measures encode and export throughput"
+
+    section("COMMANDS", &mut out);
+    let commands: Vec<(&str, &str, &str)> = vec![
+        (
+            "mvp",
+            "[--journal <path>]",
+            "plays the full acceptance drive end to end: gates are declared, capability is discovered, evidence earns yards, a tool failure is survived, a punt is taken on fourth down, and the final state is replayed against the audit to prove nothing moved backwards. Pass --journal to write a durable JSONL journal as it plays.",
+        ),
+        (
+            "status",
+            "",
+            "shows the tactical snapshot of the acceptance drive as the coach sees it: down and distance, yards-to-go, budget remaining and the play currently called.",
+        ),
+        (
+            "explain",
+            "",
+            "asks the audit why the drive is where it is, and answers in plain words — the reasons the authority accepted, down by down.",
+        ),
+        (
+            "sim",
+            "[--policy <name>] [--trace <mvp|path>]",
+            "replays a recorded game under a different policy and lays the two runs side by side, so you can see exactly what a policy change would have moved — yards, budget, completion and nothing else.",
+        ),
+        (
+            "priors",
+            "",
+            "prints the measured prior table: what each player has actually earned on the field, learned only from outcomes — never from self-report.",
+        ),
+        (
+            "policy",
+            "[pass-heavy]",
+            "prints the policy document the authority enforces. With pass-heavy, prints the contrast variant used for comparisons.",
+        ),
+        (
+            "recover",
+            "<journal>",
+            "folds a journal back into a live drive from disk and reports what the host owes: recovery truncates at the first torn or tampered record, so what survives is exactly what provably happened.",
+        ),
+        (
+            "otlp",
+            "<endpoint>",
+            "exports the acceptance drive's trace to an OTLP/HTTP collector as JSON, for observability backends that speak OpenTelemetry.",
+        ),
+        (
+            "otlp-bench",
+            "--spans N [--endpoint url] [--runs R]",
+            "measures how fast traces encode and export, so you can size the observability pipeline before the franchise depends on it.",
+        ),
+        (
+            "huddle-study",
+            "",
+            "runs the Phase 8 comparative huddle programme: the same scenarios under four coordination regimes, completed side by side, so the huddle economics are visible rather than asserted.",
+        ),
+        (
+            "cards",
+            "[--out <dir>] [--threeform]",
+            "renders the animated X-and-O playbook gallery. With --out it writes the pages to disk; with --threeform it prints one 3form event line per card for the HUD.",
+        ),
+        (
+            "sprint",
+            "",
+            "runs the blitz campaign report: the defensive single-focus inference sprint, from proposal to verified candidate.",
+        ),
+    ];
+    for (name, args, description) in commands {
+        let call = if args.is_empty() {
+            painter.accent_row(name)
+        } else {
+            format!("{} {}", painter.accent_row(name), painter.key(args))
+        };
+        line(&mut out, format!("  {call}"));
+        line(&mut out, format!("      {}", wrap(description, 66)));
+        line(&mut out, String::new());
+    }
+
+    section("OUTPUT STYLES", &mut out);
+    line(
+        &mut out,
+        format!(
+            "  {}",
+            wrap(
+                "By default every surface is 3form-styled: headlines, verdicts and stage bars. Colour strips itself automatically when output is piped or NO_COLOR is set — the facts never change, only the paint.",
+                66
+            )
+        ),
     );
-    eprintln!("  huddle-study runs the Phase 8 comparative huddle programme and reports completion per regime");
-    eprintln!("  default output is 3form-styled (colour strips when piped); --form3 | --basic select the HUD event grammar or the plainest text; the two are mutually exclusive");
+    line(
+        &mut out,
+        format!(
+            "  {}  {}",
+            painter.accent_row("--form3"),
+            painter.key("one machine-readable HUD event line per fact")
+        ),
+    );
+    line(
+        &mut out,
+        format!(
+            "  {}  {}",
+            painter.accent_row("--basic"),
+            painter.key("the plainest text a pipe can read — no styling at all")
+        ),
+    );
+
+    section("TRY THIS", &mut out);
+    line(
+        &mut out,
+        format!(
+            "  {}  {}",
+            painter.accent_row("playbook mvp --journal drive.jsonl"),
+            painter.key("# play and keep the journal")
+        ),
+    );
+    line(
+        &mut out,
+        format!(
+            "  {}  {}",
+            painter.accent_row("playbook recover drive.jsonl"),
+            painter.key("# fold it back and settle up")
+        ),
+    );
+    line(
+        &mut out,
+        format!(
+            "  {}  {}",
+            painter.accent_row("playbook-tui --replay drive.jsonl"),
+            painter.key("# film review, frame by frame")
+        ),
+    );
+    out
+}
+
+fn painter_is_colored(painter: &form3::Painter) -> bool {
+    painter.colored()
+}
+
+/// Reveal the help one line at a time on a terminal — a short, quiet
+/// stagger, not a circus. Piped output and `--basic` print instantly.
+fn reveal_help(text: &str, style: OutputStyle) {
+    let animated =
+        style != OutputStyle::Basic && std::io::IsTerminal::is_terminal(&std::io::stdout());
+    let mut stdout = std::io::stdout().lock();
+    for line_ in text.lines() {
+        // A closed pipe (playbook --help | head) ends the reveal quietly.
+        if writeln!(stdout, "{line_}").is_err() {
+            return;
+        }
+        if animated {
+            std::thread::sleep(std::time::Duration::from_millis(9));
+        }
+    }
+}
+
+/// Wrap one paragraph to `width` columns on word boundaries.
+fn wrap(text: &str, width: usize) -> String {
+    let mut out = String::new();
+    let mut column = 0;
+    for word in text.split_whitespace() {
+        if column > 0 && column + 1 + word.chars().count() > width {
+            out.push('\n');
+            out.push_str("      ");
+            column = 0;
+        } else if column > 0 {
+            out.push(' ');
+            column += 1;
+        }
+        out.push_str(word);
+        column += word.chars().count();
+    }
+    out
 }
 
 /// The acceptance drive. Plain mode reads as the coach's summary; form3 mode
@@ -1246,6 +1446,24 @@ impl DispositionName for playbook_core::Disposition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn help_is_verbose_and_pipes_plain() {
+        let (code, printed) = execute(&["--help"]);
+        assert_eq!(code, 0);
+        assert!(printed.is_empty(), "the reveal prints the help itself");
+        let help = build_help(OutputStyle::Plain);
+        assert!(help.contains("acceptance"), "the mvp hint names the drive");
+        assert!(help.contains("OUTPUT STYLES"));
+        assert!(help.contains("playbook-tui --replay"));
+        // Piped help carries no paint.
+        assert!(!help.contains('\x1b'), "piped help is plain text");
+    }
+
+    #[test]
+    fn unknown_commands_point_at_the_help() {
+        assert_eq!(run(&["no-such-command"]), 2);
+    }
 
     #[test]
     fn policy_and_mvp_commands_exit_clean() {

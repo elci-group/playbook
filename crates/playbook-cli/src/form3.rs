@@ -67,6 +67,11 @@ impl Painter {
         Self { color: false }
     }
 
+    /// Whether this painter paints.
+    pub fn colored(&self) -> bool {
+        self.color
+    }
+
     pub fn accent(&self, text: &str) -> String {
         self.paint(text, |t| t.bold())
     }
