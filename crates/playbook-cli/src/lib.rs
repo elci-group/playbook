@@ -13,6 +13,10 @@ use playbook_sim::{
 pub fn run(args: &[impl AsRef<str>]) -> i32 {
     let args: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
     match args.first().copied() {
+        Some("--help") | Some("-h") | Some("help") => {
+            print_usage();
+            0
+        }
         Some("mvp") => command(print_mvp(&args[1..])),
         Some("sim") => command(print_sim(&args[1..])),
         Some("sprint") => command(print_sprint()),
@@ -26,16 +30,24 @@ pub fn run(args: &[impl AsRef<str>]) -> i32 {
         Some("huddle-study") => command(print_huddle_study()),
         Some("cards") => command(print_cards(&args[1..])),
         _ => {
-            eprintln!("usage: playbook <mvp|sim|sprint|priors|explain|status|policy|recover|otlp|otlp-bench|huddle-study|cards>");
-            eprintln!("  cards [--out <dir>] [--threeform] renders the animated X-and-O playbook gallery; with --threeform, prints one 3form event line per card");
-            eprintln!("  mvp [--journal <path>] runs the acceptance drive, optionally through a durable journal");
-            eprintln!("  recover <journal> folds a recovered drive and reports what the host owes");
-            eprintln!("  otlp <endpoint> exports the acceptance drive trace over OTLP/HTTP JSON");
-            eprintln!("  otlp-bench --spans N [--endpoint url] [--runs R] measures encode and export throughput");
-            eprintln!("  huddle-study runs the Phase 8 comparative huddle programme and reports completion per regime");
+            print_usage();
             2
         }
     }
+}
+
+fn print_usage() {
+    eprintln!("usage: playbook <mvp|sim|sprint|priors|explain|status|policy|recover|otlp|otlp-bench|huddle-study|cards>");
+    eprintln!("  cards [--out <dir>] [--threeform] renders the animated X-and-O playbook gallery; with --threeform, prints one 3form event line per card");
+    eprintln!(
+        "  mvp [--journal <path>] runs the acceptance drive, optionally through a durable journal"
+    );
+    eprintln!("  recover <journal> folds a recovered drive and reports what the host owes");
+    eprintln!("  otlp <endpoint> exports the acceptance drive trace over OTLP/HTTP JSON");
+    eprintln!(
+        "  otlp-bench --spans N [--endpoint url] [--runs R] measures encode and export throughput"
+    );
+    eprintln!("  huddle-study runs the Phase 8 comparative huddle programme and reports completion per regime");
 }
 
 fn command(result: Result<(), PlaybookError>) -> i32 {
