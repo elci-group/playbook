@@ -1,0 +1,41 @@
+[
+  {
+    "trace_id": "drive-golden-tactical-transition",
+    "span_id": "drive-golden-tactical-transition:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-tactical-transition"
+    }
+  },
+  {
+    "trace_id": "drive-golden-tactical-transition",
+    "span_id": "drive-golden-tactical-transition:tactic:0",
+    "parent_span_id": "drive-golden-tactical-transition:drive",
+    "name": "tactic:bunch",
+    "attributes": {
+      "outcome": "admitted"
+    }
+  },
+  {
+    "trace_id": "drive-golden-tactical-transition",
+    "span_id": "drive-golden-tactical-transition:tactic_outcome:1",
+    "parent_span_id": "drive-golden-tactical-transition:drive",
+    "name": "tactic:bunch",
+    "attributes": {
+      "outcome": "completed",
+      "ytg_after_milli": "6000",
+      "ytg_before_milli": "10000"
+    }
+  },
+  {
+    "trace_id": "drive-golden-tactical-transition",
+    "span_id": "drive-golden-tactical-transition:tactic_counter:2",
+    "parent_span_id": "drive-golden-tactical-transition:drive",
+    "name": "tactic:bunch",
+    "attributes": {
+      "counter": "prevent",
+      "outcome": "countered"
+    }
+  }
+]

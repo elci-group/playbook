@@ -1,0 +1,73 @@
+[
+  {
+    "trace_id": "drive-golden-blitz",
+    "span_id": "drive-golden-blitz:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-blitz"
+    }
+  },
+  {
+    "trace_id": "drive-golden-blitz",
+    "span_id": "drive-golden-blitz:blitz:0",
+    "parent_span_id": "drive-golden-blitz:drive",
+    "name": "blitz",
+    "attributes": {
+      "blitz_id": "b-golden"
+    }
+  },
+  {
+    "trace_id": "drive-golden-blitz",
+    "span_id": "drive-golden-blitz:blitz_worker:1",
+    "parent_span_id": "drive-golden-blitz:blitz:0",
+    "name": "blitz_worker",
+    "attributes": {
+      "effective_parallelism_milli": "1000",
+      "provider": "alpha",
+      "worker_id": "w-golden-1"
+    }
+  },
+  {
+    "trace_id": "drive-golden-blitz",
+    "span_id": "drive-golden-blitz:blitz_worker:2",
+    "parent_span_id": "drive-golden-blitz:blitz:0",
+    "name": "blitz_worker",
+    "attributes": {
+      "effective_parallelism_milli": "2000",
+      "provider": "beta",
+      "worker_id": "w-golden-2"
+    }
+  },
+  {
+    "trace_id": "drive-golden-blitz",
+    "span_id": "drive-golden-blitz:candidate_verified:3",
+    "parent_span_id": "drive-golden-blitz:blitz:0",
+    "name": "candidate_verified",
+    "attributes": {
+      "candidate_id": "c-golden-1",
+      "gates_passed": "1"
+    }
+  },
+  {
+    "trace_id": "drive-golden-blitz",
+    "span_id": "drive-golden-blitz:blitz_winner:4",
+    "parent_span_id": "drive-golden-blitz:blitz:0",
+    "name": "blitz_winner",
+    "attributes": {
+      "basis": "first_verified",
+      "candidate_id": "c-golden-1",
+      "worker_id": "w-golden-1"
+    }
+  },
+  {
+    "trace_id": "drive-golden-blitz",
+    "span_id": "drive-golden-blitz:worker_cancelled:5",
+    "parent_span_id": "drive-golden-blitz:blitz:0",
+    "name": "worker_cancelled",
+    "attributes": {
+      "avoided_tokens": "900",
+      "worker_id": "w-golden-2"
+    }
+  }
+]

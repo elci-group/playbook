@@ -1,0 +1,30 @@
+[
+  {
+    "trace_id": "drive-golden-huddle",
+    "span_id": "drive-golden-huddle:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-huddle"
+    }
+  },
+  {
+    "trace_id": "drive-golden-huddle",
+    "span_id": "drive-golden-huddle:huddle:1",
+    "parent_span_id": "drive-golden-huddle:drive",
+    "name": "huddle:position",
+    "attributes": {
+      "huddle_id": "h-golden-1",
+      "scope": "position"
+    }
+  },
+  {
+    "trace_id": "drive-golden-huddle",
+    "span_id": "drive-golden-huddle:huddle_report:2",
+    "parent_span_id": "drive-golden-huddle:huddle:1",
+    "name": "huddle_report",
+    "attributes": {
+      "participant": "worker"
+    }
+  }
+]

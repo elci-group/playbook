@@ -1,0 +1,20 @@
+[
+  {
+    "trace_id": "drive-golden-lastdown-evaluation",
+    "span_id": "drive-golden-lastdown-evaluation:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-lastdown-evaluation"
+    }
+  },
+  {
+    "trace_id": "drive-golden-lastdown-evaluation",
+    "span_id": "drive-golden-lastdown-evaluation:evaluation:0",
+    "parent_span_id": "drive-golden-lastdown-evaluation:drive",
+    "name": "evaluation:lastdown",
+    "attributes": {
+      "reasons": "quota runway below the punt floor|context capacity nearly spent"
+    }
+  }
+]

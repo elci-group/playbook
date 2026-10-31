@@ -176,6 +176,7 @@ dependencies = [
  "playbook-elci",
  "playbook-events",
  "playbook-front-office",
+ "playbook-live",
  "playbook-policy",
  "playbook-sim",
  "playbook-state",

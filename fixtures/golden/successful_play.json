@@ -1,0 +1,29 @@
+[
+  {
+    "trace_id": "drive-golden-successful-play",
+    "span_id": "drive-golden-successful-play:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-successful-play"
+    }
+  },
+  {
+    "trace_id": "drive-golden-successful-play",
+    "span_id": "drive-golden-successful-play:play:1",
+    "parent_span_id": "drive-golden-successful-play:drive",
+    "name": "compile.check",
+    "attributes": {
+      "down": "FIRST_DOWN"
+    }
+  },
+  {
+    "trace_id": "drive-golden-successful-play",
+    "span_id": "drive-golden-successful-play:tool:2",
+    "parent_span_id": "drive-golden-successful-play:play:1",
+    "name": "compile.check",
+    "attributes": {
+      "capability": "elci.compiler"
+    }
+  }
+]

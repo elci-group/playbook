@@ -1,0 +1,29 @@
+[
+  {
+    "trace_id": "drive-golden-rejected-play",
+    "span_id": "drive-golden-rejected-play:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-rejected-play"
+    }
+  },
+  {
+    "trace_id": "drive-golden-rejected-play",
+    "span_id": "drive-golden-rejected-play:play:0",
+    "parent_span_id": "drive-golden-rejected-play:drive",
+    "name": "patch.apply",
+    "attributes": {
+      "down": "THIRD_DOWN_PASS"
+    }
+  },
+  {
+    "trace_id": "drive-golden-rejected-play",
+    "span_id": "drive-golden-rejected-play:tool:1",
+    "parent_span_id": "drive-golden-rejected-play:play:0",
+    "name": "patch.apply",
+    "attributes": {
+      "capability": "elci.patch"
+    }
+  }
+]

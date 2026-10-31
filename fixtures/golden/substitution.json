@@ -1,0 +1,33 @@
+[
+  {
+    "trace_id": "drive-golden-substitution",
+    "span_id": "drive-golden-substitution:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-substitution"
+    }
+  },
+  {
+    "trace_id": "drive-golden-substitution",
+    "span_id": "drive-golden-substitution:substitution:0",
+    "parent_span_id": "drive-golden-substitution:drive",
+    "name": "substitution",
+    "attributes": {
+      "class": "validator",
+      "out": "starter-validator",
+      "replacement": "bench-validator"
+    }
+  },
+  {
+    "trace_id": "drive-golden-substitution",
+    "span_id": "drive-golden-substitution:substitution:1",
+    "parent_span_id": "drive-golden-substitution:drive",
+    "name": "substitution",
+    "attributes": {
+      "class": "rusher",
+      "out": "starter-rusher",
+      "replacement": "none"
+    }
+  }
+]

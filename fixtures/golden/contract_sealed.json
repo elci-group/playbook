@@ -1,0 +1,21 @@
+[
+  {
+    "trace_id": "drive-golden-contract-sealed",
+    "span_id": "drive-golden-contract-sealed:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-contract-sealed"
+    }
+  },
+  {
+    "trace_id": "drive-golden-contract-sealed",
+    "span_id": "drive-golden-contract-sealed:game_contract:0",
+    "parent_span_id": "drive-golden-contract-sealed:drive",
+    "name": "game_contract",
+    "attributes": {
+      "contract_hash": "f35b9ec126cb19ee8ae1b7b442533ed72571295d11156c02891dd807b6d0620f",
+      "mandatory_win_conditions": "2"
+    }
+  }
+]

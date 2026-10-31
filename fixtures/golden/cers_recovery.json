@@ -1,0 +1,21 @@
+[
+  {
+    "trace_id": "drive-golden-cers-recovery",
+    "span_id": "drive-golden-cers-recovery:drive",
+    "parent_span_id": null,
+    "name": "drive",
+    "attributes": {
+      "drive_id": "drive-golden-cers-recovery"
+    }
+  },
+  {
+    "trace_id": "drive-golden-cers-recovery",
+    "span_id": "drive-golden-cers-recovery:cers:0",
+    "parent_span_id": "drive-golden-cers-recovery:drive",
+    "name": "cers_recovery",
+    "attributes": {
+      "artefact_id": "art-golden-1",
+      "source": "prior_drive_cache"
+    }
+  }
+]
