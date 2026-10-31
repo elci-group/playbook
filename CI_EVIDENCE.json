@@ -1,0 +1,199 @@
+{
+  "schema": "CI_EVIDENCE/1",
+  "revision": {
+    "commit": "61b0ab4fd678f80978d34d3c4b463ea7a45bd42f",
+    "parent": "309e043bb12e8ed1502ad0e99b706a761752143a",
+    "branch": "feat/franchise-front-office",
+    "diff_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "lock_digest": "38719299605439156306b196f9c2dd76774de84f4881c684ecca642e75202344",
+    "toolchain": "cargo 1.99.0 (5f94df478 2026-08-27); rustc 1.99.0 (b940084d7 2026-09-28)",
+    "policy_version": "v1",
+    "implementation_version": "0.1.0",
+    "config_hashes": {
+      "Cargo.lock": "38719299605439156306b196f9c2dd76774de84f4881c684ecca642e75202344",
+      "deliver.toml": "ceb7a2d48472bc4620f36d1a28709bf89e7e7bb74dd27ea16c4608a023e8fad5",
+      "goglz.yaml": "dcd5f10e76edb1dca4fdc7755b85f266456b20577aeeea3a4cb24818d9f441b4"
+    },
+    "frozen_at_ms": 1793489506678
+  },
+  "gates": [
+    {
+      "gate_id": "ci/fmt",
+      "authority": "cargo",
+      "authority_version": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489506992,
+      "completed_at_ms": 1793489507605,
+      "input_hash": "2d009b4c2fff7c140a0e853344ad59d7dd2bd2a362627a962da72a2e39704a8f",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 612
+    },
+    {
+      "gate_id": "ci/check",
+      "authority": "cargo",
+      "authority_version": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489507605,
+      "completed_at_ms": 1793489515286,
+      "input_hash": "b987a79d7a7b864b3345648662a2c9df427ced180e76ccccb1beb843ebef7d65",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 7680
+    },
+    {
+      "gate_id": "ci/clippy",
+      "authority": "cargo",
+      "authority_version": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489515286,
+      "completed_at_ms": 1793489516136,
+      "input_hash": "95480302ecc2d04e61a894896dc0571c5066ec8dba06fdf7461bac763fdb8df8",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 850
+    },
+    {
+      "gate_id": "ci/test",
+      "authority": "cargo",
+      "authority_version": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489516136,
+      "completed_at_ms": 1793489542514,
+      "input_hash": "25f5ac165e7e9d9a2c40eca93979580bce763065cf6b0ccbed12ab251ed27693",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 26378
+    },
+    {
+      "gate_id": "ci/deliver",
+      "authority": "deliver",
+      "authority_version": "unversioned",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489542514,
+      "completed_at_ms": 1793489563808,
+      "input_hash": "8203f3afe17f23927706968b964414869aecc8c23e8d8ea9bad12daf26d32665",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 21294
+    },
+    {
+      "gate_id": "ci/replay",
+      "authority": "cargo",
+      "authority_version": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489563809,
+      "completed_at_ms": 1793489563965,
+      "input_hash": "085b62d71b5b6f457ce82d77936cedfac5d013b4ce0174a013043da7490a222b",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 156
+    },
+    {
+      "gate_id": "ci/mvp-replay",
+      "authority": "playbook",
+      "authority_version": "unversioned",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489563965,
+      "completed_at_ms": 1793489563974,
+      "input_hash": "7fa2a83398e672a0253fc1acf62947b2ec65eef636e9a4ec14ff9e392ffc33e5",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 9
+    },
+    {
+      "gate_id": "ci/value-lab",
+      "authority": "cargo",
+      "authority_version": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "policy_version": "v1",
+      "classification": "blocking",
+      "started_at_ms": 1793489563974,
+      "completed_at_ms": 1793489564339,
+      "input_hash": "76222a9b8882c0471ef1cc53ea6a62593b162860bbdd8177929616f01ded7cf4",
+      "outcome": "pass",
+      "exit_code": 0,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 364
+    },
+    {
+      "gate_id": "ci/traci",
+      "authority": "traci",
+      "authority_version": "unversioned",
+      "policy_version": "v1",
+      "classification": "advisory",
+      "started_at_ms": 1793489564339,
+      "completed_at_ms": 1793489564381,
+      "input_hash": "d5ac94a6f2108cd1210a7093341075c1e660ff09fbc5ea4f25cef17f7d6b4d20",
+      "outcome": "fail",
+      "exit_code": 2,
+      "findings": [
+        {
+          "code": "gate/fail",
+          "severity": "error",
+          "message": "gate ci/traci exited non-zero (code Some(2)): ab/tests/study.rs:167:5: critical [TRC007] panic path cannot be reconstructed from telemetry\n  | let report = playbook_sim::run_mvp_with_journal(&path).unwrap();\n  = help: Replace unwrap/expect with a traced, contextual error path.\n./crates/value-lab/tests/study.rs:169:9: critical [TRC007] panic path cannot be reconstructed from telemetry\n  | value_lab::decision_snapshots(&report.events, &playbook_policy::Policy::builtin()).unwrap();\n  = help: Replace unwrap/expect with a traced, contextual error path.\n./crates/value-lab/tests/study.rs:170:5: error [TRC002] result is discarded without a diagnostic record\n  | let _ = std::fs::remove_file(&path);\n  = help: Handle the result or record why discarding it is safe.\nTraci: 178 file(s), 1693 finding(s) (0 info, 7 warning, 631 error, 1055 critical)"
+        }
+      ],
+      "artifact_hashes": [],
+      "duration_ms": 42
+    },
+    {
+      "gate_id": "ci/amber",
+      "authority": "amber",
+      "authority_version": "unversioned",
+      "policy_version": "v1",
+      "classification": "conditional",
+      "started_at_ms": 1793489564381,
+      "completed_at_ms": 1793489564402,
+      "input_hash": "fade5f27e95fbfc603a44f78c5915c731cd5fc733839ed2bf5ecbca006804e71",
+      "outcome": "fail",
+      "exit_code": 2,
+      "findings": [
+        {
+          "code": "gate/fail",
+          "severity": "error",
+          "message": "gate ci/amber exited non-zero (code Some(2)): error: unexpected argument '.' found\n\nUsage: amber [OPTIONS] [PATH] [COMMAND]\n\nFor more information, try '--help'."
+        }
+      ],
+      "artifact_hashes": [],
+      "duration_ms": 21
+    },
+    {
+      "gate_id": "ci/verity",
+      "authority": "verity",
+      "authority_version": "unversioned",
+      "policy_version": "v1",
+      "classification": "conditional",
+      "started_at_ms": 1793489564402,
+      "completed_at_ms": 1793489564408,
+      "input_hash": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "outcome": "skipped_not_applicable",
+      "exit_code": null,
+      "findings": [],
+      "artifact_hashes": [],
+      "duration_ms": 6
+    }
+  ],
+  "waivers": []
+}
