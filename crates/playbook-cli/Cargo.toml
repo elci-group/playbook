@@ -12,6 +12,7 @@ name = "playbook"
 path = "src/main.rs"
 
 [dependencies]
+form3 = { path = "../../../3form" }
 playbook-cards.workspace = true
 playbook-core.workspace = true
 playbook-events.workspace = true

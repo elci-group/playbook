@@ -129,7 +129,7 @@ fn print_usage() {
         "  otlp-bench --spans N [--endpoint url] [--runs R] measures encode and export throughput"
     );
     eprintln!("  huddle-study runs the Phase 8 comparative huddle programme and reports completion per regime");
-    eprintln!("  --form3 | --basic restyles any command: 3form HUD event lines, or the plainest text; the two are mutually exclusive");
+    eprintln!("  default output is 3form-styled (colour strips when piped); --form3 | --basic select the HUD event grammar or the plainest text; the two are mutually exclusive");
 }
 
 /// The acceptance drive. Plain mode reads as the coach's summary; form3 mode
@@ -160,36 +160,50 @@ fn print_mvp(style: OutputStyle, args: &[&str]) -> Result<String, PlaybookError>
     let mut out = String::new();
     match style {
         OutputStyle::Plain => {
-            for stage in &report.stages {
-                line(&mut out, stage);
-            }
-            line(&mut out, format!("replay_match {}", report.replay_match));
-            if let Some(matched) = report.journal_replay_match {
-                line(&mut out, format!("journal_replay_match {matched}"));
-            }
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("ACCEPTANCE DRIVE"));
             line(
                 &mut out,
-                format!(
-                    "disposition {}",
-                    report
-                        .disposition
-                        .map(|item| item.machine())
-                        .unwrap_or("none")
+                form3::stage_bar(report.stages.len(), report.stages.len()),
+            );
+            for stage in &report.stages {
+                line(&mut out, format!("  {}", stage));
+            }
+            line(&mut out, String::new());
+            line(
+                &mut out,
+                painter.boolean(
+                    report.replay_match,
+                    "replay clean — the replayed state equals the live state",
+                ),
+            );
+            if let Some(matched) = report.journal_replay_match {
+                line(&mut out, painter.boolean(matched, "journal replay clean"));
+            }
+            let disposition = report
+                .disposition
+                .map(|item| item.machine())
+                .unwrap_or("none");
+            line(&mut out, painter.kv("disposition", disposition));
+            line(
+                &mut out,
+                painter.kv(
+                    "false completion claims",
+                    &report.false_completion_claims.to_string(),
                 ),
             );
             line(
                 &mut out,
-                format!("false_completion_claims {}", report.false_completion_claims),
+                painter.kv(
+                    "duplicate failed plays",
+                    &report.duplicate_failed_plays.to_string(),
+                ),
             );
             line(
                 &mut out,
-                format!("duplicate_failed_plays {}", report.duplicate_failed_plays),
-            );
-            line(
-                &mut out,
-                format!(
-                    "control_duplicate_failed_plays {}",
-                    report.control_duplicate_failed_plays
+                painter.kv(
+                    "control duplicate failed plays",
+                    &report.control_duplicate_failed_plays.to_string(),
                 ),
             );
         }
@@ -272,71 +286,112 @@ fn print_sim(style: OutputStyle, args: &[&str]) -> Result<String, PlaybookError>
     let mut out = String::new();
     match style {
         OutputStyle::Plain => {
-            line(&mut out, format!("trace {trace_name}"));
-            line(&mut out, format!("policy {}", policy.version));
-            line(&mut out, format!("ytg_match {}", comparison.ytg_match));
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("POLICY COMPARISON"));
+            line(&mut out, painter.kv("trace", trace_name));
+            line(&mut out, painter.kv("policy", &policy.version));
+            line(&mut out, String::new());
             line(
                 &mut out,
-                format!("budget_match {}", comparison.budget_match),
+                painter.boolean(comparison.ytg_match, "yards-to-goal replay matches"),
             );
             line(
                 &mut out,
-                format!("completion_match {}", comparison.completion_match),
+                painter.boolean(comparison.budget_match, "budget replay matches"),
             );
             line(
                 &mut out,
-                format!("down_labels_differ {}", comparison.down_labels_differ),
+                painter.boolean(comparison.completion_match, "completion replay matches"),
+            );
+            line(&mut out, String::new());
+            line(
+                &mut out,
+                painter.kv("completion status", &comparison.completion_status),
             );
             line(
                 &mut out,
-                format!("completion_status {}", comparison.completion_status),
+                painter.kv(
+                    "yards gained",
+                    &format!("{} ppm", comparison.yards_gained_ppm),
+                ),
             );
             line(
                 &mut out,
-                format!("ytg_trajectory {:?}", comparison.ytg_trajectory),
+                painter.kv("gates satisfied", &comparison.gates_satisfied.to_string()),
             );
             line(
                 &mut out,
-                format!("budget_remaining_ppm {}", comparison.budget_remaining_ppm),
+                painter.kv(
+                    "efficiency ratio",
+                    &format!("{} milli", comparison.efficiency_ratio_milli),
+                ),
             );
             line(
                 &mut out,
-                format!("tool_failures {}", comparison.tool_failures),
-            );
-            line(&mut out, format!("model_calls {}", comparison.model_calls));
-            line(
-                &mut out,
-                format!("personnel_changes {}", comparison.personnel_changes),
+                painter.kv("tool failures", &comparison.tool_failures.to_string()),
             );
             line(
                 &mut out,
-                format!("fourth_down_index {:?}", comparison.fourth_down_index),
+                painter.kv("model calls", &comparison.model_calls.to_string()),
             );
             line(
                 &mut out,
-                format!("wall_clock_ms {}", comparison.wall_clock_ms),
+                painter.kv(
+                    "personnel changes",
+                    &comparison.personnel_changes.to_string(),
+                ),
             );
             line(
                 &mut out,
-                format!("monetary_cost_micros {}", comparison.monetary_cost_micros),
+                painter.kv(
+                    "budget remaining",
+                    &format!("{} ppm", comparison.budget_remaining_ppm),
+                ),
             );
             line(
                 &mut out,
-                format!("gates_satisfied {}", comparison.gates_satisfied),
+                painter.kv(
+                    "budget spent",
+                    &format!("{} ppm", comparison.budget_spent_ppm),
+                ),
             );
             line(
                 &mut out,
-                format!("yards_gained_ppm {}", comparison.yards_gained_ppm),
+                painter.kv(
+                    "monetary cost",
+                    &format!("{} micros", comparison.monetary_cost_micros),
+                ),
             );
             line(
                 &mut out,
-                format!("budget_spent_ppm {}", comparison.budget_spent_ppm),
+                painter.kv("wall clock", &format!("{} ms", comparison.wall_clock_ms)),
             );
             line(
                 &mut out,
-                format!(
-                    "efficiency_ratio_milli {}",
-                    comparison.efficiency_ratio_milli
+                painter.kv(
+                    "fourth down at",
+                    &comparison
+                        .fourth_down_index
+                        .map(|index| index.to_string())
+                        .unwrap_or_else(|| "never".into()),
+                ),
+            );
+            line(
+                &mut out,
+                painter.kv(
+                    "down labels differ",
+                    if comparison.down_labels_differ {
+                        "yes"
+                    } else {
+                        "no"
+                    },
+                ),
+            );
+            line(
+                &mut out,
+                painter.kv(
+                    "ytg trajectory",
+                    &format!("{:?}", comparison.ytg_trajectory),
                 ),
             );
         }
@@ -462,16 +517,28 @@ fn print_priors(style: OutputStyle) -> Result<String, PlaybookError> {
     let mut out = String::new();
     match style {
         OutputStyle::Plain => {
-            line(&mut out, format!("samples {}", priors.samples()));
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("MEASURED PRIORS"));
+            line(
+                &mut out,
+                painter.kv("samples", &priors.samples().to_string()),
+            );
+            line(&mut out, String::new());
             for (personnel, row) in priors.rows() {
                 line(
                     &mut out,
                     format!(
-                        "{personnel} samples={} realized_reduction_sum_milli={}",
-                        row.samples, row.realized_reduction_sum_milli
+                        "  {}  {}  {}",
+                        painter.accent_row(personnel),
+                        painter.key(&format!("samples={}", row.samples)),
+                        painter.key(&format!(
+                            "realized_reduction_sum_milli={}",
+                            row.realized_reduction_sum_milli
+                        )),
                     ),
                 );
             }
+            line(&mut out, String::new());
             line(
                 &mut out,
                 serde_json::to_string_pretty(priors).map_err(PlaybookError::json)?,
@@ -523,7 +590,11 @@ fn print_explain(style: OutputStyle) -> Result<String, PlaybookError> {
     let snapshot = report.final_state.snapshot(&Policy::builtin());
     let mut out = String::new();
     match style {
-        OutputStyle::Plain => line(&mut out, audit_text(&snapshot)),
+        OutputStyle::Plain => {
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("AUDIT EXPLANATION"));
+            line(&mut out, audit_text(&snapshot));
+        }
         OutputStyle::Basic => {
             line(&mut out, snapshot.current_down.machine_id());
             for reason in &snapshot.explanation {
@@ -561,7 +632,9 @@ fn print_status(style: OutputStyle) -> Result<String, PlaybookError> {
     let mut out = String::new();
     match style {
         OutputStyle::Plain => {
-            line(&mut out, stage_line(&snapshot));
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("TACTICAL SNAPSHOT"));
+            line(&mut out, format!("  {}", stage_line(&snapshot)));
             line(
                 &mut out,
                 serde_json::to_string(&snapshot).map_err(PlaybookError::json)?,
@@ -1046,7 +1119,11 @@ fn print_huddle_study(style: OutputStyle) -> Result<String, PlaybookError> {
     let scenarios = phase_eight_study();
     let mut out = String::new();
     match style {
-        OutputStyle::Plain => line(&mut out, study_table(&scenarios)),
+        OutputStyle::Plain => {
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("PHASE 8 HUDDLE PROGRAMME"));
+            line(&mut out, study_table(&scenarios));
+        }
         OutputStyle::Basic | OutputStyle::Form3 => {}
     }
     for scenario in &scenarios {
@@ -1065,10 +1142,32 @@ fn print_huddle_study(style: OutputStyle) -> Result<String, PlaybookError> {
             })
             .collect();
         match style {
-            OutputStyle::Plain => line(
-                &mut out,
-                format!("{}: {}", scenario.name, completions.join(" ")),
-            ),
+            OutputStyle::Plain => {
+                let painter = form3::Painter::detect();
+                let painted: Vec<String> = regimes
+                    .iter()
+                    .map(|regime| {
+                        let completed = scenario.run(*regime).completed;
+                        format!(
+                            "{}={}",
+                            painter.key(regime.name()),
+                            if completed {
+                                painter.pass("yes")
+                            } else {
+                                painter.flag_value("no")
+                            }
+                        )
+                    })
+                    .collect();
+                line(
+                    &mut out,
+                    format!(
+                        "  {}: {}",
+                        painter.accent_row(scenario.name),
+                        painted.join("  ")
+                    ),
+                );
+            }
             OutputStyle::Basic => {
                 line(
                     &mut out,

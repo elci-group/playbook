@@ -56,6 +56,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 ![Matchday: the dugout, the broadcast and the film room](docs/assets/matchday-manager.gif)
 
+## The command surface
+
+The `playbook` CLI renders every human-readable output through the real [3form](../3form) presentation library: a bold cyan `▌ PLAYBOOK` headline, dimmed keys, green ✓ / red ✗ verdicts and the broadcast stage bar. Colour resolves against stdout — piped output and `NO_COLOR` strip to plain text automatically, `--form3` emits the machine-readable HUD event grammar, and `--basic` is the plainest text a pipe can read. The styled surface and the machine grammars carry the same facts; they cannot disagree because they are projected from the same report.
+
 ## The play-card gallery
 
 `playbook-cards` renders the NFL-playbook view of the tactical repertoire: X-and-O alignments on chalk-green fields, animated routes, dynamic domain labels, and a 3form event line per card. `playbook cards --out <dir>` writes the gallery; the drive service serves it live at `GET /playbook`. The cards are generated from the same directive data the authorities execute — the diagrams cannot drift from the doctrine.
