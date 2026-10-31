@@ -309,7 +309,7 @@ impl PresentationSnapshot {
         }
         classes.sort();
         let blitz = state.blitzes().active_blitz().map(|blitz| BlitzOverlay {
-            id: blitz.id.clone(),
+            id: blitz.id.as_str().to_string(),
             phase: format!("{:?}", blitz.phase),
             workers: blitz
                 .workers
@@ -320,7 +320,7 @@ impl PresentationSnapshot {
             winner: blitz
                 .winner
                 .as_ref()
-                .map(|winner| winner.candidate_id.clone()),
+                .map(|winner| winner.candidate_id.as_str().to_string()),
             waves: blitz.closed_waves,
         });
         let huddles = state
@@ -328,7 +328,7 @@ impl PresentationSnapshot {
             .active()
             .iter()
             .map(|huddle| HuddleStrip {
-                id: huddle.id.clone(),
+                id: huddle.id.as_str().to_string(),
                 phase: format!("{:?}", huddle.phase),
                 participants: huddle.participants.len() as u32,
             })
