@@ -253,10 +253,15 @@ dependencies = [
 name = "playbook-observability"
 version = "0.1.0"
 dependencies = [
+ "playbook-blitz",
  "playbook-core",
  "playbook-events",
  "playbook-huddle",
  "playbook-policy",
+ "playbook-sim",
+ "playbook-state",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

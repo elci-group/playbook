@@ -54,6 +54,7 @@ impl Default for ServerConfig {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Response {
     pub status: u16,
     pub body: String,
@@ -1053,6 +1054,31 @@ mod tests {
             "/v1/drives",
             &json!({"drive_id": id, "statement": "serve a drive"}).to_string(),
         )
+    }
+
+    #[test]
+    fn the_playbook_surface_serves_the_animated_gallery() {
+        let dir = temp_dir("playbook-surface");
+        let service = Service::open(&config(&dir)).unwrap();
+        let response = service.handle("GET", "/playbook", "");
+        assert_eq!(response.status, 200);
+        assert_eq!(response.content_type, "text/html; charset=utf-8");
+        // The page is the real gallery: self-contained, animated, and free
+        // of scripts, secrets, or absolute host paths.
+        assert!(response.body.contains("THE PLAYBOOK"));
+        assert!(response.body.contains("event=play name=spread"));
+        assert!(!response.body.contains("<script"));
+        let lowered = response.body.to_lowercase();
+        for needle in ["api_key", "bearer ", "password", "/home/sal"] {
+            assert!(!lowered.contains(needle), "the gallery leaked {needle}");
+        }
+        // The surface is stateless and read-only: requesting it twice is
+        // byte-identical, and it works with no drives, one drive, or many.
+        let again = service.handle("GET", "/playbook", "");
+        assert_eq!(response, again);
+        let _ = create(&service, "drive-later");
+        let later = service.handle("GET", "/playbook", "");
+        assert_eq!(later.body, response.body);
     }
 
     #[test]

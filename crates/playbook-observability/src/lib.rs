@@ -62,7 +62,8 @@ pub struct Rollup {
     pub huddle_escalations: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SpanNode {
     pub trace_id: String,
     pub span_id: String,
@@ -299,6 +300,7 @@ pub fn spans(drive_id: &str, events: &[DriveEvent]) -> Vec<SpanNode> {
     let mut play_span = None;
     let mut tool_span = None;
     let mut huddle_span = None;
+    let mut blitz_span = None;
     // HuddleAdmitted carries no scope; it is resolved from the request.
     let mut huddle_scopes: BTreeMap<HuddleId, HuddleScope> = BTreeMap::new();
     for (index, event) in events.iter().enumerate() {
@@ -378,10 +380,261 @@ pub fn spans(drive_id: &str, events: &[DriveEvent]) -> Vec<SpanNode> {
                     )]),
                 });
             }
+            DriveEvent::BlitzProposed { blitz_id, .. } => {
+                let span_id = format!("{drive_id}:blitz:{index}");
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: span_id.clone(),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "blitz".into(),
+                    attributes: BTreeMap::from([("blitz_id".into(), blitz_id.to_string())]),
+                });
+                blitz_span = Some(span_id);
+            }
+            DriveEvent::BlitzWorkerDispatched {
+                worker,
+                effective_parallelism_milli,
+                ..
+            } => {
+                let parent = blitz_span
+                    .clone()
+                    .unwrap_or_else(|| format!("{drive_id}:drive"));
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:blitz_worker:{index}"),
+                    parent_span_id: Some(parent),
+                    name: "blitz_worker".into(),
+                    attributes: BTreeMap::from([
+                        ("worker_id".into(), worker.worker_id.to_string()),
+                        ("provider".into(), worker.provider.clone()),
+                        (
+                            "effective_parallelism_milli".into(),
+                            effective_parallelism_milli.to_string(),
+                        ),
+                    ]),
+                });
+            }
+            DriveEvent::BlitzCandidateVerified {
+                candidate_id,
+                passed,
+                ..
+            } => {
+                let parent = blitz_span
+                    .clone()
+                    .unwrap_or_else(|| format!("{drive_id}:drive"));
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:candidate_verified:{index}"),
+                    parent_span_id: Some(parent),
+                    name: "candidate_verified".into(),
+                    attributes: BTreeMap::from([
+                        ("candidate_id".into(), candidate_id.to_string()),
+                        ("gates_passed".into(), passed.len().to_string()),
+                    ]),
+                });
+            }
+            DriveEvent::BlitzWinnerSelected {
+                candidate_id,
+                worker_id,
+                ..
+            } => {
+                let parent = blitz_span
+                    .clone()
+                    .unwrap_or_else(|| format!("{drive_id}:drive"));
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:blitz_winner:{index}"),
+                    parent_span_id: Some(parent),
+                    name: "blitz_winner".into(),
+                    attributes: BTreeMap::from([
+                        ("candidate_id".into(), candidate_id.to_string()),
+                        ("worker_id".into(), worker_id.to_string()),
+                        ("basis".into(), "first_verified".into()),
+                    ]),
+                });
+            }
+            DriveEvent::BlitzWorkerCancelled {
+                worker_id,
+                avoided_tokens,
+                ..
+            } => {
+                let parent = blitz_span
+                    .clone()
+                    .unwrap_or_else(|| format!("{drive_id}:drive"));
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:worker_cancelled:{index}"),
+                    parent_span_id: Some(parent),
+                    name: "worker_cancelled".into(),
+                    attributes: BTreeMap::from([
+                        ("worker_id".into(), worker_id.to_string()),
+                        ("avoided_tokens".into(), avoided_tokens.to_string()),
+                    ]),
+                });
+            }
+            DriveEvent::BlitzExhausted { failure, .. } => {
+                if let Some(span_index) = blitz_span
+                    .as_ref()
+                    .and_then(|span_id| out.iter().position(|span| span.span_id == *span_id))
+                {
+                    out[span_index]
+                        .attributes
+                        .insert("outcome".into(), format!("{failure:?}"));
+                }
+            }
+            DriveEvent::TacticAdmitted { tactic, .. } => {
+                let span_id = format!("{drive_id}:tactic:{index}");
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: span_id.clone(),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: format!("tactic:{tactic}"),
+                    attributes: BTreeMap::from([("outcome".into(), "admitted".into())]),
+                });
+            }
+            DriveEvent::TacticCompleted {
+                tactic,
+                success,
+                ytg_before_milli,
+                ytg_after_milli,
+                ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:tactic_outcome:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: format!("tactic:{tactic}"),
+                    attributes: BTreeMap::from([
+                        (
+                            "outcome".into(),
+                            if *success {
+                                "completed".into()
+                            } else {
+                                "failed_objective".into()
+                            },
+                        ),
+                        ("ytg_before_milli".into(), ytg_before_milli.to_string()),
+                        ("ytg_after_milli".into(), ytg_after_milli.to_string()),
+                    ]),
+                });
+            }
+            DriveEvent::TacticFailed {
+                tactic,
+                failure_mode,
+                ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:tactic_outcome:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: format!("tactic:{tactic}"),
+                    attributes: BTreeMap::from([
+                        ("outcome".into(), "failed".into()),
+                        ("failure_mode".into(), failure_mode.clone()),
+                    ]),
+                });
+            }
+            DriveEvent::TacticCountered {
+                tactic, counter, ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:tactic_counter:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: format!("tactic:{tactic}"),
+                    attributes: BTreeMap::from([
+                        ("outcome".into(), "countered".into()),
+                        ("counter".into(), counter.clone()),
+                    ]),
+                });
+            }
+            DriveEvent::PlayerSubstituted {
+                class,
+                out: out_player,
+                replacement,
+                ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:substitution:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "substitution".into(),
+                    attributes: BTreeMap::from([
+                        ("class".into(), class.clone()),
+                        ("out".into(), out_player.to_string()),
+                        (
+                            "replacement".into(),
+                            replacement
+                                .as_ref()
+                                .map(|id| id.to_string())
+                                .unwrap_or_else(|| "none".into()),
+                        ),
+                    ]),
+                });
+            }
+            DriveEvent::GameContractSealed { contract, .. } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:game_contract:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "game_contract".into(),
+                    attributes: BTreeMap::from([
+                        ("contract_hash".into(), contract.contract_hash.clone()),
+                        (
+                            "mandatory_win_conditions".into(),
+                            contract
+                                .win_conditions
+                                .iter()
+                                .filter(|condition| condition.mandatory)
+                                .count()
+                                .to_string(),
+                        ),
+                    ]),
+                });
+            }
+            DriveEvent::EvaluationDecided {
+                branch, reasons, ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:evaluation:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: format!("evaluation:{}", branch_key(branch)),
+                    attributes: BTreeMap::from([("reasons".into(), reasons.join("|"))]),
+                });
+            }
+            DriveEvent::CersRecovered {
+                artefact_id,
+                source,
+                ..
+            } => {
+                out.push(SpanNode {
+                    trace_id: trace_id.clone(),
+                    span_id: format!("{drive_id}:cers:{index}"),
+                    parent_span_id: Some(format!("{drive_id}:drive")),
+                    name: "cers_recovery".into(),
+                    attributes: BTreeMap::from([
+                        ("artefact_id".into(), artefact_id.to_string()),
+                        ("source".into(), source.clone()),
+                    ]),
+                });
+            }
             _ => {}
         }
     }
     out
+}
+
+fn branch_key(branch: &playbook_core::EvaluationBranch) -> &'static str {
+    use playbook_core::EvaluationBranch;
+    match branch {
+        EvaluationBranch::Advance => "advance",
+        EvaluationBranch::Huddle => "huddle",
+        EvaluationBranch::Substitute => "substitute",
+        EvaluationBranch::Lastdown => "lastdown",
+        EvaluationBranch::Blitz => "blitz",
+        EvaluationBranch::CersRecovery => "cers_recovery",
+    }
 }
 
 #[cfg(test)]

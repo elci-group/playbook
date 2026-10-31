@@ -10,6 +10,7 @@
 
 use crate::spec::slot::{defense, offense, quarterback, receiver};
 use crate::spec::{CardClass, PlaySpec, Role, Route, RouteKind, Side, Slot};
+use playbook_tactics::formation::TacticalFormation;
 
 fn qb() -> Slot {
     quarterback(50, 42)
@@ -38,6 +39,8 @@ pub fn all_cards() -> Vec<PlaySpec> {
         bracket(),
         bear(),
         two_high(),
+        nickel(),
+        dime(),
     ]
 }
 
@@ -84,11 +87,24 @@ fn spread() -> PlaySpec {
                 kind: RouteKind::Pass,
             },
         ],
-        stats: vec![
-            ("max_concurrent".into(), "8".into()),
-            ("overlap_ppm".into(), "50".into()),
-            ("independence".into(), "sole_domain".into()),
-        ],
+        stats: {
+            let profile = playbook_tactics::formation::profile(TacticalFormation::Spread);
+            vec![
+                ("max_concurrent".into(), profile.max_concurrent.to_string()),
+                (
+                    "overlap_ppm".into(),
+                    profile.context_overlap_ppm.to_string(),
+                ),
+                (
+                    "reserves_share_ppm".into(),
+                    profile.reserves_share_ppm.to_string(),
+                ),
+                (
+                    "specialist_share_ppm".into(),
+                    profile.specialist_share_ppm.to_string(),
+                ),
+            ]
+        },
     }
 }
 
@@ -125,10 +141,24 @@ fn trips() -> PlaySpec {
                 kind: RouteKind::Pass,
             },
         ],
-        stats: vec![
-            ("concentration".into(), "3_on_critical".into()),
-            ("remainder".into(), "global".into()),
-        ],
+        stats: {
+            let profile = playbook_tactics::formation::profile(TacticalFormation::Trips);
+            vec![
+                ("max_concurrent".into(), profile.max_concurrent.to_string()),
+                (
+                    "overlap_ppm".into(),
+                    profile.context_overlap_ppm.to_string(),
+                ),
+                (
+                    "reserves_share_ppm".into(),
+                    profile.reserves_share_ppm.to_string(),
+                ),
+                (
+                    "specialist_share_ppm".into(),
+                    profile.specialist_share_ppm.to_string(),
+                ),
+            ]
+        },
     }
 }
 
@@ -164,10 +194,24 @@ fn bunch() -> PlaySpec {
                 kind: RouteKind::Pass,
             },
         ],
-        stats: vec![
-            ("overlap_ppm".into(), "900".into()),
-            ("huddle_access".into(), "full".into()),
-        ],
+        stats: {
+            let profile = playbook_tactics::formation::profile(TacticalFormation::Bunch);
+            vec![
+                ("max_concurrent".into(), profile.max_concurrent.to_string()),
+                (
+                    "overlap_ppm".into(),
+                    profile.context_overlap_ppm.to_string(),
+                ),
+                (
+                    "reserves_share_ppm".into(),
+                    profile.reserves_share_ppm.to_string(),
+                ),
+                (
+                    "specialist_share_ppm".into(),
+                    profile.specialist_share_ppm.to_string(),
+                ),
+            ]
+        },
     }
 }
 
@@ -203,10 +247,24 @@ fn empty() -> PlaySpec {
                 kind: RouteKind::Pass,
             },
         ],
-        stats: vec![
-            ("reserves_share_ppm".into(), "0".into()),
-            ("counter".into(), "max_protect".into()),
-        ],
+        stats: {
+            let profile = playbook_tactics::formation::profile(TacticalFormation::Empty);
+            vec![
+                ("max_concurrent".into(), profile.max_concurrent.to_string()),
+                (
+                    "overlap_ppm".into(),
+                    profile.context_overlap_ppm.to_string(),
+                ),
+                (
+                    "reserves_share_ppm".into(),
+                    profile.reserves_share_ppm.to_string(),
+                ),
+                (
+                    "specialist_share_ppm".into(),
+                    profile.specialist_share_ppm.to_string(),
+                ),
+            ]
+        },
     }
 }
 
@@ -243,10 +301,24 @@ fn heavy() -> PlaySpec {
                 kind: RouteKind::Block,
             },
         ],
-        stats: vec![
-            ("executors".into(), "1".into()),
-            ("protection_delta_ppm".into(), "800".into()),
-        ],
+        stats: {
+            let profile = playbook_tactics::formation::profile(TacticalFormation::Heavy);
+            vec![
+                ("max_concurrent".into(), profile.max_concurrent.to_string()),
+                (
+                    "overlap_ppm".into(),
+                    profile.context_overlap_ppm.to_string(),
+                ),
+                (
+                    "reserves_share_ppm".into(),
+                    profile.reserves_share_ppm.to_string(),
+                ),
+                (
+                    "specialist_share_ppm".into(),
+                    profile.specialist_share_ppm.to_string(),
+                ),
+            ]
+        },
     }
 }
 
@@ -672,6 +744,50 @@ fn bear() -> PlaySpec {
         stats: vec![
             ("coverage".into(), "central_core".into()),
             ("remediation".into(), "instinctive".into()),
+        ],
+    }
+}
+
+fn nickel() -> PlaySpec {
+    PlaySpec {
+        name: "nickel".into(),
+        title: "NICKEL".into(),
+        side: Side::Defense,
+        class: CardClass::Defence,
+        coaching_point: "swap a generalist for a specialist reviewer as information density rises"
+            .into(),
+        slots: vec![
+            defense(35, 58, Role::Linebacker, "GEN"),
+            defense(50, 60, Role::Corner, "API"),
+            defense(65, 58, Role::Linebacker, "LB"),
+            defense(50, 74, Role::Safety, "S"),
+        ],
+        routes: vec![],
+        stats: vec![
+            ("specialist_share_ppm".into(), "500".into()),
+            ("swap".into(), "generalist_to_specialist".into()),
+        ],
+    }
+}
+
+fn dime() -> PlaySpec {
+    PlaySpec {
+        name: "dime".into(),
+        title: "DIME".into(),
+        side: Side::Defense,
+        class: CardClass::Defence,
+        coaching_point: "maximum specialist review density for subtle-correctness risk".into(),
+        slots: vec![
+            defense(30, 58, Role::Corner, "SEC"),
+            defense(42, 60, Role::Corner, "LEGAL"),
+            defense(54, 60, Role::Corner, "COMPAT"),
+            defense(66, 58, Role::Corner, "REL"),
+            defense(50, 74, Role::Safety, "S"),
+        ],
+        routes: vec![],
+        stats: vec![
+            ("specialist_share_ppm".into(), "800".into()),
+            ("domains".into(), "security,legal,compat,release".into()),
         ],
     }
 }

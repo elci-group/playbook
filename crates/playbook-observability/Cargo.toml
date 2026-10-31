@@ -10,10 +10,15 @@ description = "Tactical telemetry, audit lines, and an OpenTelemetry-shaped span
 [dependencies]
 playbook-core.workspace = true
 playbook-events.workspace = true
+serde.workspace = true
 playbook-huddle.workspace = true
 
 [dev-dependencies]
+playbook-blitz.workspace = true
 playbook-policy.workspace = true
+playbook-sim.workspace = true
+playbook-state.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true
