@@ -9,8 +9,7 @@ use crate::domain::HuddleCost;
 
 /// Add one consumption delta to the running spend. Any dimension that would
 /// pass its ceiling is refused; the caller must synthesize instead.
-pub #[tracing::instrument]
-fn consume(
+pub fn consume(
     spent: HuddleCost,
     budget: &HuddleBudget,
     delta: &HuddleCost,
@@ -49,8 +48,7 @@ fn consume(
 
 /// True once any budget dimension has reached its ceiling. After this only
 /// forced synthesis is admissible.
-pub #[tracing::instrument]
-fn exhausted(spent: &HuddleCost, budget: &HuddleBudget) -> bool {
+pub fn exhausted(spent: &HuddleCost, budget: &HuddleBudget) -> bool {
     spent.tokens >= budget.max_tokens
         || spent.cost_microunits >= budget.max_cost_microunits
         || spent.duration_ms >= budget.max_duration_ms
@@ -61,8 +59,7 @@ fn exhausted(spent: &HuddleCost, budget: &HuddleBudget) -> bool {
 mod tests {
     use super::*;
 
-    #[tracing::instrument]
-fn envelope() -> HuddleBudget {
+    fn envelope() -> HuddleBudget {
         HuddleBudget {
             max_tokens: 2_000,
             max_cost_microunits: 200_000,
@@ -73,8 +70,7 @@ fn envelope() -> HuddleBudget {
     }
 
     #[test]
-    #[tracing::instrument]
-fn consumption_stops_at_the_envelope() {
+    fn consumption_stops_at_the_envelope() {
         let budget = envelope();
         let first = consume(
             HuddleCost::zero(),
@@ -116,8 +112,7 @@ fn consumption_stops_at_the_envelope() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn rounds_never_pass_the_ceiling() {
+    fn rounds_never_pass_the_ceiling() {
         let budget = envelope();
         let spent = consume(
             HuddleCost::zero(),

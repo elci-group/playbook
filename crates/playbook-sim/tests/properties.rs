@@ -9,7 +9,6 @@ use playbook_sim::{
 use serde_json::{json, Value};
 
 #[test]
-#[tracing::instrument]
 fn invariants_hold_on_the_engine() {
     let report = run_mvp().unwrap();
     assert!(report.replay_match);
@@ -66,7 +65,6 @@ fn invariants_hold_on_the_engine() {
 }
 
 #[test]
-#[tracing::instrument]
 fn fuzz_rejects_weightless_claims_and_illegal_budget_moves() {
     let (mut drive, _) = open_drive(
         FixturePlane::ready(),
@@ -107,7 +105,6 @@ fn fuzz_rejects_weightless_claims_and_illegal_budget_moves() {
 }
 
 #[test]
-#[tracing::instrument]
 fn a_missing_tov_adapter_stays_isolated() {
     let outcome = try_tov_normalise(
         Path::new("tov/adapters/missing.tov"),
@@ -130,7 +127,6 @@ fn a_missing_tov_adapter_stays_isolated() {
 }
 
 #[test]
-#[tracing::instrument]
 fn inconsistent_nonzero_test_exit_reopens_an_already_satisfied_gate() {
     let (mut drive, _) = open_drive(
         FixturePlane::ready(),
@@ -185,7 +181,6 @@ fn inconsistent_nonzero_test_exit_reopens_an_already_satisfied_gate() {
 }
 
 #[test]
-#[tracing::instrument]
 fn partial_test_failure_preserves_progress_and_reopens_satisfied_gate() {
     let (mut drive, _) = open_drive(
         FixturePlane::ready(),
@@ -240,7 +235,6 @@ fn partial_test_failure_preserves_progress_and_reopens_satisfied_gate() {
 }
 
 #[test]
-#[tracing::instrument]
 fn schemas_name_the_contract_fields() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas");
     let report = run_mvp().unwrap();
@@ -458,14 +452,12 @@ fn schemas_name_the_contract_fields() {
 // These contracts use only this small JSON Schema subset. Keeping the test
 // validator local avoids a runtime or development dependency on a validator
 // crate while still checking serialized fixtures recursively.
-#[tracing::instrument]
 fn assert_schema_subset(schema: &Value, record: &Value, name: &str) {
     if let Err(message) = validate_schema_subset(schema, record) {
         panic!("{name} serialized record does not match schema: {message}");
     }
 }
 
-#[tracing::instrument]
 fn validate_schema_subset(schema: &Value, value: &Value) -> Result<(), String> {
     const SUPPORTED: &[&str] = &[
         "$schema",
@@ -561,7 +553,6 @@ fn validate_schema_subset(schema: &Value, value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn matches_json_type(kind: &str, value: &Value) -> bool {
     match kind {
         "object" => value.is_object(),
@@ -575,7 +566,6 @@ fn matches_json_type(kind: &str, value: &Value) -> bool {
     }
 }
 
-#[tracing::instrument]
 fn sample_measurement() -> Measurement {
     Measurement {
         validated_progress: false,
@@ -605,8 +595,7 @@ fn sample_measurement() -> Measurement {
 struct XorShift(u64);
 
 impl XorShift {
-    #[tracing::instrument]
-fn next(&mut self) -> u64 {
+    fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;

@@ -55,12 +55,10 @@ pub struct ModelResponse {
 /// The provider seam. A host implements this against its real provider
 /// client; [`ProviderPlane`] does the rest.
 pub trait ModelTransport {
-    #[tracing::instrument]
-fn complete(&self, request: &ModelRequest) -> Result<ModelResponse, PlaybookError>;
+    fn complete(&self, request: &ModelRequest) -> Result<ModelResponse, PlaybookError>;
     /// Ask the transport what became of a cancelled invocation. Unknown is a
     /// first-class answer.
-    #[tracing::instrument]
-fn cancellation(&self, execution_id: &str) -> CancellationState;
+    fn cancellation(&self, execution_id: &str) -> CancellationState;
 }
 
 /// The transport a host has not wired yet. It refuses with a distinct,
@@ -69,8 +67,7 @@ fn cancellation(&self, execution_id: &str) -> CancellationState;
 pub struct UnimplementedTransport;
 
 impl ModelTransport for UnimplementedTransport {
-    #[tracing::instrument]
-fn complete(&self, _request: &ModelRequest) -> Result<ModelResponse, PlaybookError> {
+    fn complete(&self, _request: &ModelRequest) -> Result<ModelResponse, PlaybookError> {
         Err(PlaybookError::Io(
             "no live model transport is wired: implement ModelTransport for your provider client \
              and hand it to ProviderPlane"
@@ -78,8 +75,7 @@ fn complete(&self, _request: &ModelRequest) -> Result<ModelResponse, PlaybookErr
         ))
     }
 
-    #[tracing::instrument]
-fn cancellation(&self, _execution_id: &str) -> CancellationState {
+    fn cancellation(&self, _execution_id: &str) -> CancellationState {
         CancellationState::Unknown
     }
 }
@@ -92,8 +88,7 @@ pub struct ProviderPlane<T: ModelTransport> {
 }
 
 impl<T: ModelTransport> ProviderPlane<T> {
-    pub #[tracing::instrument]
-fn new(identity: LiveIdentity, transport: T) -> Self {
+    pub fn new(identity: LiveIdentity, transport: T) -> Self {
         Self {
             identity,
             transport,
@@ -101,13 +96,11 @@ fn new(identity: LiveIdentity, transport: T) -> Self {
         }
     }
 
-    pub #[tracing::instrument]
-fn identity(&self) -> &LiveIdentity {
+    pub fn identity(&self) -> &LiveIdentity {
         &self.identity
     }
 
-    #[tracing::instrument]
-fn capability(&self) -> Capability {
+    fn capability(&self) -> Capability {
         Capability {
             id: CapabilityId::new("live.model")
                 .unwrap_or_else(|_| CapabilityId::new("live.model.fallback").expect("fallback id")),
@@ -129,8 +122,7 @@ fn capability(&self) -> Capability {
         }
     }
 
-    #[tracing::instrument]
-fn failure(
+    fn failure(
         &self,
         execution: &playbook_core::PlayExecution,
         kind: ToolFailureKind,
@@ -156,16 +148,14 @@ fn failure(
 }
 
 impl<T: ModelTransport> CapabilityPlane for ProviderPlane<T> {
-    #[tracing::instrument]
-fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
+    fn discover(&mut self) -> Result<CapabilitySnapshot, PlaybookError> {
         Ok(CapabilitySnapshot {
             generation: self.generation,
             capabilities: vec![self.capability()],
         })
     }
 
-    #[tracing::instrument]
-fn execute(
+    fn execute(
         &mut self,
         execution: &playbook_core::PlayExecution,
     ) -> Result<PlaneResult, PlaybookError> {
@@ -258,8 +248,7 @@ fn execute(
 
 /// Ask a transport what became of a cancelled invocation, as a report the
 /// cancellation ledger can consume.
-pub #[tracing::instrument]
-fn cancellation_report<T: ModelTransport>(
+pub fn cancellation_report<T: ModelTransport>(
     transport: &T,
     execution_id: playbook_core::ExecutionId,
     note: &str,
@@ -278,8 +267,7 @@ mod tests {
     use playbook_core::{Down, DriveId, PlayExecution, PlayId, RetryPolicy};
     use std::cell::Cell;
 
-    #[tracing::instrument]
-fn execution(prompt: &str) -> PlayExecution {
+    fn execution(prompt: &str) -> PlayExecution {
         PlayExecution {
             drive_id: DriveId::new("drive-live").unwrap(),
             play_id: PlayId::new("play-1").unwrap(),
@@ -317,8 +305,7 @@ fn execution(prompt: &str) -> PlayExecution {
     }
 
     impl ModelTransport for Scripted {
-        #[tracing::instrument]
-fn complete(&self, request: &ModelRequest) -> Result<ModelResponse, PlaybookError> {
+        fn complete(&self, request: &ModelRequest) -> Result<ModelResponse, PlaybookError> {
             self.calls.set(self.calls.get() + 1);
             let _ = request;
             if self.fail {
@@ -332,15 +319,13 @@ fn complete(&self, request: &ModelRequest) -> Result<ModelResponse, PlaybookErro
             })
         }
 
-        #[tracing::instrument]
-fn cancellation(&self, _execution_id: &str) -> CancellationState {
+        fn cancellation(&self, _execution_id: &str) -> CancellationState {
             CancellationState::Unknown
         }
     }
 
     #[test]
-    #[tracing::instrument]
-fn the_unwired_transport_refuses_with_direction_not_fiction() {
+    fn the_unwired_transport_refuses_with_direction_not_fiction() {
         let mut plane = ProviderPlane::new(
             LiveIdentity::new("alpha", "model-x", "v1", "tools").unwrap(),
             UnimplementedTransport,
@@ -354,8 +339,7 @@ fn the_unwired_transport_refuses_with_direction_not_fiction() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_response_is_a_claimed_artefact_and_tool_invocation_evidence_never_more() {
+    fn a_response_is_a_claimed_artefact_and_tool_invocation_evidence_never_more() {
         let transport = Scripted {
             text: "I have fixed the parser.".into(),
             usage_tokens: Some(311),
@@ -387,8 +371,7 @@ fn a_response_is_a_claimed_artefact_and_tool_invocation_evidence_never_more() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn unreported_spend_is_not_booked_as_zero() {
+    fn unreported_spend_is_not_booked_as_zero() {
         let transport = Scripted {
             text: "done".into(),
             usage_tokens: None,
@@ -413,8 +396,7 @@ fn unreported_spend_is_not_booked_as_zero() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_provider_error_is_a_transient_failure_with_the_key_preserved() {
+    fn a_provider_error_is_a_transient_failure_with_the_key_preserved() {
         let transport = Scripted {
             text: String::new(),
             usage_tokens: None,
@@ -436,8 +418,7 @@ fn a_provider_error_is_a_transient_failure_with_the_key_preserved() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_promptless_invocation_is_refused_as_invalid_input() {
+    fn a_promptless_invocation_is_refused_as_invalid_input() {
         let transport = Scripted {
             text: String::new(),
             usage_tokens: None,
@@ -457,8 +438,7 @@ fn a_promptless_invocation_is_refused_as_invalid_input() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn cancellation_reports_default_conservative() {
+    fn cancellation_reports_default_conservative() {
         let transport = Scripted {
             text: String::new(),
             usage_tokens: None,

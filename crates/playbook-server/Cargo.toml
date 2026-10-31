@@ -13,6 +13,7 @@ name = "playbook-server"
 path = "src/main.rs"
 
 [dependencies]
+playbook-cards.workspace = true
 playbook-core.workspace = true
 playbook-elci.workspace = true
 playbook-events.workspace = true

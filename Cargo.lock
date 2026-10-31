@@ -94,6 +94,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-cards"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-tactics",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-cers"
 version = "0.1.0"
 dependencies = [
@@ -107,6 +117,7 @@ dependencies = [
 name = "playbook-cli"
 version = "0.1.0"
 dependencies = [
+ "playbook-cards",
  "playbook-core",
  "playbook-events",
  "playbook-journal",
@@ -287,6 +298,7 @@ dependencies = [
 name = "playbook-server"
 version = "0.1.0"
 dependencies = [
+ "playbook-cards",
  "playbook-core",
  "playbook-elci",
  "playbook-events",

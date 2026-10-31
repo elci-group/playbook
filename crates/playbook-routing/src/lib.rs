@@ -44,8 +44,7 @@ pub struct RankedPersonnel {
     pub score_ppm: u32,
 }
 
-pub #[tracing::instrument]
-fn admit(
+pub fn admit(
     field: &FieldPosition,
     definition: &PlayDefinition,
     personnel_id: &PersonnelId,
@@ -96,8 +95,7 @@ fn admit(
     Ok(())
 }
 
-pub #[tracing::instrument]
-fn rank(
+pub fn rank(
     personnel: &[Personnel],
     policy: &Policy,
     priors: &HistoricalPriorTable,
@@ -120,8 +118,7 @@ fn rank(
     ranked
 }
 
-pub #[tracing::instrument]
-fn select(field: &FieldPosition, policy: &Policy) -> Result<DecisionRecord, PlaybookError> {
+pub fn select(field: &FieldPosition, policy: &Policy) -> Result<DecisionRecord, PlaybookError> {
     let mut rejections = Vec::new();
     let mut candidates = Vec::new();
     for definition in &policy.plays {
@@ -211,8 +208,7 @@ fn select(field: &FieldPosition, policy: &Policy) -> Result<DecisionRecord, Play
 /// never enters the table.
 pub use playbook_core::{HistoricalPriorTable, PriorRow};
 
-pub #[tracing::instrument]
-fn admit_swarm(order: &SwarmOrder, policy: &Policy) -> Result<(), PlaybookError> {
+pub fn admit_swarm(order: &SwarmOrder, policy: &Policy) -> Result<(), PlaybookError> {
     if order.expected_marginal_ytg_milli < policy.swarm_min_marginal_milli {
         return Err(PlaybookError::SwarmUnjustified);
     }
@@ -233,7 +229,6 @@ struct Candidate<'a> {
     leverage: u64,
 }
 
-#[tracing::instrument]
 fn best_personnel<'a>(
     field: &'a FieldPosition,
     definition: &PlayDefinition,
@@ -267,13 +262,11 @@ fn best_personnel<'a>(
 }
 
 trait PlayName {
-    #[tracing::instrument]
-fn machine(self) -> &'static str;
+    fn machine(self) -> &'static str;
 }
 
 impl PlayName for PlayKind {
-    #[tracing::instrument]
-fn machine(self) -> &'static str {
+    fn machine(self) -> &'static str {
         match self {
             Self::InspectEnvironment => "inspect",
             Self::DiscoverRepository => "discover_repository",
@@ -296,7 +289,6 @@ fn machine(self) -> &'static str {
     }
 }
 
-#[tracing::instrument]
 fn expected_reduction(definition: &PlayDefinition, gates: &[Gate]) -> u32 {
     let Some(target) = definition.target_gate.as_deref() else {
         return if definition.survey {
@@ -322,7 +314,6 @@ fn expected_reduction(definition: &PlayDefinition, gates: &[Gate]) -> u32 {
     gate_unresolved_milli(gate, gates)
 }
 
-#[tracing::instrument]
 fn target_gate_rejection(definition: &PlayDefinition, gates: &[Gate]) -> &'static str {
     let Some(target) = definition.target_gate.as_deref() else {
         return "target gate has no unresolved yards";
@@ -343,7 +334,6 @@ fn target_gate_rejection(definition: &PlayDefinition, gates: &[Gate]) -> &'stati
     "target gate has no unresolved yards"
 }
 
-#[tracing::instrument]
 fn score(person: &Personnel, policy: &Policy, priors: &HistoricalPriorTable) -> u32 {
     let weights = &policy.routing;
     // A learned prior is measured ground truth, so it outranks the
@@ -401,8 +391,7 @@ mod tests {
     use super::*;
     use playbook_core::{DriveStatus, EvidenceClass, Gate, GateId, PersonnelId, PersonnelKind};
 
-    #[tracing::instrument]
-fn person(id: &str, kind: PersonnelKind, cost: u64) -> Personnel {
+    fn person(id: &str, kind: PersonnelKind, cost: u64) -> Personnel {
         Personnel {
             id: PersonnelId::new(id).unwrap(),
             kind,
@@ -418,8 +407,7 @@ fn person(id: &str, kind: PersonnelKind, cost: u64) -> Personnel {
     }
 
     #[test]
-    #[tracing::instrument]
-fn deterministic_personnel_sort_ahead_of_specialists() {
+    fn deterministic_personnel_sort_ahead_of_specialists() {
         let policy = Policy::builtin();
         let ranked = rank(
             &[
@@ -434,8 +422,7 @@ fn deterministic_personnel_sort_ahead_of_specialists() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn the_learned_prior_replaces_the_self_report() {
+    fn the_learned_prior_replaces_the_self_report() {
         let policy = Policy::builtin();
         let mut priors = HistoricalPriorTable::empty();
         let specialist = PersonnelId::new("measured").unwrap();
@@ -467,8 +454,7 @@ fn the_learned_prior_replaces_the_self_report() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn priors_below_the_sample_threshold_do_not_apply() {
+    fn priors_below_the_sample_threshold_do_not_apply() {
         let policy = Policy::builtin();
         let mut priors = HistoricalPriorTable::empty();
         let id = PersonnelId::new("scarce").unwrap();
@@ -480,8 +466,7 @@ fn priors_below_the_sample_threshold_do_not_apply() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn failed_outcomes_drag_the_prior_down() {
+    fn failed_outcomes_drag_the_prior_down() {
         let policy = Policy::builtin();
         let mut priors = HistoricalPriorTable::empty();
         let id = PersonnelId::new("worker").unwrap();
@@ -505,8 +490,7 @@ fn failed_outcomes_drag_the_prior_down() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_swarm_with_no_marginal_gain_is_rejected() {
+    fn a_swarm_with_no_marginal_gain_is_rejected() {
         let err = admit_swarm(
             &SwarmOrder {
                 objective: "look busy".into(),
@@ -525,8 +509,7 @@ fn a_swarm_with_no_marginal_gain_is_rejected() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_blocked_gate_does_not_outrank_its_dependency() {
+    fn a_blocked_gate_does_not_outrank_its_dependency() {
         let policy = Policy::builtin();
         let implementation = Gate::declare(
             GateId::new("implementation").unwrap(),
@@ -587,8 +570,7 @@ fn a_blocked_gate_does_not_outrank_its_dependency() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_terminal_target_gate_has_a_specific_rejection_reason() {
+    fn a_terminal_target_gate_has_a_specific_rejection_reason() {
         let policy = Policy::builtin();
         let mut implementation = Gate::declare(
             GateId::new("implementation").unwrap(),

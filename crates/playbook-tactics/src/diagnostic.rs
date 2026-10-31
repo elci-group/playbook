@@ -74,8 +74,7 @@ pub struct MeshPlan {
 
 /// Mesh: two agents cross through the same reconciliation domain from
 /// opposite sides. The crossing point is the reconciliation target.
-pub #[tracing::instrument]
-fn plan_mesh(
+pub fn plan_mesh(
     agent_a: PersonnelId,
     agent_b: PersonnelId,
     outer_a: &str,
@@ -120,8 +119,7 @@ pub enum AbstractionLevel {
 
 impl AbstractionLevel {
     /// The depth rank, 0..=4: Architecture is 0, Line is 4.
-    pub #[tracing::instrument]
-fn rank(self) -> u8 {
+    pub fn rank(self) -> u8 {
         match self {
             Self::Architecture => 0,
             Self::Crate => 1,
@@ -133,8 +131,7 @@ fn rank(self) -> u8 {
 
     /// The snake_case label used in owned-domain names of a personnel
     /// shape.
-    #[tracing::instrument]
-fn label(self) -> &'static str {
+    fn label(self) -> &'static str {
         match self {
             Self::Architecture => "architecture",
             Self::Crate => "crate",
@@ -147,7 +144,6 @@ fn label(self) -> &'static str {
 
 /// The level a depth ladder starts from (rank 0) and the level at rank
 /// `depth % 5`; used by both the flood and the levels ladders.
-#[tracing::instrument]
 fn level_at_depth(depth: usize) -> AbstractionLevel {
     match depth % 5 {
         1 => AbstractionLevel::Crate,
@@ -186,8 +182,7 @@ pub struct FloodPlan {
 ///
 /// A zone has exactly five depths, so the sixth and later runners have no
 /// depth to hold: they are left out of the flood rather than refused.
-pub #[tracing::instrument]
-fn plan_flood(domain: &str, agents: &[PersonnelId]) -> Result<FloodPlan, PlaybookError> {
+pub fn plan_flood(domain: &str, agents: &[PersonnelId]) -> Result<FloodPlan, PlaybookError> {
     if domain.trim().is_empty() {
         return Err(tactics_refusal("flood names no domain"));
     }
@@ -220,8 +215,7 @@ pub struct LevelsPlan {
 /// Levels: the same agents at progressively DEEPER granularity over multiple
 /// rounds — assignment i gets level rank (i % 5), so repeated rounds walk
 /// the depth ladder. Refuse empty agents/target.
-pub #[tracing::instrument]
-fn plan_levels(target: &str, agents: &[PersonnelId]) -> Result<LevelsPlan, PlaybookError> {
+pub fn plan_levels(target: &str, agents: &[PersonnelId]) -> Result<LevelsPlan, PlaybookError> {
     if target.trim().is_empty() {
         return Err(tactics_refusal("levels name no target"));
     }
@@ -244,8 +238,7 @@ fn plan_levels(target: &str, agents: &[PersonnelId]) -> Result<LevelsPlan, Playb
 
 /// Overlap detection: two plans conflict when the same personnel appears in
 /// both. Returns the duplicated personnel ids, sorted, deduped.
-pub #[tracing::instrument]
-fn overlapping_personnel(
+pub fn overlapping_personnel(
     left: &[DepthAssignment],
     right: &[DepthAssignment],
 ) -> Vec<PersonnelId> {
@@ -267,8 +260,7 @@ fn overlapping_personnel(
 ///
 /// The merged ordering is deepest level first; equal ranks keep the left
 /// plan's runners ahead of the right plan's (a stable sort).
-pub #[tracing::instrument]
-fn merge_flood(left: FloodPlan, right: FloodPlan) -> Result<FloodPlan, PlaybookError> {
+pub fn merge_flood(left: FloodPlan, right: FloodPlan) -> Result<FloodPlan, PlaybookError> {
     if left.domain != right.domain {
         return Err(tactics_refusal(&format!(
             "cannot merge floods over {} and {}: one zone at a time",
@@ -300,7 +292,6 @@ fn merge_flood(left: FloodPlan, right: FloodPlan) -> Result<FloodPlan, PlaybookE
 }
 
 /// Saturating personnel count: a shape never counts above `u16::MAX`.
-#[tracing::instrument]
 fn saturating_executors(count: usize) -> u16 {
     u16::try_from(count).unwrap_or(u16::MAX)
 }
@@ -308,7 +299,6 @@ fn saturating_executors(count: usize) -> u16 {
 /// Build a personnel shape from `(owned domain, agent)` pairs: one sole
 /// assignment per pair, the pair count as executors, nobody in support,
 /// reserves, or surveillance.
-#[tracing::instrument]
 fn shape_over(owned: impl IntoIterator<Item = (String, PersonnelId)>) -> PersonnelShape {
     let assignments: Vec<DomainAssignment> = owned
         .into_iter()
@@ -335,7 +325,6 @@ fn shape_over(owned: impl IntoIterator<Item = (String, PersonnelId)>) -> Personn
 /// budget — the budget funds a single diagnostic pass (`max_plays` 1) while
 /// termination tolerates two plays, so one repeat of the pass is possible
 /// before the abort triggers govern.
-#[tracing::instrument]
 fn diagnostic_directive(
     name: &str,
     trigger: TacticalTrigger,
@@ -398,8 +387,7 @@ fn diagnostic_directive(
 /// includes `DivergenceExceedsTolerance` — the crossing must reconcile or
 /// abort. Mesh needs exactly two crossers; flood and levels refuse empty
 /// rosters through their planners.
-pub #[tracing::instrument]
-fn directive(
+pub fn directive(
     pattern: AttackPattern,
     domain: &str,
     agents: &[PersonnelId],
@@ -475,29 +463,25 @@ mod tests {
     use super::*;
     use crate::domain::{RiskBand, TacticalContext};
 
-    #[tracing::instrument]
-fn agent(name: &str) -> PersonnelId {
+    fn agent(name: &str) -> PersonnelId {
         PersonnelId::new(name).unwrap()
     }
 
-    #[tracing::instrument]
-fn roster() -> Vec<PersonnelId> {
+    fn roster() -> Vec<PersonnelId> {
         ["a", "b", "c", "d", "e", "f", "g"]
             .into_iter()
             .map(agent)
             .collect()
     }
 
-    #[tracing::instrument]
-fn ranks(plan: &[DepthAssignment]) -> Vec<u8> {
+    fn ranks(plan: &[DepthAssignment]) -> Vec<u8> {
         plan.iter()
             .map(|assignment| assignment.level.rank())
             .collect()
     }
 
     #[test]
-    #[tracing::instrument]
-fn mesh_crossings_converge_on_the_reconciliation_target() {
+    fn mesh_crossings_converge_on_the_reconciliation_target() {
         let plan = plan_mesh(agent("x"), agent("y"), "frontend", "storage", "parser");
         assert_eq!(plan.crossings.len(), 2);
         assert_eq!(plan.crossings[0].agent, agent("x"));
@@ -515,8 +499,7 @@ fn mesh_crossings_converge_on_the_reconciliation_target() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn flood_allocates_shallow_first_and_refuses_empty_inputs() {
+    fn flood_allocates_shallow_first_and_refuses_empty_inputs() {
         let roster = roster();
         let plan = plan_flood("parser", &roster[..4]).unwrap();
         assert_eq!(plan.domain, "parser");
@@ -530,8 +513,7 @@ fn flood_allocates_shallow_first_and_refuses_empty_inputs() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn flood_caps_the_zone_at_five_depths_and_leaves_extras_out() {
+    fn flood_caps_the_zone_at_five_depths_and_leaves_extras_out() {
         let roster = roster();
         let plan = plan_flood("parser", &roster).unwrap();
         assert_eq!(plan.assignments.len(), 5);
@@ -542,8 +524,7 @@ fn flood_caps_the_zone_at_five_depths_and_leaves_extras_out() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn levels_round_robin_walks_the_depth_ladder() {
+    fn levels_round_robin_walks_the_depth_ladder() {
         let roster = roster();
         let plan = plan_levels("refactor-parser", &roster).unwrap();
         assert_eq!(plan.target, "refactor-parser");
@@ -556,8 +537,7 @@ fn levels_round_robin_walks_the_depth_ladder() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn overlapping_personnel_finds_sorted_deduped_overlap() {
+    fn overlapping_personnel_finds_sorted_deduped_overlap() {
         let left = vec![
             DepthAssignment {
                 agent: agent("a"),
@@ -595,8 +575,7 @@ fn overlapping_personnel_finds_sorted_deduped_overlap() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn merge_flood_combines_one_domain_deepest_level_first() {
+    fn merge_flood_combines_one_domain_deepest_level_first() {
         let left = plan_flood("parser", &[agent("a"), agent("b"), agent("c")]).unwrap();
         let right = plan_flood("parser", &[agent("d"), agent("e")]).unwrap();
         let merged = merge_flood(left, right).unwrap();
@@ -611,16 +590,14 @@ fn merge_flood_combines_one_domain_deepest_level_first() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn merge_flood_refuses_different_domains() {
+    fn merge_flood_refuses_different_domains() {
         let left = plan_flood("parser", &[agent("a")]).unwrap();
         let right = plan_flood("storage", &[agent("b")]).unwrap();
         assert!(merge_flood(left, right).is_err());
     }
 
     #[test]
-    #[tracing::instrument]
-fn merge_flood_deduplicates_an_agent_at_the_same_level() {
+    fn merge_flood_deduplicates_an_agent_at_the_same_level() {
         let left = FloodPlan {
             domain: "parser".into(),
             assignments: vec![
@@ -659,8 +636,7 @@ fn merge_flood_deduplicates_an_agent_at_the_same_level() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn merge_flood_refuses_an_agent_at_two_depths_of_one_domain() {
+    fn merge_flood_refuses_an_agent_at_two_depths_of_one_domain() {
         let left = FloodPlan {
             domain: "parser".into(),
             assignments: vec![DepthAssignment {
@@ -679,8 +655,7 @@ fn merge_flood_refuses_an_agent_at_two_depths_of_one_domain() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn diagnostic_directives_pass_validation_and_fire_on_their_triggers() {
+    fn diagnostic_directives_pass_validation_and_fire_on_their_triggers() {
         let roster = roster();
         let mesh = directive(AttackPattern::Mesh, "parser", &roster[..2]).unwrap();
         let flood = directive(AttackPattern::Flood, "parser", &roster[..3]).unwrap();

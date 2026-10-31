@@ -10,8 +10,7 @@ use playbook_sim::{
     HuddleRegime, MvpReport,
 };
 
-pub #[tracing::instrument]
-fn run(args: &[impl AsRef<str>]) -> i32 {
+pub fn run(args: &[impl AsRef<str>]) -> i32 {
     let args: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
     match args.first().copied() {
         Some("mvp") => command(print_mvp(&args[1..])),
@@ -25,8 +24,10 @@ fn run(args: &[impl AsRef<str>]) -> i32 {
         Some("otlp") => command(print_otlp(&args[1..])),
         Some("otlp-bench") => command(print_otlp_bench(&args[1..])),
         Some("huddle-study") => command(print_huddle_study()),
+        Some("cards") => command(print_cards(&args[1..])),
         _ => {
-            eprintln!("usage: playbook <mvp|sim|sprint|priors|explain|status|policy|recover|otlp|otlp-bench|huddle-study>");
+            eprintln!("usage: playbook <mvp|sim|sprint|priors|explain|status|policy|recover|otlp|otlp-bench|huddle-study|cards>");
+            eprintln!("  cards [--out <dir>] [--threeform] renders the animated X-and-O playbook gallery; with --threeform, prints one 3form event line per card");
             eprintln!("  mvp [--journal <path>] runs the acceptance drive, optionally through a durable journal");
             eprintln!("  recover <journal> folds a recovered drive and reports what the host owes");
             eprintln!("  otlp <endpoint> exports the acceptance drive trace over OTLP/HTTP JSON");
@@ -37,7 +38,6 @@ fn run(args: &[impl AsRef<str>]) -> i32 {
     }
 }
 
-#[tracing::instrument]
 fn command(result: Result<(), PlaybookError>) -> i32 {
     match result {
         Ok(()) => 0,
@@ -48,7 +48,6 @@ fn command(result: Result<(), PlaybookError>) -> i32 {
     }
 }
 
-#[tracing::instrument]
 fn print_mvp(args: &[&str]) -> Result<(), PlaybookError> {
     let mut journal: Option<&str> = None;
     let mut index = 0;
@@ -94,7 +93,6 @@ fn print_mvp(args: &[&str]) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_sim(args: &[&str]) -> Result<(), PlaybookError> {
     let mut policy_name = "playbook-policy-pass-heavy";
     let mut trace_name = "mvp";
@@ -148,7 +146,6 @@ fn print_sim(args: &[&str]) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn resolve_policy(name: &str) -> Result<Policy, PlaybookError> {
     match name {
         "builtin" | "playbook-policy-1" => Ok(Policy::builtin()),
@@ -157,7 +154,6 @@ fn resolve_policy(name: &str) -> Result<Policy, PlaybookError> {
     }
 }
 
-#[tracing::instrument]
 fn load_trace(name: &str) -> Result<Vec<DriveEvent>, PlaybookError> {
     if name == "mvp" {
         return Ok(accepted_report()?.events);
@@ -168,7 +164,6 @@ fn load_trace(name: &str) -> Result<Vec<DriveEvent>, PlaybookError> {
     serde_json::from_str(&text).map_err(PlaybookError::json)
 }
 
-#[tracing::instrument]
 fn print_sprint() -> Result<(), PlaybookError> {
     let report = accepted_report()?;
     println!(
@@ -178,7 +173,6 @@ fn print_sprint() -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_priors() -> Result<(), PlaybookError> {
     let report = accepted_report()?;
     let priors = report.final_state.priors();
@@ -196,7 +190,6 @@ fn print_priors() -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_explain() -> Result<(), PlaybookError> {
     let report = accepted_report()?;
     println!(
@@ -206,7 +199,6 @@ fn print_explain() -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_status() -> Result<(), PlaybookError> {
     let report = accepted_report()?;
     let snapshot = report.final_state.snapshot(&Policy::builtin());
@@ -218,7 +210,6 @@ fn print_status() -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_policy(variant: Option<&str>) -> Result<(), PlaybookError> {
     let policy = match variant {
         Some("pass-heavy") => Policy::pass_heavy_contrast(),
@@ -231,7 +222,6 @@ fn print_policy(variant: Option<&str>) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_recover(path: Option<&str>) -> Result<(), PlaybookError> {
     let Some(path) = path else {
         return Err(PlaybookError::Evidence(
@@ -270,7 +260,6 @@ fn print_recover(path: Option<&str>) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_otlp(args: &[&str]) -> Result<(), PlaybookError> {
     if args.len() != 1 {
         return Err(PlaybookError::Evidence(
@@ -308,7 +297,6 @@ fn print_otlp(args: &[&str]) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn print_otlp_bench(args: &[&str]) -> Result<(), PlaybookError> {
     let mut span_count = 1_000usize;
     let mut runs = 50usize;
@@ -418,7 +406,53 @@ fn print_otlp_bench(args: &[&str]) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
+fn print_cards(args: &[&str]) -> Result<(), PlaybookError> {
+    let mut out: Option<&str> = None;
+    let mut threeform = false;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index] {
+            "--out" => {
+                out =
+                    Some(args.get(index + 1).copied().ok_or_else(|| {
+                        PlaybookError::Evidence("--out requires a directory".into())
+                    })?);
+                index += 2;
+            }
+            "--threeform" => {
+                threeform = true;
+                index += 1;
+            }
+            other => {
+                return Err(PlaybookError::Evidence(format!(
+                    "unknown cards argument {other}"
+                )));
+            }
+        }
+    }
+    for line in playbook_cards::threeform_lines() {
+        println!("{line}");
+    }
+    if threeform {
+        return Ok(());
+    }
+    let page = playbook_cards::render_gallery();
+    match out {
+        Some(dir) => {
+            std::fs::create_dir_all(dir)
+                .map_err(|error| PlaybookError::Io(format!("cannot create {dir}: {error}")))?;
+            let path = std::path::Path::new(dir).join("playbook.html");
+            std::fs::write(&path, &page).map_err(|error| {
+                PlaybookError::Io(format!("cannot write {}: {error}", path.display()))
+            })?;
+            println!("wrote {}", path.display());
+            println!("cards {}", playbook_cards::all_cards().len());
+        }
+        None => print!("{page}"),
+    }
+    Ok(())
+}
+
 fn print_huddle_study() -> Result<(), PlaybookError> {
     let regimes = [
         HuddleRegime::Control,
@@ -448,7 +482,6 @@ fn print_huddle_study() -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn accepted_report() -> Result<MvpReport, PlaybookError> {
     let report = run_mvp()?;
     let required = [
@@ -480,13 +513,11 @@ fn accepted_report() -> Result<MvpReport, PlaybookError> {
 }
 
 trait DispositionName {
-    #[tracing::instrument]
-fn machine(self) -> &'static str;
+    fn machine(self) -> &'static str;
 }
 
 impl DispositionName for playbook_core::Disposition {
-    #[tracing::instrument]
-fn machine(self) -> &'static str {
+    fn machine(self) -> &'static str {
         match self {
             Self::Convert => "convert",
             Self::FieldGoal => "field_goal",
@@ -502,8 +533,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[tracing::instrument]
-fn policy_and_mvp_commands_exit_clean() {
+    fn policy_and_mvp_commands_exit_clean() {
         assert_eq!(run(&["policy"]), 0);
         assert_eq!(run(&["policy", "pass-heavy"]), 0);
         assert_eq!(run(&["mvp"]), 0);
@@ -533,8 +563,7 @@ fn policy_and_mvp_commands_exit_clean() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn sim_rejects_unknown_and_missing_arguments() {
+    fn sim_rejects_unknown_and_missing_arguments() {
         assert_eq!(run(&["sim", "--bogus"]), 1);
         assert_eq!(run(&["sim", "--trace"]), 1);
         assert_eq!(run(&["sim", "--policy"]), 1);
@@ -544,8 +573,7 @@ fn sim_rejects_unknown_and_missing_arguments() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn recover_rejects_missing_and_empty_journals() {
+    fn recover_rejects_missing_and_empty_journals() {
         assert_eq!(run(&["recover"]), 1);
         assert_eq!(run(&["recover", "/tmp/path-does-not-exist-pb"]), 1);
         let path = std::env::temp_dir().join(format!(
@@ -559,8 +587,7 @@ fn recover_rejects_missing_and_empty_journals() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn sim_loads_json_event_log_paths() {
+    fn sim_loads_json_event_log_paths() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../fixtures/sprint_transcript.json");
         let trace = load_trace(path.to_str().unwrap()).unwrap();
@@ -577,15 +604,28 @@ fn sim_loads_json_event_log_paths() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn otlp_requires_exactly_one_endpoint() {
+    fn cards_render_to_stdout_and_to_a_directory() {
+        assert_eq!(run(&["cards", "--threeform"]), 0);
+        assert_eq!(run(&["cards"]), 0);
+        let dir = std::env::temp_dir().join(format!("playbook-cards-{}", std::process::id()));
+        let dir = dir.to_str().unwrap().to_string();
+        assert_eq!(run(&["cards", "--out", &dir]), 0);
+        let page = std::path::Path::new(&dir).join("playbook.html");
+        let html = std::fs::read_to_string(&page).unwrap();
+        assert!(html.contains("THE PLAYBOOK"));
+        assert!(html.contains("event=play name=spread"));
+        assert_eq!(run(&["cards", "--bogus"]), 1);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn otlp_requires_exactly_one_endpoint() {
         assert_eq!(run(&["otlp"]), 1);
         assert_eq!(run(&["otlp", "https://nope"]), 1);
     }
 
     #[test]
-    #[tracing::instrument]
-fn huddle_study_is_deterministic_and_labels_regimes() {
+    fn huddle_study_is_deterministic_and_labels_regimes() {
         let first = phase_eight_study();
         let second = phase_eight_study();
         assert_eq!(first, second);
@@ -595,16 +635,14 @@ fn huddle_study_is_deterministic_and_labels_regimes() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn otlp_bench_defaults_and_rejects_unknown_arguments() {
+    fn otlp_bench_defaults_and_rejects_unknown_arguments() {
         assert_eq!(run(&["otlp-bench"]), 0);
         assert_eq!(run(&["otlp-bench", "--spans", "50", "--runs", "2"]), 0);
         assert_eq!(run(&["otlp-bench", "--bogus"]), 1);
     }
 
     #[test]
-    #[tracing::instrument]
-fn otlp_round_trips_a_local_collector() {
+    fn otlp_round_trips_a_local_collector() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let server = std::thread::spawn(move || {

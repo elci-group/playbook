@@ -103,22 +103,19 @@ pub struct ManmarkRegistry {
     marks: Vec<Mark>,
 }
 
-#[tracing::instrument]
 fn invalid(message: &str) -> PlaybookError {
     PlaybookError::Evidence(message.into())
 }
 
 impl ManmarkRegistry {
     /// An empty registry.
-    pub #[tracing::instrument]
-fn empty() -> Self {
+    pub fn empty() -> Self {
         Self { marks: Vec::new() }
     }
 
     /// Claim ownership of a domain. Refuses a duplicate domain and keeps
     /// the registry sorted domain-ascending.
-    pub #[tracing::instrument]
-fn assign(&mut self, mark: Mark) -> Result<(), PlaybookError> {
+    pub fn assign(&mut self, mark: Mark) -> Result<(), PlaybookError> {
         if mark.domain.trim().is_empty() {
             return Err(invalid("manmark domain requires a subject"));
         }
@@ -135,19 +132,16 @@ fn assign(&mut self, mark: Mark) -> Result<(), PlaybookError> {
     }
 
     /// Every owned mark, domain-ascending.
-    pub #[tracing::instrument]
-fn marks(&self) -> &[Mark] {
+    pub fn marks(&self) -> &[Mark] {
         &self.marks
     }
 
     /// The mark owning one domain, or none.
-    pub #[tracing::instrument]
-fn mark(&self, domain: &str) -> Option<&Mark> {
+    pub fn mark(&self, domain: &str) -> Option<&Mark> {
         self.marks.iter().find(|mark| mark.domain == domain)
     }
 
-    #[tracing::instrument]
-fn mark_mut(&mut self, domain: &str) -> Result<&mut Mark, PlaybookError> {
+    fn mark_mut(&mut self, domain: &str) -> Result<&mut Mark, PlaybookError> {
         self.marks
             .iter_mut()
             .find(|mark| mark.domain == domain)
@@ -163,8 +157,7 @@ fn mark_mut(&mut self, domain: &str) -> Result<&mut Mark, PlaybookError> {
     /// `Escalating` mark stays put and is reported breached again). A clean
     /// inspection of an `Exposed` or `Escalating` mark recontains it and
     /// starts a fresh success streak at zero.
-    pub #[tracing::instrument]
-fn inspect(
+    pub fn inspect(
         &mut self,
         domain: &str,
         evidence: &Evidence,
@@ -201,8 +194,7 @@ fn inspect(
     /// Critical severity, proposing a blitz request through the seam;
     /// anything lower stays in-drive (`Ok(None)`). An unknown domain is an
     /// error, as is a domain that cannot name an originating event.
-    pub #[tracing::instrument]
-fn escalation_request(
+    pub fn escalation_request(
         &self,
         domain: &str,
     ) -> Result<Option<ManmarkRequest>, PlaybookError> {
@@ -230,8 +222,7 @@ fn escalation_request(
     /// success streak at zero. Returns `Some(procedure)` on graduation,
     /// `None` while the streak sits below the threshold or the mark already
     /// plays instinctively.
-    pub #[tracing::instrument]
-fn graduate(
+    pub fn graduate(
         &mut self,
         domain: &str,
         threshold: u32,
@@ -253,8 +244,7 @@ fn graduate(
 
     /// Record a successful remediation, extending the consecutive success
     /// streak that graduation counts.
-    pub #[tracing::instrument]
-fn record_success(&mut self, domain: &str) -> Result<(), PlaybookError> {
+    pub fn record_success(&mut self, domain: &str) -> Result<(), PlaybookError> {
         let mark = self.mark_mut(domain)?;
         mark.consecutive_successes = mark.consecutive_successes.saturating_add(1);
         Ok(())
@@ -267,8 +257,7 @@ mod tests {
     use playbook_core::EvidenceClass;
     use serde_json::json;
 
-    #[tracing::instrument]
-fn mark(domain: &str, owner: &str, remediation: Remediation) -> Mark {
+    fn mark(domain: &str, owner: &str, remediation: Remediation) -> Mark {
         Mark {
             domain: domain.into(),
             owner: PersonnelId::new(owner).unwrap(),
@@ -285,8 +274,7 @@ fn mark(domain: &str, owner: &str, remediation: Remediation) -> Mark {
         }
     }
 
-    #[tracing::instrument]
-fn strategic(domain: &str, owner: &str, severity: Severity) -> Mark {
+    fn strategic(domain: &str, owner: &str, severity: Severity) -> Mark {
         Mark {
             severity,
             ..mark(
@@ -299,8 +287,7 @@ fn strategic(domain: &str, owner: &str, severity: Severity) -> Mark {
         }
     }
 
-    #[tracing::instrument]
-fn evidence(class: EvidenceClass, subject: &str, at_ms: u64) -> Evidence {
+    fn evidence(class: EvidenceClass, subject: &str, at_ms: u64) -> Evidence {
         Evidence::seal(
             class,
             json!({ "subject": subject, "unit": "lockfile" }),
@@ -310,8 +297,7 @@ fn evidence(class: EvidenceClass, subject: &str, at_ms: u64) -> Evidence {
     }
 
     #[test]
-    #[tracing::instrument]
-fn assign_keeps_domain_order_and_refuses_duplicates() {
+    fn assign_keeps_domain_order_and_refuses_duplicates() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(mark(
@@ -366,8 +352,7 @@ fn assign_keeps_domain_order_and_refuses_duplicates() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn inspect_stays_untriggered_without_class_and_subject_match() {
+    fn inspect_stays_untriggered_without_class_and_subject_match() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(mark(
@@ -397,8 +382,7 @@ fn inspect_stays_untriggered_without_class_and_subject_match() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_breach_exposes_the_mark_and_seals_the_evidence() {
+    fn a_breach_exposes_the_mark_and_seals_the_evidence() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(strategic("dep-drift", "sentinel", Severity::High))
@@ -425,8 +409,7 @@ fn a_breach_exposes_the_mark_and_seals_the_evidence() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_clean_inspection_recontains_an_exposed_mark() {
+    fn a_clean_inspection_recontains_an_exposed_mark() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(mark(
@@ -460,8 +443,7 @@ fn a_clean_inspection_recontains_an_exposed_mark() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn instinctive_marks_never_escalate() {
+    fn instinctive_marks_never_escalate() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(strategic("covered", "sentinel", Severity::Low))
@@ -493,8 +475,7 @@ fn instinctive_marks_never_escalate() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn strategic_marks_escalate_at_high_severity_and_above() {
+    fn strategic_marks_escalate_at_high_severity_and_above() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(strategic("dep-drift", "sentinel", Severity::High))
@@ -518,8 +499,7 @@ fn strategic_marks_escalate_at_high_severity_and_above() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn graduation_demotes_remediation_after_threshold() {
+    fn graduation_demotes_remediation_after_threshold() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(strategic("dep-drift", "sentinel", Severity::Medium))
@@ -549,8 +529,7 @@ fn graduation_demotes_remediation_after_threshold() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn inspect_of_unknown_domain_is_an_error() {
+    fn inspect_of_unknown_domain_is_an_error() {
         let mut registry = ManmarkRegistry::empty();
         let observed = evidence(EvidenceClass::TestReport, "dependency drift", 10);
         assert_eq!(
@@ -565,8 +544,7 @@ fn inspect_of_unknown_domain_is_an_error() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn registry_round_trips_through_json() {
+    fn registry_round_trips_through_json() {
         let mut registry = ManmarkRegistry::empty();
         registry
             .assign(strategic("dep-drift", "sentinel", Severity::High))

@@ -62,8 +62,7 @@ pub struct OwnershipPair {
 ///
 /// Refusals: a pair needs two distinct agents ("banjo_needs_two_agents")
 /// and two distinct, non-empty domains ("banjo_needs_two_domains").
-pub #[tracing::instrument]
-fn banjo(
+pub fn banjo(
     agent_a: PersonnelId,
     agent_b: PersonnelId,
     domain_x: &str,
@@ -94,8 +93,7 @@ pub enum Holder {
 
 impl Holder {
     /// The other member of the pair.
-    #[tracing::instrument]
-fn other(self) -> Self {
+    fn other(self) -> Self {
         match self {
             Self::AgentA => Self::AgentB,
             Self::AgentB => Self::AgentA,
@@ -117,8 +115,7 @@ pub struct BanjoState {
 
 /// The opening Banjo look: agent A takes primary on `domain_x`, agent B on
 /// `domain_y`, and nothing has switched yet.
-pub #[tracing::instrument]
-fn initial(pair: OwnershipPair, at_ms: u64) -> BanjoState {
+pub fn initial(pair: OwnershipPair, at_ms: u64) -> BanjoState {
     BanjoState {
         pair,
         x_primary: Holder::AgentA,
@@ -145,8 +142,7 @@ pub enum SwitchTrigger {
 /// than the current state is refused ("switch_time_regressed"). An equal
 /// timestamp is permitted — the trigger and the observation may share a
 /// tick.
-pub #[tracing::instrument]
-fn switch_on(
+pub fn switch_on(
     state: BanjoState,
     trigger: SwitchTrigger,
     at_ms: u64,
@@ -170,8 +166,7 @@ fn switch_on(
 
 /// The agent currently holding primary on `domain`, or `None` when the
 /// domain is not one of the pair's two domains.
-pub #[tracing::instrument]
-fn primary_of(state: &BanjoState, domain: &str) -> Option<PersonnelId> {
+pub fn primary_of(state: &BanjoState, domain: &str) -> Option<PersonnelId> {
     if domain == state.pair.domain_x {
         Some(match state.x_primary {
             Holder::AgentA => state.pair.agent_a.clone(),
@@ -216,8 +211,7 @@ pub struct Exchange {
 /// zero precedes every observed state, so a record stamped there could
 /// only be a regression ("exchange_time_regressed"). Staleness against the
 /// last observed state is a separate, explicit check: [`reject_stale`].
-pub #[tracing::instrument]
-fn scrape_exchange(
+pub fn scrape_exchange(
     out_agent: PersonnelId,
     in_agent: PersonnelId,
     from_role: &str,
@@ -248,8 +242,7 @@ fn scrape_exchange(
 /// older than the current observation is refused. The exchange is valid
 /// exactly when `computed_at >= last_state_at_ms`
 /// ("exchange_stale_owner").
-pub #[tracing::instrument]
-fn reject_stale(last_state_at_ms: u64, computed_at: u64) -> Result<(), PlaybookError> {
+pub fn reject_stale(last_state_at_ms: u64, computed_at: u64) -> Result<(), PlaybookError> {
     if computed_at < last_state_at_ms {
         return Err(tactics_refusal("exchange_stale_owner"));
     }
@@ -259,8 +252,7 @@ fn reject_stale(last_state_at_ms: u64, computed_at: u64) -> Result<(), PlaybookE
 /// Recovery semantics: after an exchange, both agents' new roles are
 /// declared, so no responsibility gap opens. Returns
 /// `((out_agent, to_role), (in_agent, from_role))`.
-pub #[tracing::instrument]
-fn post_exchange_roles(exchange: &Exchange) -> ((PersonnelId, String), (PersonnelId, String)) {
+pub fn post_exchange_roles(exchange: &Exchange) -> ((PersonnelId, String), (PersonnelId, String)) {
     (
         (exchange.out_agent.clone(), exchange.to_role.clone()),
         (exchange.in_agent.clone(), exchange.from_role.clone()),
@@ -275,12 +267,10 @@ pub enum ExchangeKind {
     ScrapeExchange,
 }
 
-#[tracing::instrument]
 fn template_agent_a() -> PersonnelId {
     PersonnelId::new("agent_a").unwrap()
 }
 
-#[tracing::instrument]
 fn template_agent_b() -> PersonnelId {
     PersonnelId::new("agent_b").unwrap()
 }
@@ -289,7 +279,6 @@ fn template_agent_b() -> PersonnelId {
 /// fixed template values; the caller's kind decides the shape, the
 /// trigger, the information topology, and the termination.
 #[allow(clippy::too_many_arguments)]
-#[tracing::instrument]
 fn directive_template(
     name: &str,
     class: TacticalClass,
@@ -351,8 +340,7 @@ fn directive_template(
 /// Both pass [`crate::admission::validated`]. Construction is
 /// measurement-independent: the triggers read the measured context at
 /// admission time, not here.
-pub #[tracing::instrument]
-fn directive(kind: ExchangeKind, context: &TacticalContext) -> TacticalDirective {
+pub fn directive(kind: ExchangeKind, context: &TacticalContext) -> TacticalDirective {
     // The template is deliberately measurement-independent; the context
     // belongs to admission, not construction.
     let _ = context;
@@ -450,8 +438,7 @@ mod tests {
     use crate::domain::RiskBand;
 
     /// The canonical pair: runtime containment and root cause.
-    #[tracing::instrument]
-fn pair() -> OwnershipPair {
+    fn pair() -> OwnershipPair {
         banjo(
             PersonnelId::new("runtime").unwrap(),
             PersonnelId::new("arch").unwrap(),
@@ -461,8 +448,7 @@ fn pair() -> OwnershipPair {
         .unwrap()
     }
 
-    #[tracing::instrument]
-fn error_code(err: PlaybookError) -> String {
+    fn error_code(err: PlaybookError) -> String {
         match err {
             PlaybookError::Inadmissible(authority, code) => {
                 assert_eq!(authority, "tactics");
@@ -472,8 +458,7 @@ fn error_code(err: PlaybookError) -> String {
         }
     }
 
-    #[tracing::instrument]
-fn context() -> TacticalContext {
+    fn context() -> TacticalContext {
         TacticalContext {
             problem_breadth_ppm: 400,
             domain_coupling_ppm: 300,
@@ -491,8 +476,7 @@ fn context() -> TacticalContext {
     }
 
     #[test]
-    #[tracing::instrument]
-fn banjo_refuses_degenerate_pairs_and_builds_clean_ones() {
+    fn banjo_refuses_degenerate_pairs_and_builds_clean_ones() {
         let a = PersonnelId::new("runtime").unwrap();
         let b = PersonnelId::new("arch").unwrap();
         // One agent cannot banjo with himself.
@@ -516,8 +500,7 @@ fn banjo_refuses_degenerate_pairs_and_builds_clean_ones() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn initial_hands_the_first_domain_to_agent_a() {
+    fn initial_hands_the_first_domain_to_agent_a() {
         let state = initial(pair(), 1_000);
         assert_eq!(state.x_primary, Holder::AgentA);
         assert_eq!(state.switches, 0);
@@ -533,8 +516,7 @@ fn initial_hands_the_first_domain_to_agent_a() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn any_active_domain_trigger_swaps_both_primaries() {
+    fn any_active_domain_trigger_swaps_both_primaries() {
         let start = initial(pair(), 1_000);
         // The waiting agent takes the active domain: either trigger is a
         // full exchange of both primaries.
@@ -557,8 +539,7 @@ fn any_active_domain_trigger_swaps_both_primaries() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn primary_of_tracks_the_swapped_holders() {
+    fn primary_of_tracks_the_swapped_holders() {
         let start = initial(pair(), 1_000);
         let swapped = switch_on(start, SwitchTrigger::DomainXActive, 2_000).unwrap();
         assert_eq!(
@@ -574,8 +555,7 @@ fn primary_of_tracks_the_swapped_holders() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn scrape_exchange_refuses_degenerate_records() {
+    fn scrape_exchange_refuses_degenerate_records() {
         let a = PersonnelId::new("runtime").unwrap();
         let b = PersonnelId::new("arch").unwrap();
         assert_eq!(
@@ -629,8 +609,7 @@ fn scrape_exchange_refuses_degenerate_records() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn scrape_exchange_journals_the_full_handoff() {
+    fn scrape_exchange_journals_the_full_handoff() {
         let record = scrape_exchange(
             PersonnelId::new("runtime").unwrap(),
             PersonnelId::new("arch").unwrap(),
@@ -652,8 +631,7 @@ fn scrape_exchange_journals_the_full_handoff() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn post_exchange_roles_declares_both_sides_exactly() {
+    fn post_exchange_roles_declares_both_sides_exactly() {
         let record = scrape_exchange(
             PersonnelId::new("runtime").unwrap(),
             PersonnelId::new("arch").unwrap(),
@@ -671,8 +649,7 @@ fn post_exchange_roles_declares_both_sides_exactly() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn reject_stale_draws_the_boundary_at_equality() {
+    fn reject_stale_draws_the_boundary_at_equality() {
         // Computed against exactly the observed state: valid.
         assert!(reject_stale(5_000, 5_000).is_ok());
         // Computed against fresher state: valid.
@@ -685,8 +662,7 @@ fn reject_stale_draws_the_boundary_at_equality() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn exchange_directives_validate() {
+    fn exchange_directives_validate() {
         let context = context();
         let banjo_directive = directive(ExchangeKind::Banjo, &context);
         crate::admission::validated(&banjo_directive).unwrap();
@@ -720,8 +696,7 @@ fn exchange_directives_validate() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn exchange_is_deterministic() {
+    fn exchange_is_deterministic() {
         let context = context();
         // The same inputs always produce the same pairs, states, records,
         // and directives.

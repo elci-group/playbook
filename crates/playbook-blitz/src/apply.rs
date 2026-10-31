@@ -165,8 +165,7 @@ pub struct BlitzView {
     pub remaining_cost_microunits: u64,
 }
 
-pub #[tracing::instrument]
-fn fold_blitz(
+pub fn fold_blitz(
     ledger: &mut BlitzLedger,
     events: &[BlitzEvent],
     view: &BlitzView,
@@ -180,7 +179,6 @@ fn fold_blitz(
 
 /// The exhaustion economics sealed at closure time, built from the live
 /// state while the blitz is still active.
-#[tracing::instrument]
 fn exhaustion_outcome(blitz: &ActiveBlitz) -> BlitzOutcome {
     BlitzOutcome {
         target_hash: blitz.target.target_hash.clone(),
@@ -204,8 +202,7 @@ fn exhaustion_outcome(blitz: &ActiveBlitz) -> BlitzOutcome {
     }
 }
 
-pub #[tracing::instrument]
-fn apply_blitz(
+pub fn apply_blitz(
     ledger: &mut BlitzLedger,
     event: &BlitzEvent,
     view: &BlitzView,
@@ -994,13 +991,11 @@ mod tests {
     use playbook_core::{CandidateId, EventId, EvidenceId, WorkerId, PPM_SCALE};
     use playbook_policy::BlitzCorroboration;
 
-    #[tracing::instrument]
-fn policy() -> Policy {
+    fn policy() -> Policy {
         Policy::builtin()
     }
 
-    #[tracing::instrument]
-fn view() -> BlitzView {
+    fn view() -> BlitzView {
         BlitzView {
             active: true,
             remaining_tokens: 1_000_000,
@@ -1008,8 +1003,7 @@ fn view() -> BlitzView {
         }
     }
 
-    #[tracing::instrument]
-fn target(hash_seed: &str) -> TargetPackage {
+    fn target(hash_seed: &str) -> TargetPackage {
         TargetPackage {
             problem_statement: "restore the failing component".into(),
             evidence_refs: Vec::new(),
@@ -1035,8 +1029,7 @@ fn target(hash_seed: &str) -> TargetPackage {
         .unwrap()
     }
 
-    #[tracing::instrument]
-fn pressure() -> DefensivePressure {
+    fn pressure() -> DefensivePressure {
         DefensivePressure {
             severity: Severity::Critical,
             deadline_ms: Some(10_000),
@@ -1050,8 +1043,7 @@ fn pressure() -> DefensivePressure {
         }
     }
 
-    #[tracing::instrument]
-fn trigger() -> BlitzTrigger {
+    fn trigger() -> BlitzTrigger {
         BlitzTrigger {
             class: BlitzClass::Instinctive,
             reason_code: "power_critical".into(),
@@ -1060,8 +1052,7 @@ fn trigger() -> BlitzTrigger {
         }
     }
 
-    #[tracing::instrument]
-fn budget() -> BlitzBudget {
+    fn budget() -> BlitzBudget {
         BlitzBudget {
             max_tokens: 40_000,
             max_cost_microunits: 4_000_000,
@@ -1071,8 +1062,7 @@ fn budget() -> BlitzBudget {
         }
     }
 
-    #[tracing::instrument]
-fn worker(id: &str, wave: u16, domains: &[&str]) -> WorkerSlot {
+    fn worker(id: &str, wave: u16, domains: &[&str]) -> WorkerSlot {
         WorkerSlot {
             worker_id: WorkerId::new(id).unwrap(),
             personnel_id: playbook_core::PersonnelId::new(id).unwrap(),
@@ -1085,8 +1075,7 @@ fn worker(id: &str, wave: u16, domains: &[&str]) -> WorkerSlot {
         }
     }
 
-    #[tracing::instrument]
-fn candidate(id: &str, worker: &str, digest: &str) -> Candidate {
+    fn candidate(id: &str, worker: &str, digest: &str) -> Candidate {
         Candidate {
             candidate_id: CandidateId::new(id).unwrap(),
             blitz_id: BlitzId::new("b-1").unwrap(),
@@ -1102,8 +1091,7 @@ fn candidate(id: &str, worker: &str, digest: &str) -> Candidate {
         }
     }
 
-    #[tracing::instrument]
-fn open_blitz(ledger: &mut BlitzLedger) -> BlitzId {
+    fn open_blitz(ledger: &mut BlitzLedger) -> BlitzId {
         let id = BlitzId::new("b-1").unwrap();
         fold_blitz(
             ledger,
@@ -1134,8 +1122,7 @@ fn open_blitz(ledger: &mut BlitzLedger) -> BlitzId {
         id
     }
 
-    #[tracing::instrument]
-fn dispatch_two(ledger: &mut BlitzLedger, id: &BlitzId) {
+    fn dispatch_two(ledger: &mut BlitzLedger, id: &BlitzId) {
         for (name, domains) in [("w-1", vec!["dc-a"]), ("w-2", vec!["dc-b"])] {
             let worker = worker(name, 1, &domains);
             let effective = roster::effective_parallelism_milli(&{
@@ -1170,8 +1157,7 @@ fn dispatch_two(ledger: &mut BlitzLedger, id: &BlitzId) {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_blitz_lifecycle_recovers_and_closes() {
+    fn a_blitz_lifecycle_recovers_and_closes() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1308,8 +1294,7 @@ fn a_blitz_lifecycle_recovers_and_closes() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_fast_wrong_answer_never_wins() {
+    fn a_fast_wrong_answer_never_wins() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1418,8 +1403,7 @@ fn a_fast_wrong_answer_never_wins() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn an_unverified_or_mismatched_candidate_is_refused() {
+    fn an_unverified_or_mismatched_candidate_is_refused() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1468,8 +1452,7 @@ fn an_unverified_or_mismatched_candidate_is_refused() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn wave_two_requires_a_closed_wave_one() {
+    fn wave_two_requires_a_closed_wave_one() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1584,8 +1567,7 @@ fn wave_two_requires_a_closed_wave_one() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn correlated_rejections_are_counted_once_per_pair() {
+    fn correlated_rejections_are_counted_once_per_pair() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1629,8 +1611,7 @@ fn correlated_rejections_are_counted_once_per_pair() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn budget_governor_refuses_expansion_and_exhaustion_closes() {
+    fn budget_governor_refuses_expansion_and_exhaustion_closes() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1704,8 +1685,7 @@ fn budget_governor_refuses_expansion_and_exhaustion_closes() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn exhausted_blitz_escalates_to_a_huddle_recommendation() {
+    fn exhausted_blitz_escalates_to_a_huddle_recommendation() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1738,8 +1718,7 @@ fn exhausted_blitz_escalates_to_a_huddle_recommendation() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn fail_closed_verifier_blocks_victory_until_a_policy_bounded_retry() {
+    fn fail_closed_verifier_blocks_victory_until_a_policy_bounded_retry() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1834,8 +1813,7 @@ fn fail_closed_verifier_blocks_victory_until_a_policy_bounded_retry() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn only_one_winner_ever_and_cancellation_precedes_recovery() {
+    fn only_one_winner_ever_and_cancellation_precedes_recovery() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -1969,8 +1947,7 @@ fn only_one_winner_ever_and_cancellation_precedes_recovery() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn target_drift_supersedes_and_a_new_target_can_be_proposed() {
+    fn target_drift_supersedes_and_a_new_target_can_be_proposed() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -2017,8 +1994,7 @@ fn target_drift_supersedes_and_a_new_target_can_be_proposed() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn an_unchanged_target_is_a_refused_blitz_storm() {
+    fn an_unchanged_target_is_a_refused_blitz_storm() {
         let mut ledger = BlitzLedger::empty();
         let id = BlitzId::new("b-1").unwrap();
         apply_blitz(
@@ -2063,8 +2039,7 @@ fn an_unchanged_target_is_a_refused_blitz_storm() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn inactive_drives_and_double_formations_are_refused() {
+    fn inactive_drives_and_double_formations_are_refused() {
         let mut ledger = BlitzLedger::empty();
         let id = open_blitz(&mut ledger);
         dispatch_two(&mut ledger, &id);
@@ -2108,8 +2083,7 @@ fn inactive_drives_and_double_formations_are_refused() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn authorisation_refuses_an_empty_or_unaffordable_envelope() {
+    fn authorisation_refuses_an_empty_or_unaffordable_envelope() {
         let mut ledger = BlitzLedger::empty();
         let id = BlitzId::new("b-1").unwrap();
         // A bare proposal: not yet authorised, so authorisation still owns

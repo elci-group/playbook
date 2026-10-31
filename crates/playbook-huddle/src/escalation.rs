@@ -11,8 +11,7 @@ use crate::domain::{ActiveHuddle, ContradictionSeverity, HuddleScope};
 /// unresolved contradiction load or coordinator-band debt; Franchise scope
 /// additionally requires manual authority, which the caller expresses by
 /// passing `manual`.
-pub #[tracing::instrument]
-fn escalation_target(
+pub fn escalation_target(
     huddle: &ActiveHuddle,
     debt: u32,
     manual: bool,
@@ -39,8 +38,7 @@ fn escalation_target(
 }
 
 /// A scope is a valid escalation target only upward.
-pub #[tracing::instrument]
-fn is_upward(current: HuddleScope, target: HuddleScope) -> bool {
+pub fn is_upward(current: HuddleScope, target: HuddleScope) -> bool {
     target.rank() > current.rank()
 }
 
@@ -53,8 +51,7 @@ mod tests {
     use playbook_core::{BarrierMode, EventId, HuddleBudget, HuddleId};
     use playbook_policy::Policy;
 
-    #[tracing::instrument]
-fn huddle(severity: ContradictionSeverity) -> ActiveHuddle {
+    fn huddle(severity: ContradictionSeverity) -> ActiveHuddle {
         ActiveHuddle {
             id: HuddleId::new("h-1").unwrap(),
             scope: HuddleScope::Unit,
@@ -88,8 +85,7 @@ fn huddle(severity: ContradictionSeverity) -> ActiveHuddle {
     }
 
     #[test]
-    #[tracing::instrument]
-fn escalation_needs_justification_and_stays_upward() {
+    fn escalation_needs_justification_and_stays_upward() {
         let policy = Policy::builtin().huddle;
         assert!(
             escalation_target(&huddle(ContradictionSeverity::Low), 0, false, &policy)
@@ -115,8 +111,7 @@ fn escalation_needs_justification_and_stays_upward() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn franchise_escalation_requires_manual_authority() {
+    fn franchise_escalation_requires_manual_authority() {
         let policy = Policy::builtin().huddle;
         let mut team = huddle(ContradictionSeverity::High);
         team.scope = HuddleScope::Team;

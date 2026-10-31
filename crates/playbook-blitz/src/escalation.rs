@@ -26,8 +26,7 @@ pub struct ManmarkRequest {
 impl ManmarkRequest {
     /// The blitz trigger this request proposes. It is a strategic class:
     /// Manmark proposes urgency, policy authorises the expenditure.
-    pub #[tracing::instrument]
-fn into_trigger(self) -> Result<BlitzTrigger, PlaybookError> {
+    pub fn into_trigger(self) -> Result<BlitzTrigger, PlaybookError> {
         if self.threat.trim().is_empty() {
             return Err(refusal("manmark threat requires a subject"));
         }
@@ -42,8 +41,7 @@ fn into_trigger(self) -> Result<BlitzTrigger, PlaybookError> {
     /// The defensive pressure a tracked threat implies. Deterioration and
     /// blast radius come from the manmark tracking history, not from the
     /// requesting agent's confidence.
-    pub #[tracing::instrument]
-fn pressure(&self, severity: Severity) -> crate::domain::DefensivePressure {
+    pub fn pressure(&self, severity: Severity) -> crate::domain::DefensivePressure {
         crate::domain::DefensivePressure {
             severity,
             deadline_ms: None,
@@ -63,8 +61,7 @@ fn pressure(&self, severity: Severity) -> crate::domain::DefensivePressure {
 /// uncertainty and failure cost sit above the urgency floor. Ordinary
 /// continuation asks which substitute preserves the drive; this asks whether
 /// remaining time is now worth more than inference efficiency.
-pub #[tracing::instrument]
-fn should_escalate_from_lastdown(
+pub fn should_escalate_from_lastdown(
     remaining_time_ms: u64,
     solver_uncertainty_ppm: u32,
     failure_cost_ppm: u32,
@@ -81,8 +78,7 @@ fn should_escalate_from_lastdown(
 /// The wave-3 handoff: a failure-aggregated recommendation for the Huddle
 /// subsystem. Scope follows severity — critical failures are already
 /// team-level emergencies; everything else starts where the divergence is.
-pub #[tracing::instrument]
-fn huddle_target(blitz: &ActiveBlitz) -> Result<HuddleRecommendation, PlaybookError> {
+pub fn huddle_target(blitz: &ActiveBlitz) -> Result<HuddleRecommendation, PlaybookError> {
     if blitz.phase != crate::domain::BlitzPhase::Exhausted {
         return Err(refusal("only an exhausted blitz escalates"));
     }
@@ -107,8 +103,7 @@ fn huddle_target(blitz: &ActiveBlitz) -> Result<HuddleRecommendation, PlaybookEr
 /// diagnostics the engine records. No candidates at all, every candidate
 /// invalid, and a verifier that could not run are different problems
 /// requiring different remediation.
-pub #[tracing::instrument]
-fn wave_failure(blitz: &ActiveBlitz) -> Option<BlitzFailure> {
+pub fn wave_failure(blitz: &ActiveBlitz) -> Option<BlitzFailure> {
     if blitz.workers.is_empty() {
         return Some(BlitzFailure::NoCandidate);
     }
@@ -145,8 +140,7 @@ mod tests {
     };
     use playbook_core::{BlitzBudget, BlitzId, EventId, PPM_SCALE};
 
-    #[tracing::instrument]
-fn exhausted(severity: Severity, correlated: u32) -> ActiveBlitz {
+    fn exhausted(severity: Severity, correlated: u32) -> ActiveBlitz {
         let target = TargetPackage {
             problem_statement: "restore the failing component".into(),
             evidence_refs: Vec::new(),
@@ -207,8 +201,7 @@ fn exhausted(severity: Severity, correlated: u32) -> ActiveBlitz {
     }
 
     #[test]
-    #[tracing::instrument]
-fn manmark_requests_are_strategic_proposals_with_pressure() {
+    fn manmark_requests_are_strategic_proposals_with_pressure() {
         let request = ManmarkRequest {
             threat: "supply_chain_drift".into(),
             severity: Severity::High,
@@ -230,8 +223,7 @@ fn manmark_requests_are_strategic_proposals_with_pressure() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn lastdown_escalates_only_under_joint_pressure() {
+    fn lastdown_escalates_only_under_joint_pressure() {
         let policy = playbook_policy::Policy::builtin().blitz;
         // Plenty of time: sequential substitution remains rational.
         assert!(!should_escalate_from_lastdown(
@@ -248,8 +240,7 @@ fn lastdown_escalates_only_under_joint_pressure() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn huddle_scope_follows_severity_and_requires_exhaustion() {
+    fn huddle_scope_follows_severity_and_requires_exhaustion() {
         let policy = playbook_policy::Policy::builtin().blitz;
         let critical = huddle_target(&exhausted(Severity::Critical, 0)).unwrap();
         assert_eq!(critical.scope_key, "team");
@@ -269,8 +260,7 @@ fn huddle_scope_follows_severity_and_requires_exhaustion() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn wave_failures_are_classified() {
+    fn wave_failures_are_classified() {
         use crate::domain::{Candidate, VerificationRecord};
         use playbook_core::{CandidateId, WorkerId};
         let mut blitz = exhausted(Severity::High, 0);

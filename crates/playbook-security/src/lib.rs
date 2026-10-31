@@ -7,8 +7,7 @@
 
 use playbook_core::{PlaybookError, SideEffectClass};
 
-pub #[tracing::instrument]
-fn authorize(class: SideEffectClass, allowed: &[SideEffectClass]) -> Result<(), PlaybookError> {
+pub fn authorize(class: SideEffectClass, allowed: &[SideEffectClass]) -> Result<(), PlaybookError> {
     if allowed.contains(&class) {
         Ok(())
     } else {
@@ -21,8 +20,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[tracing::instrument]
-fn low_budget_does_not_create_a_deployment_permission() {
+    fn low_budget_does_not_create_a_deployment_permission() {
         let allowed = [SideEffectClass::ReadOnly, SideEffectClass::LocalMutation];
         let low_budget_ppm = 1_u32;
         let first = authorize(SideEffectClass::Deployment, &allowed);

@@ -17,8 +17,7 @@ pub struct BudgetView {
     pub exhaustion_risk_ppm: u32,
 }
 
-pub #[tracing::instrument]
-fn effective_remaining_ppm(
+pub fn effective_remaining_ppm(
     initial: DriveBudget,
     consumed: DriveBudget,
     weights: BudgetWeights,
@@ -38,8 +37,7 @@ fn effective_remaining_ppm(
     scarce.unwrap_or(PPM_SCALE)
 }
 
-pub #[tracing::instrument]
-fn consume(
+pub fn consume(
     initial: DriveBudget,
     consumed: DriveBudget,
     cost: DriveBudget,
@@ -54,8 +52,7 @@ fn consume(
     Ok(next)
 }
 
-pub #[tracing::instrument]
-fn view(
+pub fn view(
     initial: DriveBudget,
     consumed: DriveBudget,
     weights: BudgetWeights,
@@ -112,7 +109,6 @@ fn view(
     }
 }
 
-#[tracing::instrument]
 fn exhaustion(
     remaining_ppm: u32,
     projected: Option<DriveBudget>,
@@ -132,7 +128,6 @@ fn exhaustion(
     PPM_SCALE.saturating_sub(remaining_ppm)
 }
 
-#[tracing::instrument]
 fn exceeds(projected: DriveBudget, remaining: DriveBudget, weights: BudgetWeights) -> bool {
     weights
         .pairs(projected, remaining)
@@ -140,7 +135,6 @@ fn exceeds(projected: DriveBudget, remaining: DriveBudget, weights: BudgetWeight
         .any(|(weight, projected_dim, remaining_dim)| weight > 0 && projected_dim > remaining_dim)
 }
 
-#[tracing::instrument]
 fn scale_budget(budget: DriveBudget, numer: u32, denom: u32) -> DriveBudget {
     let scale = |value: u64| value.saturating_mul(u64::from(numer)) / u64::from(denom.max(1));
     DriveBudget {
@@ -155,7 +149,6 @@ fn scale_budget(budget: DriveBudget, numer: u32, denom: u32) -> DriveBudget {
     }
 }
 
-#[tracing::instrument]
 fn remaining_increased(initial: DriveBudget, before: DriveBudget, after: DriveBudget) -> bool {
     let left = initial.remaining(before);
     let right = initial.remaining(after);
@@ -173,8 +166,7 @@ fn remaining_increased(initial: DriveBudget, before: DriveBudget, after: DriveBu
 mod tests {
     use super::*;
 
-    #[tracing::instrument]
-fn weights() -> BudgetWeights {
+    fn weights() -> BudgetWeights {
         BudgetWeights {
             tokens: 1,
             monetary_cost_micros: 0,
@@ -187,8 +179,7 @@ fn weights() -> BudgetWeights {
         }
     }
 
-    #[tracing::instrument]
-fn budget(tokens: u64, quota: u64) -> DriveBudget {
+    fn budget(tokens: u64, quota: u64) -> DriveBudget {
         DriveBudget {
             tokens,
             provider_quota: quota,
@@ -197,8 +188,7 @@ fn budget(tokens: u64, quota: u64) -> DriveBudget {
     }
 
     #[test]
-    #[tracing::instrument]
-fn quota_pressure_beats_a_healthy_token_balance() {
+    fn quota_pressure_beats_a_healthy_token_balance() {
         let initial = budget(1_000, 1_000);
         let consumed = budget(100, 900);
         assert_eq!(
@@ -208,16 +198,14 @@ fn quota_pressure_beats_a_healthy_token_balance() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn consume_cannot_increase_remaining() {
+    fn consume_cannot_increase_remaining() {
         let initial = budget(100, 100);
         let err = consume(initial, budget(10, 0), budget(u64::MAX, 0)).unwrap_err();
         assert_eq!(err, PlaybookError::BudgetExhausted);
     }
 
     #[test]
-    #[tracing::instrument]
-fn projected_overrun_is_full_exhaustion_risk() {
+    fn projected_overrun_is_full_exhaustion_risk() {
         let initial = budget(100, 100);
         let consumed = budget(80, 0);
         let seen = view(initial, consumed, weights(), budget(80, 0), 20, 80);

@@ -37,17 +37,14 @@ pub struct Recovery {
     pub repaired_tail: bool,
 }
 
-#[tracing::instrument]
 fn io_error(err: std::io::Error) -> PlaybookError {
     PlaybookError::Io(err.to_string())
 }
 
-#[tracing::instrument]
 fn digest_of(event: &DriveEvent) -> Result<String, PlaybookError> {
     Ok(sha256_hex(&to_canonical_bytes(event)?))
 }
 
-#[tracing::instrument]
 fn parse_record(line: &[u8], expected_seq: u64) -> Result<Option<JournalRecord>, PlaybookError> {
     let record: JournalRecord = match serde_json::from_slice(line) {
         Ok(record) => record,
@@ -63,8 +60,7 @@ fn parse_record(line: &[u8], expected_seq: u64) -> Result<Option<JournalRecord>,
 }
 
 impl Journal {
-    pub #[tracing::instrument]
-fn create(path: &Path) -> Result<Self, PlaybookError> {
+    pub fn create(path: &Path) -> Result<Self, PlaybookError> {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -81,8 +77,7 @@ fn create(path: &Path) -> Result<Self, PlaybookError> {
 
     /// Create a journal exclusively: the call fails when the file already
     /// exists, so concurrent creators cannot truncate each other's log.
-    pub #[tracing::instrument]
-fn create_new(path: &Path) -> Result<Self, PlaybookError> {
+    pub fn create_new(path: &Path) -> Result<Self, PlaybookError> {
         let file = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -96,8 +91,7 @@ fn create_new(path: &Path) -> Result<Self, PlaybookError> {
         })
     }
 
-    pub #[tracing::instrument]
-fn open(path: &Path) -> Result<Recovery, PlaybookError> {
+    pub fn open(path: &Path) -> Result<Recovery, PlaybookError> {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -133,8 +127,7 @@ fn open(path: &Path) -> Result<Recovery, PlaybookError> {
         })
     }
 
-    pub #[tracing::instrument]
-fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
+    pub fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
         let record = JournalRecord {
             seq: (self.offsets.len() + 1) as u64,
             digest: digest_of(event)?,
@@ -150,7 +143,6 @@ fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
     }
 }
 
-#[tracing::instrument]
 fn sync_parent(path: &Path) -> Result<(), PlaybookError> {
     let Some(parent) = path
         .parent()
@@ -163,18 +155,15 @@ fn sync_parent(path: &Path) -> Result<(), PlaybookError> {
 }
 
 impl EventSink for Journal {
-    #[tracing::instrument]
-fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
+    fn record(&mut self, event: &DriveEvent) -> Result<(), PlaybookError> {
         Journal::record(self, event)
     }
 
-    #[tracing::instrument]
-fn mark(&self) -> u64 {
+    fn mark(&self) -> u64 {
         self.offsets.len() as u64
     }
 
-    #[tracing::instrument]
-fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
+    fn rollback(&mut self, mark: u64) -> Result<(), PlaybookError> {
         if mark as usize > self.offsets.len() {
             return Err(PlaybookError::ReplayDivergence(
                 "journal mark out of range".into(),
@@ -208,8 +197,7 @@ mod tests {
 
     use super::{digest_of, Journal, JournalRecord};
 
-    #[tracing::instrument]
-fn event_log() -> Vec<DriveEvent> {
+    fn event_log() -> Vec<DriveEvent> {
         let mut authority = Authority::start(
             DriveId::new("journal-drive").unwrap(),
             TaskContract {
@@ -240,16 +228,14 @@ fn event_log() -> Vec<DriveEvent> {
         authority.log().to_vec()
     }
 
-    #[tracing::instrument]
-fn temp_path(name: &str) -> PathBuf {
+    fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "playbook-journal-{}-{name}.jsonl",
             std::process::id()
         ))
     }
 
-    #[tracing::instrument]
-fn journal_line(event: &DriveEvent, seq: u64) -> Vec<u8> {
+    fn journal_line(event: &DriveEvent, seq: u64) -> Vec<u8> {
         let record = JournalRecord {
             seq,
             digest: digest_of(event).unwrap(),
@@ -261,8 +247,7 @@ fn journal_line(event: &DriveEvent, seq: u64) -> Vec<u8> {
     }
 
     #[test]
-    #[tracing::instrument]
-fn reopen_reproduces_the_recorded_events() {
+    fn reopen_reproduces_the_recorded_events() {
         let events = event_log();
         let path = temp_path("reopen");
         let mut sink: Box<dyn EventSink> = Box::new(Journal::create(&path).unwrap());
@@ -282,8 +267,7 @@ fn reopen_reproduces_the_recorded_events() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn torn_tail_is_truncated_on_open() {
+    fn torn_tail_is_truncated_on_open() {
         let events = event_log();
         let path = temp_path("torn");
         let mut sink: Box<dyn EventSink> = Box::new(Journal::create(&path).unwrap());
@@ -309,8 +293,7 @@ fn torn_tail_is_truncated_on_open() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn tampered_digest_truncates_at_that_record() {
+    fn tampered_digest_truncates_at_that_record() {
         let events = event_log();
         let path = temp_path("tampered");
         let mut bytes = journal_line(&events[0], 1);
@@ -330,8 +313,7 @@ fn tampered_digest_truncates_at_that_record() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn sequence_gap_truncates_at_that_record() {
+    fn sequence_gap_truncates_at_that_record() {
         let events = event_log();
         let path = temp_path("seq-gap");
         let mut bytes = journal_line(&events[0], 1);
@@ -345,8 +327,7 @@ fn sequence_gap_truncates_at_that_record() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn rollback_drops_records_after_the_mark() {
+    fn rollback_drops_records_after_the_mark() {
         let events = event_log();
         let path = temp_path("rollback");
         let mut sink: Box<dyn EventSink> = Box::new(Journal::create(&path).unwrap());
@@ -370,8 +351,7 @@ fn rollback_drops_records_after_the_mark() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn rollback_rejects_unknown_marks() {
+    fn rollback_rejects_unknown_marks() {
         let events = event_log();
         let path = temp_path("unknown-mark");
         let mut sink: Box<dyn EventSink> = Box::new(Journal::create(&path).unwrap());

@@ -37,8 +37,7 @@ pub enum WinConditionKind {
 
 impl WinConditionKind {
     /// The machine key for reports and journals.
-    pub #[tracing::instrument]
-fn key(&self) -> &'static str {
+    pub fn key(&self) -> &'static str {
         match self {
             Self::GateSatisfied { .. } => "gate_satisfied",
             Self::EvidencePresent { .. } => "evidence_present",
@@ -90,8 +89,7 @@ pub struct EvidencePolicy {
 }
 
 impl EvidencePolicy {
-    pub #[tracing::instrument]
-fn accepts(&self, class: EvidenceClass) -> bool {
+    pub fn accepts(&self, class: EvidenceClass) -> bool {
         class.can_satisfy_gate() && self.accepted_classes.contains(&class)
     }
 }
@@ -118,8 +116,7 @@ impl GameContract {
     /// Seal the contract. Win condition ids must be unique; at least one
     /// mandatory win condition is required, or the contract could never be
     /// won and could never lose honestly.
-    pub #[tracing::instrument]
-fn seal(mut self) -> Result<Self, PlaybookError> {
+    pub fn seal(mut self) -> Result<Self, PlaybookError> {
         if self.win_conditions.is_empty() {
             return Err(PlaybookError::Evidence(
                 "game contract requires at least one win condition".into(),
@@ -154,8 +151,7 @@ fn seal(mut self) -> Result<Self, PlaybookError> {
     }
 
     /// The contract is well-formed and the digest matches its contents.
-    pub #[tracing::instrument]
-fn verify(&self) -> Result<(), PlaybookError> {
+    pub fn verify(&self) -> Result<(), PlaybookError> {
         let mut unsealed = self.clone();
         unsealed.contract_hash.clear();
         let sealed = sha256_hex(&to_canonical_bytes(&unsealed)?);
@@ -168,8 +164,7 @@ fn verify(&self) -> Result<(), PlaybookError> {
     /// An audited amendment: a new sealed contract naming this one as its
     /// predecessor. Immutability is preserved — the old contract is never
     /// mutated, only superseded.
-    pub #[tracing::instrument]
-fn amend(mut self, evidence_policy: EvidencePolicy) -> Self {
+    pub fn amend(mut self, evidence_policy: EvidencePolicy) -> Self {
         self.predecessor_hash = Some(self.contract_hash.clone());
         self.evidence_policy = evidence_policy;
         self.contract_hash.clear();
@@ -202,8 +197,7 @@ pub struct ContractVerification {
 
 /// Check every win condition against measured drive state. Deterministic:
 /// the same state and contract always produce the same verdict.
-pub #[tracing::instrument]
-fn verify_win_conditions(
+pub fn verify_win_conditions(
     contract: &GameContract,
     gates: &[Gate],
     evidence: &[Evidence],
@@ -244,7 +238,6 @@ fn verify_win_conditions(
     }
 }
 
-#[tracing::instrument]
 fn check(
     condition: &WinCondition,
     contract: &GameContract,
@@ -305,8 +298,7 @@ pub enum ContractLoss {
 
 /// Check the loss conditions. The first recognised loss names itself; an
 /// unrecognised loss never terminates a game.
-pub #[tracing::instrument]
-fn check_loss_conditions(
+pub fn check_loss_conditions(
     contract: &GameContract,
     gates: &[Gate],
     budget_consumed: crate::DriveBudget,
@@ -342,8 +334,7 @@ mod tests {
     use super::*;
     use crate::{ArtefactId, Constraint, Down, DriveStatus, EvidenceId, TaskIntegrity};
 
-    #[tracing::instrument]
-fn gate(id: &str) -> Gate {
+    fn gate(id: &str) -> Gate {
         Gate::declare(
             GateId::new(id).unwrap(),
             "compiler accepts",
@@ -355,8 +346,7 @@ fn gate(id: &str) -> Gate {
         .unwrap()
     }
 
-    #[tracing::instrument]
-fn contract(win: WinCondition) -> GameContract {
+    fn contract(win: WinCondition) -> GameContract {
         GameContract {
             game_id: GameId::new("game-1").unwrap(),
             objective: TaskContract {
@@ -401,8 +391,7 @@ fn contract(win: WinCondition) -> GameContract {
         .unwrap()
     }
 
-    #[tracing::instrument]
-fn win() -> WinCondition {
+    fn win() -> WinCondition {
         WinCondition {
             id: WinConditionId::new("win-build").unwrap(),
             kind: WinConditionKind::GateSatisfied {
@@ -414,8 +403,7 @@ fn win() -> WinCondition {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_sealed_contract_round_trips_and_detects_tampering() {
+    fn a_sealed_contract_round_trips_and_detects_tampering() {
         let sealed = contract(win());
         sealed.verify().unwrap();
         let mut tampered = sealed.clone();
@@ -427,8 +415,7 @@ fn a_sealed_contract_round_trips_and_detects_tampering() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_contract_without_mandatory_conditions_is_refused() {
+    fn a_contract_without_mandatory_conditions_is_refused() {
         let mut relaxed = contract(win());
         relaxed.win_conditions[0].mandatory = false;
         relaxed.contract_hash.clear();
@@ -436,8 +423,7 @@ fn a_contract_without_mandatory_conditions_is_refused() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn duplicate_condition_ids_are_refused() {
+    fn duplicate_condition_ids_are_refused() {
         let mut duplicated = contract(win());
         duplicated.win_conditions.push(win());
         duplicated.contract_hash.clear();
@@ -445,8 +431,7 @@ fn duplicate_condition_ids_are_refused() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn only_mandatory_conditions_gate_the_win() {
+    fn only_mandatory_conditions_gate_the_win() {
         let mut sealed = contract(win());
         sealed.win_conditions.push(WinCondition {
             id: WinConditionId::new("win-advisory").unwrap(),
@@ -470,8 +455,7 @@ fn only_mandatory_conditions_gate_the_win() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn an_unsatisfied_gate_is_never_a_win() {
+    fn an_unsatisfied_gate_is_never_a_win() {
         let sealed = contract(win());
         let verdict = verify_win_conditions(&sealed, &[], &[], &[], &serde_json::json!({}));
         assert!(!verdict.verified_win);
@@ -480,8 +464,7 @@ fn an_unsatisfied_gate_is_never_a_win() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn evidence_policy_and_narrative_rejection_bind() {
+    fn evidence_policy_and_narrative_rejection_bind() {
         let mut sealed = contract(WinCondition {
             id: WinConditionId::new("win-scan").unwrap(),
             kind: WinConditionKind::EvidencePresent {
@@ -530,8 +513,7 @@ fn evidence_policy_and_narrative_rejection_bind() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn artefacts_and_environment_facts_are_checked_deterministically() {
+    fn artefacts_and_environment_facts_are_checked_deterministically() {
         let sealed = contract(WinCondition {
             id: WinConditionId::new("win-artefact").unwrap(),
             kind: WinConditionKind::ArtefactValidated { minimum: 1 },
@@ -597,8 +579,7 @@ fn artefacts_and_environment_facts_are_checked_deterministically() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn amendment_supersedes_without_mutating_the_predecessor() {
+    fn amendment_supersedes_without_mutating_the_predecessor() {
         let original = contract(win());
         let amended = original.clone().amend(EvidencePolicy {
             accepted_classes: vec![EvidenceClass::CompilerResult, EvidenceClass::Benchmark],
@@ -612,8 +593,7 @@ fn amendment_supersedes_without_mutating_the_predecessor() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn loss_conditions_recognise_budget_gates_and_deadlines() {
+    fn loss_conditions_recognise_budget_gates_and_deadlines() {
         let sealed = contract(win());
         assert_eq!(
             check_loss_conditions(

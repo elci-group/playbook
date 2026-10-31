@@ -145,18 +145,15 @@ pub struct RosterContract {
     pub plan: RosterPlan,
 }
 
-#[tracing::instrument]
 fn invalid(message: &str) -> PlaybookError {
     PlaybookError::Evidence(message.into())
 }
-#[tracing::instrument]
 fn ppm(value: u32) -> Result<(), PlaybookError> {
     Ppm::new(value).map(|_| ())
 }
 
 impl RosterContract {
-    pub #[tracing::instrument]
-fn verify(&self) -> Result<(), PlaybookError> {
+    pub fn verify(&self) -> Result<(), PlaybookError> {
         if self.magic != "ROSTER/1" || self.digest != sha256_hex(&to_canonical_bytes(&self.plan)?) {
             return Err(PlaybookError::DigestMismatch);
         }
@@ -222,7 +219,6 @@ fn verify(&self) -> Result<(), PlaybookError> {
     }
 }
 
-#[tracing::instrument]
 fn validate(input: &PortfolioInput) -> Result<(), PlaybookError> {
     if input.effective_season <= input.evidence_through_season
         || input.workloads.is_empty()
@@ -303,7 +299,6 @@ fn validate(input: &PortfolioInput) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn fit(candidate: &Candidate, profile: &OpponentProfile, min_samples: u32) -> u32 {
     let Some(history) = candidate
         .history
@@ -337,7 +332,6 @@ fn fit(candidate: &Candidate, profile: &OpponentProfile, min_samples: u32) -> u3
         / u64::from(PPM_SCALE)) as u32
 }
 
-#[tracing::instrument]
 fn exclusion(candidate: &Candidate, input: &PortfolioInput) -> Option<ExclusionReason> {
     if candidate.reliability_ppm < input.minimum_reliability_ppm {
         Some(ExclusionReason::Reliability)
@@ -369,8 +363,7 @@ struct EvaluatedPortfolio {
 
 /// Exhaustively compare portfolios of at most 16 candidates. Scores are
 /// counterfactual proxies, not measured completion probabilities.
-pub #[tracing::instrument]
-fn construct(input: &PortfolioInput) -> Result<RosterContract, PlaybookError> {
+pub fn construct(input: &PortfolioInput) -> Result<RosterContract, PlaybookError> {
     validate(input)?;
     let mut candidates: Vec<_> = input
         .candidates

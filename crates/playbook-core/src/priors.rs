@@ -34,40 +34,34 @@ pub struct HistoricalPriorTable {
 }
 
 impl HistoricalPriorTable {
-    pub #[tracing::instrument]
-fn empty() -> Self {
+    pub fn empty() -> Self {
         Self::default()
     }
 
-    pub #[tracing::instrument]
-fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
 
     /// Total recorded outcomes across all personnel.
-    pub #[tracing::instrument]
-fn samples(&self) -> u32 {
+    pub fn samples(&self) -> u32 {
         self.rows.values().map(|row| row.samples).sum()
     }
 
     /// Record one measured outcome. Failed plays record zero: a failure is
     /// ground truth about the play, not a gap in the table.
-    pub #[tracing::instrument]
-fn record(&mut self, personnel: &PersonnelId, realized_reduction_milli: u32) {
+    pub fn record(&mut self, personnel: &PersonnelId, realized_reduction_milli: u32) {
         let row = self.rows.entry(personnel.to_string()).or_default();
         row.samples = row.samples.saturating_add(1);
         row.realized_reduction_sum_milli += u64::from(realized_reduction_milli);
     }
 
-    pub #[tracing::instrument]
-fn row(&self, personnel: &PersonnelId) -> Option<&PriorRow> {
+    pub fn row(&self, personnel: &PersonnelId) -> Option<&PriorRow> {
         self.rows.get(personnel.as_str())
     }
 
     /// Deterministic average realized reduction for a personnel id. `None`
     /// until the row exists and holds at least `min_samples` outcomes.
-    pub #[tracing::instrument]
-fn prior_milli(&self, personnel: &PersonnelId, min_samples: u32) -> Option<u32> {
+    pub fn prior_milli(&self, personnel: &PersonnelId, min_samples: u32) -> Option<u32> {
         let row = self.row(personnel)?;
         if row.samples < min_samples.max(1) {
             return None;
@@ -75,15 +69,13 @@ fn prior_milli(&self, personnel: &PersonnelId, min_samples: u32) -> Option<u32> 
         Some((row.realized_reduction_sum_milli / u64::from(row.samples)) as u32)
     }
 
-    pub #[tracing::instrument]
-fn rows(&self) -> impl Iterator<Item = (&String, &PriorRow)> {
+    pub fn rows(&self) -> impl Iterator<Item = (&String, &PriorRow)> {
         self.rows.iter()
     }
 
     /// Combine only the observations learned after a drive's imported seed.
     /// This prevents cross-drive history from being counted again on recovery.
-    pub #[tracing::instrument]
-fn merge_observations(&mut self, learned: &Self, seed: &Self) -> Result<(), PlaybookError> {
+    pub fn merge_observations(&mut self, learned: &Self, seed: &Self) -> Result<(), PlaybookError> {
         let mut next = self.clone();
         for (id, base) in seed.rows() {
             let row = learned.rows.get(id).copied().unwrap_or_default();
@@ -121,8 +113,7 @@ pub struct PriorBundle {
 }
 
 /// Serialize a prior table as a schema-versioned bundle.
-pub #[tracing::instrument]
-fn export_priors(priors: &HistoricalPriorTable) -> Result<String, PlaybookError> {
+pub fn export_priors(priors: &HistoricalPriorTable) -> Result<String, PlaybookError> {
     let bundle = PriorBundle {
         schema_version: SCHEMA_VERSION,
         priors: priors.clone(),
@@ -131,8 +122,7 @@ fn export_priors(priors: &HistoricalPriorTable) -> Result<String, PlaybookError>
 }
 
 /// Parse and schema-check a persisted prior bundle.
-pub #[tracing::instrument]
-fn import_priors(json: &str) -> Result<HistoricalPriorTable, PlaybookError> {
+pub fn import_priors(json: &str) -> Result<HistoricalPriorTable, PlaybookError> {
     let bundle: PriorBundle = serde_json::from_str(json).map_err(PlaybookError::json)?;
     accept_schema(bundle.schema_version)?;
     Ok(bundle.priors)
@@ -143,8 +133,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[tracing::instrument]
-fn a_prior_bundle_round_trips_through_json() {
+    fn a_prior_bundle_round_trips_through_json() {
         let mut priors = HistoricalPriorTable::empty();
         let worker = PersonnelId::new("worker").unwrap();
         priors.record(&worker, 4_000);
@@ -156,15 +145,13 @@ fn a_prior_bundle_round_trips_through_json() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn an_unknown_bundle_schema_is_rejected() {
+    fn an_unknown_bundle_schema_is_rejected() {
         let json = r#"{"schema_version": 99, "priors": {"rows": {}}}"#;
         assert!(import_priors(json).is_err());
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_bundle_with_unknown_fields_is_rejected() {
+    fn a_bundle_with_unknown_fields_is_rejected() {
         let json = r#"{
             "schema_version": 1,
             "priors": {"rows": {}, "rankings": {"worker": 1}}

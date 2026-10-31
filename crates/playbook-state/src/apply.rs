@@ -25,14 +25,12 @@ pub enum ApplyMode {
 }
 
 /// Serialize a drive event log as JSON.
-pub #[tracing::instrument]
-fn export_log(events: &[DriveEvent]) -> Result<String, PlaybookError> {
+pub fn export_log(events: &[DriveEvent]) -> Result<String, PlaybookError> {
     serde_json::to_string(events).map_err(PlaybookError::json)
 }
 
 /// Parse a JSON drive event log.
-pub #[tracing::instrument]
-fn import_log(json: &str) -> Result<Vec<DriveEvent>, PlaybookError> {
+pub fn import_log(json: &str) -> Result<Vec<DriveEvent>, PlaybookError> {
     serde_json::from_str(json).map_err(PlaybookError::json)
 }
 
@@ -47,8 +45,7 @@ pub struct TrajectoryPoint {
     pub status: DriveStatus,
 }
 
-pub #[tracing::instrument]
-fn fold(
+pub fn fold(
     events: &[DriveEvent],
     policy: &Policy,
     mode: ApplyMode,
@@ -60,8 +57,7 @@ fn fold(
     state.ok_or(PlaybookError::Incomplete)
 }
 
-pub #[tracing::instrument]
-fn trajectory(
+pub fn trajectory(
     events: &[DriveEvent],
     policy: &Policy,
     mode: ApplyMode,
@@ -84,8 +80,7 @@ fn trajectory(
     Ok(points)
 }
 
-pub #[tracing::instrument]
-fn apply(
+pub fn apply(
     existing: Option<&DriveState>,
     event: &DriveEvent,
     policy: &Policy,
@@ -116,7 +111,6 @@ fn apply(
     }
 }
 
-#[tracing::instrument]
 fn apply_open(
     current: &DriveState,
     event: &DriveEvent,
@@ -1021,8 +1015,7 @@ fn apply_open(
 }
 
 /// One-to-one projection from journal events onto the huddle fold.
-pub(crate) #[tracing::instrument]
-fn project_huddle(event: &DriveEvent) -> Option<playbook_huddle::HuddleEvent> {
+pub(crate) fn project_huddle(event: &DriveEvent) -> Option<playbook_huddle::HuddleEvent> {
     Some(match event {
         DriveEvent::HuddleRequested {
             huddle_id,
@@ -1122,8 +1115,7 @@ fn project_huddle(event: &DriveEvent) -> Option<playbook_huddle::HuddleEvent> {
 }
 
 /// One-to-one projection from journal events onto the blitz fold.
-pub(crate) #[tracing::instrument]
-fn project_blitz(event: &DriveEvent) -> Option<playbook_blitz::BlitzEvent> {
+pub(crate) fn project_blitz(event: &DriveEvent) -> Option<playbook_blitz::BlitzEvent> {
     Some(match event {
         DriveEvent::BlitzProposed {
             blitz_id,
@@ -1351,7 +1343,6 @@ fn project_blitz(event: &DriveEvent) -> Option<playbook_blitz::BlitzEvent> {
     })
 }
 
-#[tracing::instrument]
 fn close_cycle(before: &DriveState, next: &mut DriveState, policy: &Policy) {
     let spent = consumed_increased(before.budget_consumed, next.budget_consumed);
     if next.ytg_milli < before.ytg_milli {
@@ -1390,7 +1381,6 @@ fn close_cycle(before: &DriveState, next: &mut DriveState, policy: &Policy) {
     score_field_goal(next);
 }
 
-#[tracing::instrument]
 fn ingest(state: &mut DriveState, evidence: &Evidence) -> Result<(), PlaybookError> {
     if state
         .evidence
@@ -1420,7 +1410,6 @@ fn ingest(state: &mut DriveState, evidence: &Evidence) -> Result<(), PlaybookErr
     Ok(())
 }
 
-#[tracing::instrument]
 fn doctrine(state: &DriveState, policy: &Policy) -> playbook_lastdown::DoctrineDecision {
     let full = state
         .gates
@@ -1453,7 +1442,6 @@ fn doctrine(state: &DriveState, policy: &Policy) -> playbook_lastdown::DoctrineD
 /// The most recent coordinator-scope reconciliation contested the conversion
 /// plan: its outcome carried a strategy change. Fourth-down doctrine then
 /// banks instead of gambling on another convert.
-#[tracing::instrument]
 fn coaching_contested(state: &DriveState) -> bool {
     state
         .huddles()
@@ -1466,7 +1454,6 @@ fn coaching_contested(state: &DriveState) -> bool {
         .is_some()
 }
 
-#[tracing::instrument]
 fn requirement(state: &DriveState, policy: &Policy) -> Option<CapabilityRequirement> {
     let gate = state.gates.iter().find(|gate| {
         gate.mandatory
@@ -1498,7 +1485,6 @@ fn requirement(state: &DriveState, policy: &Policy) -> Option<CapabilityRequirem
     })
 }
 
-#[tracing::instrument]
 fn score_field_goal(state: &mut DriveState) {
     if let Some(gate_id) = &state.field_goal_gate {
         if state
@@ -1511,7 +1497,6 @@ fn score_field_goal(state: &mut DriveState) {
     }
 }
 
-#[tracing::instrument]
 fn ensure_active(state: &DriveState) -> Result<(), PlaybookError> {
     if matches!(
         state.status,
@@ -1526,7 +1511,6 @@ fn ensure_active(state: &DriveState) -> Result<(), PlaybookError> {
     }
 }
 
-#[tracing::instrument]
 fn note_idempotency_start(state: &mut DriveState, key: Option<&str>) -> Result<(), PlaybookError> {
     let Some(key) = key else {
         return Ok(());
@@ -1545,7 +1529,6 @@ fn note_idempotency_start(state: &mut DriveState, key: Option<&str>) -> Result<(
     }
 }
 
-#[tracing::instrument]
 fn settle_effects(
     state: &mut DriveState,
     key: Option<&str>,
@@ -1567,7 +1550,6 @@ fn settle_effects(
     }
 }
 
-#[tracing::instrument]
 fn ensure_no_open_execution(state: &DriveState) -> Result<(), PlaybookError> {
     if let Some(execution) = &state.open_execution {
         return Err(PlaybookError::Reconcile(
@@ -1583,7 +1565,6 @@ fn ensure_no_open_execution(state: &DriveState) -> Result<(), PlaybookError> {
     Ok(())
 }
 
-#[tracing::instrument]
 fn validate_effect_keys(
     key: Option<&str>,
     effects: &[SideEffectNote],
@@ -1604,7 +1585,6 @@ fn validate_effect_keys(
     Ok(())
 }
 
-#[tracing::instrument]
 fn saturating_add_budget(left: DriveBudget, right: DriveBudget) -> DriveBudget {
     DriveBudget {
         tokens: left.tokens.saturating_add(right.tokens),
@@ -1620,7 +1600,6 @@ fn saturating_add_budget(left: DriveBudget, right: DriveBudget) -> DriveBudget {
     }
 }
 
-#[tracing::instrument]
 fn admit_selected(
     state: &DriveState,
     definition: &playbook_core::PlayDefinition,
@@ -1643,7 +1622,6 @@ fn admit_selected(
     admit(&field, definition, personnel, policy)
 }
 
-#[tracing::instrument]
 fn consumed_increased(before: DriveBudget, after: DriveBudget) -> bool {
     after.tokens > before.tokens
         || after.monetary_cost_micros > before.monetary_cost_micros
@@ -1665,8 +1643,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    #[tracing::instrument]
-fn authority_log_json_round_trips_and_audit_fold_matches_live_state() {
+    fn authority_log_json_round_trips_and_audit_fold_matches_live_state() {
         let policy = Policy::builtin();
         let task = TaskContract {
             statement: "compile the implementation".into(),
@@ -1714,8 +1691,7 @@ fn authority_log_json_round_trips_and_audit_fold_matches_live_state() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn priors_learn_from_measured_outcomes_and_replay_identically() {
+    fn priors_learn_from_measured_outcomes_and_replay_identically() {
         use playbook_core::{Personnel, PersonnelId, PersonnelKind, YTG_REFERENCE_MILLI};
         use playbook_elci::FixturePlane;
 
@@ -1790,8 +1766,7 @@ fn priors_learn_from_measured_outcomes_and_replay_identically() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn loaded_priors_flip_routing_across_drives() {
+    fn loaded_priors_flip_routing_across_drives() {
         use playbook_core::{Personnel, PersonnelId, PersonnelKind};
         use playbook_elci::FixturePlane;
         use playbook_routing::HistoricalPriorTable;

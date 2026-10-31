@@ -435,3 +435,18 @@ min_size_bytes = 2000
 path = "docs/anthology/08-personnel-and-organisation.md"
 required = true
 min_size_bytes = 2000
+
+[[file]]
+path = "crates/playbook-cards/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-cards/src/repertoire.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "crates/playbook-cards/src/svg.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]

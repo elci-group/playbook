@@ -19,23 +19,20 @@ impl Ppm {
     pub const ZERO: Self = Self(0);
     pub const ONE: Self = Self(PPM_SCALE);
 
-    pub #[tracing::instrument]
-fn new(value: u32) -> Result<Self, PlaybookError> {
+    pub fn new(value: u32) -> Result<Self, PlaybookError> {
         if value > PPM_SCALE {
             return Err(PlaybookError::Probability(value));
         }
         Ok(Self(value))
     }
 
-    pub #[tracing::instrument]
-fn get(self) -> u32 {
+    pub fn get(self) -> u32 {
         self.0
     }
 }
 
 /// Lastdown's scale: zero stays zero, every other product is at least one.
-pub #[tracing::instrument]
-fn scale_by_probability(ppm: u32, value: u64) -> u64 {
+pub fn scale_by_probability(ppm: u32, value: u64) -> u64 {
     if ppm == 0 || value == 0 {
         0
     } else {
@@ -43,8 +40,7 @@ fn scale_by_probability(ppm: u32, value: u64) -> u64 {
     }
 }
 
-pub #[tracing::instrument]
-fn accept_schema(version: u32) -> Result<(), PlaybookError> {
+pub fn accept_schema(version: u32) -> Result<(), PlaybookError> {
     if version == SCHEMA_VERSION {
         Ok(())
     } else {
@@ -52,8 +48,7 @@ fn accept_schema(version: u32) -> Result<(), PlaybookError> {
     }
 }
 
-pub #[tracing::instrument]
-fn ppm_percent(ppm: u32) -> String {
+pub fn ppm_percent(ppm: u32) -> String {
     let ppm = ppm.min(PPM_SCALE);
     let whole = ppm / 10_000;
     let frac = (ppm % 10_000) / 100;

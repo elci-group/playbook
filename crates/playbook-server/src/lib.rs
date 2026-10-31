@@ -44,8 +44,7 @@ pub struct ServerConfig {
 }
 
 impl Default for ServerConfig {
-    #[tracing::instrument]
-fn default() -> Self {
+    fn default() -> Self {
         Self {
             bind: "127.0.0.1".into(),
             port: 8088,
@@ -58,22 +57,32 @@ fn default() -> Self {
 pub struct Response {
     pub status: u16,
     pub body: String,
+    /// The wire content type. JSON is the default; the play-card gallery is
+    /// the one HTML surface.
+    pub content_type: &'static str,
 }
 
-#[tracing::instrument]
 fn reply(status: u16, body: &Value) -> Response {
     Response {
         status,
         body: body.to_string(),
+        content_type: "application/json",
     }
 }
 
-#[tracing::instrument]
+/// Serve a pre-rendered HTML page (the play-card gallery).
+fn html_reply(status: u16, body: String) -> Response {
+    Response {
+        status,
+        body,
+        content_type: "text/html; charset=utf-8",
+    }
+}
+
 fn error_reply(status: u16, code: &str, detail: &str) -> Response {
     reply(status, &json!({"error": code, "detail": detail}))
 }
 
-#[tracing::instrument]
 fn error_of(err: PlaybookError) -> Response {
     let code = match &err {
         PlaybookError::Reconcile(_) => "reconcile_required",
@@ -108,13 +117,11 @@ fn error_of(err: PlaybookError) -> Response {
     error_reply(error_status(code), code, &err.to_string())
 }
 
-#[tracing::instrument]
 fn cleanup_journal(path: &Path, sidecar: &Path) {
     let _ = std::fs::remove_file(path);
     let _ = std::fs::remove_file(sidecar);
 }
 
-#[tracing::instrument]
 fn error_status(code: &str) -> u16 {
     match code {
         "io" => 500,
@@ -145,7 +152,6 @@ pub struct Service {
 /// The newest logical clock reading visible in the log. `ToolInvoked` carries
 /// its dispatch time in `execution.timeout_ms`; outcome events inherit the
 /// same reading through their inner play records.
-#[tracing::instrument]
 fn last_at_ms(events: &[DriveEvent]) -> u64 {
     events
         .iter()
@@ -163,7 +169,6 @@ fn last_at_ms(events: &[DriveEvent]) -> u64 {
         .unwrap_or(1_000)
 }
 
-#[tracing::instrument]
 fn spans_value(spans: &[SpanNode]) -> Value {
     Value::Array(
         spans
@@ -182,8 +187,7 @@ fn spans_value(spans: &[SpanNode]) -> Value {
 }
 
 impl Service {
-    pub #[tracing::instrument]
-fn open(config: &ServerConfig) -> Result<Service, PlaybookError> {
+    pub fn open(config: &ServerConfig) -> Result<Service, PlaybookError> {
         std::fs::create_dir_all(&config.journal_dir)
             .map_err(|error| PlaybookError::Io(error.to_string()))?;
         let mut drives = BTreeMap::new();
@@ -229,15 +233,13 @@ fn open(config: &ServerConfig) -> Result<Service, PlaybookError> {
 
     /// Install a huddle dispatch plane. The scripted fixture serves tests;
     /// a live embedding installs its ELCI-backed implementation here.
-    pub #[tracing::instrument]
-fn script_huddles(&self, responses: Vec<Result<Value, String>>) {
+    pub fn script_huddles(&self, responses: Vec<Result<Value, String>>) {
         *self.huddle_plane.lock().expect("huddle plane lock") =
             Box::new(FixtureHuddlePlane::responding(responses));
     }
     /// The policy a journal folds under: the sidecar records the choice at
     /// creation; the fold test breaks ties for journals without one.
-    #[tracing::instrument]
-fn policy_for(path: &Path) -> Policy {
+    fn policy_for(path: &Path) -> Policy {
         let sidecar = path.with_extension("jsonl.policy");
         if let Ok(text) = std::fs::read_to_string(&sidecar) {
             match text.trim() {
@@ -257,8 +259,7 @@ fn policy_for(path: &Path) -> Policy {
         }
     }
 
-    #[tracing::instrument]
-fn recover_drive(path: &Path, policy: &Policy) -> Result<DriveHandle, PlaybookError> {
+    fn recover_drive(path: &Path, policy: &Policy) -> Result<DriveHandle, PlaybookError> {
         let recovery = Journal::open(path)?;
         playbook_state::fold(&recovery.events, policy, ApplyMode::Audit)?;
         let mut authority =
@@ -273,13 +274,11 @@ fn recover_drive(path: &Path, policy: &Policy) -> Result<DriveHandle, PlaybookEr
         })
     }
 
-    pub #[tracing::instrument]
-fn rejected_journals(&self) -> usize {
+    pub fn rejected_journals(&self) -> usize {
         *self.rejected_journals.lock().expect("rejected lock")
     }
 
-    #[tracing::instrument]
-fn create_drive(&self, body: &str) -> Response {
+    fn create_drive(&self, body: &str) -> Response {
         let parsed: Value = match serde_json::from_str(body) {
             Ok(value) => value,
             Err(error) => return error_of(PlaybookError::json(error)),
@@ -374,13 +373,11 @@ fn create_drive(&self, body: &str) -> Response {
         reply(201, &json!({"snapshot": snapshot}))
     }
 
-    #[tracing::instrument]
-fn snapshot_of(handle: &DriveHandle) -> Value {
+    fn snapshot_of(handle: &DriveHandle) -> Value {
         json!(handle.authority.state().snapshot(handle.authority.policy()))
     }
 
-    #[tracing::instrument]
-fn mutate<F>(&self, id: &str, body: &str, apply: F) -> Response
+    fn mutate<F>(&self, id: &str, body: &str, apply: F) -> Response
     where
         F: FnOnce(&mut DriveHandle, u64) -> Result<Option<Value>, PlaybookError>,
     {
@@ -431,8 +428,7 @@ fn mutate<F>(&self, id: &str, body: &str, apply: F) -> Response
 
     /// Mark a terminal drive as exported and return the network job, so the
     /// blocking OTLP POST runs without the registry lock held.
-    #[tracing::instrument]
-fn export_job(
+    fn export_job(
         handle: &mut DriveHandle,
         id: &str,
         otlp: &Option<String>,
@@ -464,8 +460,7 @@ fn export_job(
         ))
     }
 
-    pub #[tracing::instrument]
-fn handle(&self, method: &str, path: &str, body: &str) -> Response {
+    pub fn handle(&self, method: &str, path: &str, body: &str) -> Response {
         let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
         if method == "POST" && segments == ["v1", "front-office", "rosters"] {
             return match serde_json::from_str::<playbook_front_office::PortfolioInput>(body)
@@ -480,6 +475,7 @@ fn handle(&self, method: &str, path: &str, body: &str) -> Response {
             return self.franchises.handle(method, &segments[2..], body);
         }
         match (method, segments.as_slice()) {
+            ("GET", ["playbook"]) => html_reply(200, playbook_cards::render_gallery()),
             ("GET", ["healthz"]) => reply(200, &json!({"ok": true})),
             ("GET", ["readyz"]) => reply(
                 200,
@@ -698,20 +694,17 @@ fn handle(&self, method: &str, path: &str, body: &str) -> Response {
         }
     }
 
-    #[tracing::instrument]
-fn snapshot_json(&self, id: &str) -> Option<Value> {
+    fn snapshot_json(&self, id: &str) -> Option<Value> {
         let drives = self.drives.lock().expect("drive lock");
         drives.get(id).map(Service::snapshot_of)
     }
 
-    #[tracing::instrument]
-fn events_json(&self, id: &str) -> Option<Vec<DriveEvent>> {
+    fn events_json(&self, id: &str) -> Option<Vec<DriveEvent>> {
         let drives = self.drives.lock().expect("drive lock");
         drives.get(id).map(|handle| handle.authority.log().to_vec())
     }
 
-    #[tracing::instrument]
-fn trace_json(&self, id: &str) -> Option<Vec<Value>> {
+    fn trace_json(&self, id: &str) -> Option<Vec<Value>> {
         let drives = self.drives.lock().expect("drive lock");
         drives.get(id).map(|handle| {
             match spans_value(&playbook_observability::spans(id, handle.authority.log())) {
@@ -721,8 +714,7 @@ fn trace_json(&self, id: &str) -> Option<Vec<Value>> {
         })
     }
 
-    #[tracing::instrument]
-fn huddles_json(&self, id: &str) -> Option<Value> {
+    fn huddles_json(&self, id: &str) -> Option<Value> {
         let drives = self.drives.lock().expect("drive lock");
         drives.get(id).map(|handle| {
             serde_json::to_value(handle.authority.state().huddles()).unwrap_or(Value::Null)
@@ -731,8 +723,7 @@ fn huddles_json(&self, id: &str) -> Option<Value> {
 
     /// The Phase 7 seam: the live coherence reading plus the huddle metrics
     /// an orchestrator monitors over a hosted drive.
-    #[tracing::instrument]
-fn coherence_json(&self, id: &str) -> Option<Value> {
+    fn coherence_json(&self, id: &str) -> Option<Value> {
         let drives = self.drives.lock().expect("drive lock");
         let handle = drives.get(id)?;
         let reading = handle.authority.coherence();
@@ -751,8 +742,7 @@ fn coherence_json(&self, id: &str) -> Option<Value> {
         }))
     }
 
-    #[tracing::instrument]
-fn huddle_json(&self, id: &str, huddle_id: &str) -> Option<Value> {
+    fn huddle_json(&self, id: &str, huddle_id: &str) -> Option<Value> {
         let drives = self.drives.lock().expect("drive lock");
         let handle = drives.get(id)?;
         let ledger = handle.authority.state().huddles();
@@ -775,8 +765,7 @@ pub struct Bound {
     live: Arc<AtomicUsize>,
 }
 
-pub #[tracing::instrument]
-fn bind(config: ServerConfig) -> std::io::Result<Bound> {
+pub fn bind(config: ServerConfig) -> std::io::Result<Bound> {
     let listener = TcpListener::bind((config.bind.as_str(), config.port))?;
     let address = listener.local_addr()?;
     let service = Arc::new(
@@ -793,18 +782,15 @@ fn bind(config: ServerConfig) -> std::io::Result<Bound> {
 }
 
 impl Bound {
-    pub #[tracing::instrument]
-fn local_addr(&self) -> SocketAddr {
+    pub fn local_addr(&self) -> SocketAddr {
         self.listener.local_addr().expect("bound listener")
     }
 
-    pub #[tracing::instrument]
-fn stop(&self) {
+    pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
     }
 
-    pub #[tracing::instrument]
-fn run(self) -> std::io::Result<()> {
+    pub fn run(self) -> std::io::Result<()> {
         let Bound {
             listener,
             service,
@@ -842,7 +828,6 @@ struct Parsed {
     body: String,
 }
 
-#[tracing::instrument]
 fn parse_request(raw: &[u8]) -> Result<Parsed, Response> {
     let split = raw
         .windows(4)
@@ -887,14 +872,12 @@ fn parse_request(raw: &[u8]) -> Result<Parsed, Response> {
     })
 }
 
-#[tracing::instrument]
 fn header_end(raw: &[u8]) -> Option<usize> {
     raw.windows(4)
         .position(|window| window == b"\r\n\r\n")
         .map(|position| position + 4)
 }
 
-#[tracing::instrument]
 fn content_length(head: &[u8]) -> Result<usize, Response> {
     let text = String::from_utf8_lossy(head);
     let mut declared: Option<usize> = None;
@@ -921,7 +904,6 @@ fn content_length(head: &[u8]) -> Result<usize, Response> {
     Ok(declared.unwrap_or(0))
 }
 
-#[tracing::instrument]
 fn read_request(stream: &mut TcpStream) -> Result<Vec<u8>, Response> {
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
     let deadline = Instant::now() + READ_TIMEOUT;
@@ -980,7 +962,6 @@ fn read_request(stream: &mut TcpStream) -> Result<Vec<u8>, Response> {
     }
 }
 
-#[tracing::instrument]
 fn handle_connection(mut stream: TcpStream, service: &Service, live: Arc<AtomicUsize>) {
     live.fetch_add(1, Ordering::AcqRel);
     let response = match read_request(&mut stream) {
@@ -1008,7 +989,6 @@ fn handle_connection(mut stream: TcpStream, service: &Service, live: Arc<AtomicU
 
 /// Consume a rejected body so the response is not lost to a TCP reset. The
 /// budget bounds the drain; a client still sending past it gets a reset.
-#[tracing::instrument]
 fn drain(stream: &mut TcpStream, remaining: usize) {
     let mut discard = [0u8; 8192];
     let mut budget = remaining.min(2 * MAX_BODY_BYTES);
@@ -1020,7 +1000,6 @@ fn drain(stream: &mut TcpStream, remaining: usize) {
     }
 }
 
-#[tracing::instrument]
 fn write_response(stream: &mut TcpStream, response: &Response) {
     let reason = match response.status {
         200 => "OK",
@@ -1037,9 +1016,10 @@ fn write_response(stream: &mut TcpStream, response: &Response) {
         _ => "Response",
     };
     let wire = format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         response.status,
         reason,
+        response.content_type,
         response.body.len(),
         response.body
     );
@@ -1053,24 +1033,21 @@ mod tests {
     use playbook_core::EvidenceClass;
     use playbook_state::EventSink;
 
-    #[tracing::instrument]
-fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("playbook-server-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
 
-    #[tracing::instrument]
-fn config(dir: &Path) -> ServerConfig {
+    fn config(dir: &Path) -> ServerConfig {
         ServerConfig {
             journal_dir: dir.to_path_buf(),
             ..ServerConfig::default()
         }
     }
 
-    #[tracing::instrument]
-fn create(service: &Service, id: &str) -> Response {
+    fn create(service: &Service, id: &str) -> Response {
         service.handle(
             "POST",
             "/v1/drives",
@@ -1079,8 +1056,7 @@ fn create(service: &Service, id: &str) -> Response {
     }
 
     #[test]
-    #[tracing::instrument]
-fn health_and_ready_report_the_registry() {
+    fn health_and_ready_report_the_registry() {
         let dir = temp_dir("health");
         let service = Service::open(&config(&dir)).unwrap();
         assert_eq!(service.handle("GET", "/healthz", "").status, 200);
@@ -1093,8 +1069,7 @@ fn health_and_ready_report_the_registry() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn creation_validates_its_input() {
+    fn creation_validates_its_input() {
         let dir = temp_dir("create");
         let service = Service::open(&config(&dir)).unwrap();
         assert_eq!(create(&service, "drive-a").status, 201);
@@ -1124,8 +1099,7 @@ fn creation_validates_its_input() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_drive_lifecycle_advances_and_journals() {
+    fn a_drive_lifecycle_advances_and_journals() {
         let dir = temp_dir("lifecycle");
         let service = Service::open(&config(&dir)).unwrap();
         assert_eq!(create(&service, "drive-life").status, 201);
@@ -1156,8 +1130,7 @@ fn a_drive_lifecycle_advances_and_journals() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_crashed_invocation_reconciles_at_handler_level() {
+    fn a_crashed_invocation_reconciles_at_handler_level() {
         let dir = temp_dir("crash");
         std::fs::create_dir_all(&dir).unwrap();
         let policy = Policy::builtin();
@@ -1228,8 +1201,7 @@ fn a_crashed_invocation_reconciles_at_handler_level() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn the_journal_is_the_authority_for_state() {
+    fn the_journal_is_the_authority_for_state() {
         let dir = temp_dir("authority");
         let service = Service::open(&config(&dir)).unwrap();
         create(&service, "drive-auth");
@@ -1251,8 +1223,7 @@ fn the_journal_is_the_authority_for_state() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_rejected_journal_is_quarantined_and_counted() {
+    fn a_rejected_journal_is_quarantined_and_counted() {
         let dir = temp_dir("quarantine");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("broken.jsonl"), b"{\"seq\":1,\"digest\":\"00\"}\n").unwrap();
@@ -1263,8 +1234,7 @@ fn a_rejected_journal_is_quarantined_and_counted() {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    #[tracing::instrument]
-fn huddle_value() -> Value {
+    fn huddle_value() -> Value {
         json!({
             "predicted_rework_avoided": 600,
             "expected_failure_reduction": 300,
@@ -1277,8 +1247,7 @@ fn huddle_value() -> Value {
         })
     }
 
-    #[tracing::instrument]
-fn huddle_request_body() -> Value {
+    fn huddle_request_body() -> Value {
         json!({
             "scope": "position",
             "trigger_kind": "failure",
@@ -1291,8 +1260,7 @@ fn huddle_request_body() -> Value {
         })
     }
 
-    #[tracing::instrument]
-fn huddle_report_body(participant: &str) -> Value {
+    fn huddle_report_body(participant: &str) -> Value {
         json!({
             "participant": participant,
             "verified_progress": [],
@@ -1306,8 +1274,7 @@ fn huddle_report_body(participant: &str) -> Value {
     }
 
     #[test]
-    #[tracing::instrument]
-fn huddles_open_collect_commit_and_refuse_storms_over_http() {
+    fn huddles_open_collect_commit_and_refuse_storms_over_http() {
         let dir = temp_dir("huddles");
         let service = Service::open(&config(&dir)).unwrap();
         let created = service.handle(
@@ -1397,8 +1364,7 @@ fn huddles_open_collect_commit_and_refuse_storms_over_http() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn coherence_route_and_elci_collection_run_over_http() {
+    fn coherence_route_and_elci_collection_run_over_http() {
         let dir = temp_dir("coherence");
         let service = Service::open(&config(&dir)).unwrap();
         let created = service.handle(

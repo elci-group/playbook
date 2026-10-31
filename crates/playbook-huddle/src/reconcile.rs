@@ -21,7 +21,6 @@ const MAX_STATEMENT: usize = 2_000;
 const MAX_ARRAY: usize = 64;
 const MAX_OBSERVATION_DETAIL: usize = 512;
 
-#[tracing::instrument]
 fn bounded_text(value: &Value, field: &str, max: usize) -> Result<(), PlaybookError> {
     if let Some(text) = value.get(field).and_then(Value::as_str) {
         if text.len() > max {
@@ -35,8 +34,7 @@ fn bounded_text(value: &Value, field: &str, max: usize) -> Result<(), PlaybookEr
 
 /// Normalize raw participant output into a schema-valid report. Structured
 /// output is mandatory; anything serde cannot read is refused.
-pub #[tracing::instrument]
-fn normalize_report(body: &Value) -> Result<HuddleReport, PlaybookError> {
+pub fn normalize_report(body: &Value) -> Result<HuddleReport, PlaybookError> {
     if !body.is_object() {
         return Err(PlaybookError::Evidence(
             "huddle report must be a JSON object".into(),
@@ -110,8 +108,7 @@ pub struct Observation {
     pub evidence_ref: Option<EvidenceId>,
 }
 
-pub #[tracing::instrument]
-fn normalize_observation(body: &Value) -> Result<Observation, PlaybookError> {
+pub fn normalize_observation(body: &Value) -> Result<Observation, PlaybookError> {
     let observation: Observation = serde_json::from_value(body.clone())
         .map_err(|error| PlaybookError::Evidence(format!("invalid observation: {error}")))?;
     if observation.subject.is_empty() || observation.subject.len() > MAX_SUBJECT {
@@ -130,8 +127,7 @@ fn normalize_observation(body: &Value) -> Result<Observation, PlaybookError> {
 /// Detect contradictions across reports: two participants asserting
 /// different current values for the same subject. Deterministic: subjects in
 /// ascending order, ids assigned in that order.
-pub #[tracing::instrument]
-fn detect_contradictions(reports: &[HuddleReport]) -> Vec<Contradiction> {
+pub fn detect_contradictions(reports: &[HuddleReport]) -> Vec<Contradiction> {
     use std::collections::BTreeMap;
     let mut subjects: BTreeMap<String, Vec<ClaimRef>> = BTreeMap::new();
     for report in reports {
@@ -187,8 +183,7 @@ fn detect_contradictions(reports: &[HuddleReport]) -> Vec<Contradiction> {
 /// Forced synthesis after budget exhaustion: commit what the accumulated
 /// reports support, resolve nothing, and hand the blocking remainder to the
 /// next scope up.
-pub #[tracing::instrument]
-fn forced_synthesis(huddle: &ActiveHuddle) -> HuddleOutcome {
+pub fn forced_synthesis(huddle: &ActiveHuddle) -> HuddleOutcome {
     let mut verified: Vec<EvidenceId> = huddle
         .reports
         .iter()
@@ -221,8 +216,7 @@ fn forced_synthesis(huddle: &ActiveHuddle) -> HuddleOutcome {
 
 /// The Rust authority for report shape. A missing or failing Tov adapter
 /// falls back here, deterministically.
-pub #[tracing::instrument]
-fn report_shape_is_valid(body: &Value) -> bool {
+pub fn report_shape_is_valid(body: &Value) -> bool {
     normalize_report(body).is_ok()
 }
 
@@ -234,8 +228,7 @@ pub struct NormalizedOutcome {
 }
 
 /// Try the Tov adapter first; any failure falls back to the Rust authority.
-pub #[tracing::instrument]
-fn try_tov_normalize_report(
+pub fn try_tov_normalize_report(
     script: &Path,
     body: &Value,
 ) -> Result<NormalizedOutcome, PlaybookError> {
@@ -262,7 +255,6 @@ fn try_tov_normalize_report(
     }
 }
 
-#[tracing::instrument]
 fn rust_outcome(body: &Value) -> Result<NormalizedOutcome, PlaybookError> {
     Ok(NormalizedOutcome {
         accepted: report_shape_is_valid(body),
@@ -277,8 +269,7 @@ mod tests {
     use playbook_core::PersonnelId;
     use serde_json::json;
 
-    #[tracing::instrument]
-fn raw_report(participant: &str, confidence: u64) -> Value {
+    fn raw_report(participant: &str, confidence: u64) -> Value {
         json!({
             "participant": participant,
             "verified_progress": [],
@@ -292,8 +283,7 @@ fn raw_report(participant: &str, confidence: u64) -> Value {
     }
 
     #[test]
-    #[tracing::instrument]
-fn reports_normalize_and_junk_is_refused() {
+    fn reports_normalize_and_junk_is_refused() {
         let report = normalize_report(&raw_report("worker", 9_500)).unwrap();
         assert_eq!(report.participant.as_str(), "worker");
         assert_eq!(report.confidence_milli, 9_500);
@@ -308,8 +298,7 @@ fn reports_normalize_and_junk_is_refused() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn observations_reject_transcripts() {
+    fn observations_reject_transcripts() {
         let ok = normalize_observation(&json!({
             "subject": "crate-x",
             "detail": "crate X failed three times because feature Y is unavailable offline",
@@ -327,8 +316,7 @@ fn observations_reject_transcripts() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn contradiction_detection_is_deterministic_and_bounded() {
+    fn contradiction_detection_is_deterministic_and_bounded() {
         let claim = |participant: &str, current: &str| HuddleReport {
             participant: PersonnelId::new(participant).unwrap(),
             verified_progress: Vec::new(),

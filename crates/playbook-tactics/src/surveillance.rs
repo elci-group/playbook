@@ -33,8 +33,7 @@ pub struct SpyAssignment {
 /// shape — every assignment in a shape is execution work (an observer's post
 /// lives in the observers count, never in the assignment list), and a spy
 /// with a job is not watching. The domain must be named.
-pub #[tracing::instrument]
-fn assign_spy(
+pub fn assign_spy(
     observer: PersonnelId,
     subject: PersonnelId,
     domain: &str,
@@ -91,8 +90,7 @@ pub struct DriftPolicy {
 impl DriftPolicy {
     /// The frozen default ladder: watch at 300 ppm, intervene at 700 ppm,
     /// intervene on three unusual decisions in one window.
-    pub #[tracing::instrument]
-fn builtin() -> Self {
+    pub fn builtin() -> Self {
         Self {
             watch_ppm: 300,
             intervene_ppm: 700,
@@ -114,8 +112,7 @@ pub enum DriftBand {
 /// intervene threshold, or unusual decisions reach the limit; watch when
 /// any rate sits at or above the watch threshold, or any unusual decision
 /// has been observed; calm otherwise.
-pub #[tracing::instrument]
-fn drift_band(reading: &DriftReading, policy: &DriftPolicy) -> DriftBand {
+pub fn drift_band(reading: &DriftReading, policy: &DriftPolicy) -> DriftBand {
     let rates_intervene = reading.scope_expansion_ppm >= policy.intervene_ppm
         || reading.resource_use_ppm >= policy.intervene_ppm;
     let decisions_intervene = reading.unusual_decisions >= policy.unusual_decision_limit;
@@ -145,8 +142,7 @@ pub enum Intervention {
 }
 
 /// Map a band to its recommendation. Every band maps to exactly one.
-pub #[tracing::instrument]
-fn intervention(band: DriftBand) -> Intervention {
+pub fn intervention(band: DriftBand) -> Intervention {
     match band {
         DriftBand::Calm => Intervention::None,
         DriftBand::Watch => Intervention::IncreaseObservation,
@@ -174,8 +170,7 @@ pub struct Bracket {
 /// Assemble a bracket. The controls must be distinct personnel (two of the
 /// same control is not a bracket, it is one control said twice) and the
 /// domain must be named.
-pub #[tracing::instrument]
-fn bracket(
+pub fn bracket(
     domain: &str,
     deterministic_control: PersonnelId,
     generative_control: PersonnelId,
@@ -197,8 +192,7 @@ fn bracket(
 /// both controls hold ownership of that domain in the shape. Ownership is
 /// read across every assignment that names the domain, and it is only ever
 /// read: the bracket grants nothing, transfers nothing, and edits nothing.
-pub #[tracing::instrument]
-fn is_bracked(domain: &str, bracket: &Bracket, shape: &PersonnelShape) -> bool {
+pub fn is_bracked(domain: &str, bracket: &Bracket, shape: &PersonnelShape) -> bool {
     if bracket.domain != domain {
         return false;
     }
@@ -226,8 +220,7 @@ pub enum SurveillanceKind {
 /// joint ownership of one domain, admitted from Elevated upward, claiming a
 /// protection delta of at least 700 ppm. Both variants pass
 /// `crate::admission::validated` as built and admit on their triggers.
-pub #[tracing::instrument]
-fn directive(
+pub fn directive(
     kind: SurveillanceKind,
     context: &TacticalContext,
 ) -> crate::domain::TacticalDirective {
@@ -356,8 +349,7 @@ fn directive(
 mod tests {
     use super::*;
 
-    #[tracing::instrument]
-fn shape_with(spy_working: bool) -> PersonnelShape {
+    fn shape_with(spy_working: bool) -> PersonnelShape {
         let mut assignments = vec![crate::domain::DomainAssignment {
             domain: "runtime".into(),
             personnel: vec![person("subject")],
@@ -379,14 +371,12 @@ fn shape_with(spy_working: bool) -> PersonnelShape {
         }
     }
 
-    #[tracing::instrument]
-fn person(id: &str) -> PersonnelId {
+    fn person(id: &str) -> PersonnelId {
         PersonnelId::new(id).unwrap()
     }
 
     #[test]
-    #[tracing::instrument]
-fn spy_assignment_refuses_self_and_working_spies() {
+    fn spy_assignment_refuses_self_and_working_spies() {
         // The spy watching itself is not surveillance.
         assert_eq!(
             assign_spy(person("w"), person("w"), "runtime", &shape_with(false)).unwrap_err(),
@@ -416,8 +406,7 @@ fn spy_assignment_refuses_self_and_working_spies() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn drift_bands_follow_the_builtin_ladder() {
+    fn drift_bands_follow_the_builtin_ladder() {
         let policy = DriftPolicy::builtin();
         assert_eq!(
             drift_band(
@@ -481,8 +470,7 @@ fn drift_bands_follow_the_builtin_ladder() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn intervention_recommends_but_never_substitutes() {
+    fn intervention_recommends_but_never_substitutes() {
         assert_eq!(intervention(DriftBand::Calm), Intervention::None);
         assert_eq!(
             intervention(DriftBand::Watch),
@@ -500,8 +488,7 @@ fn intervention_recommends_but_never_substitutes() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn brackets_need_two_different_controls_and_a_domain() {
+    fn brackets_need_two_different_controls_and_a_domain() {
         assert_eq!(
             bracket("security", person("scanner"), person("scanner")).unwrap_err(),
             tactics_refusal("bracket_controls_identical")
@@ -515,8 +502,7 @@ fn brackets_need_two_different_controls_and_a_domain() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn dual_control_coverage_requires_both_owners_on_the_domain() {
+    fn dual_control_coverage_requires_both_owners_on_the_domain() {
         let pair = bracket("security", person("scanner"), person("reviewer")).unwrap();
         let mut shape = crate::domain::PersonnelShape {
             primary_executors: 1,
@@ -540,8 +526,7 @@ fn dual_control_coverage_requires_both_owners_on_the_domain() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn the_spy_directive_is_observe_only_and_validates() {
+    fn the_spy_directive_is_observe_only_and_validates() {
         let context = crate::domain::TacticalContext {
             problem_breadth_ppm: 300,
             domain_coupling_ppm: 400,
@@ -576,8 +561,7 @@ fn the_spy_directive_is_observe_only_and_validates() {
         assert!(bracket_directive.shape.assignments[0].personnel.len() == 2);
     }
 
-    #[tracing::instrument]
-fn context_at(band: RiskBand, critical_domain: Option<&str>) -> TacticalContext {
+    fn context_at(band: RiskBand, critical_domain: Option<&str>) -> TacticalContext {
         TacticalContext {
             problem_breadth_ppm: 300,
             domain_coupling_ppm: 400,
@@ -595,8 +579,7 @@ fn context_at(band: RiskBand, critical_domain: Option<&str>) -> TacticalContext 
     }
 
     #[test]
-    #[tracing::instrument]
-fn the_spy_only_reads_and_recommends() {
+    fn the_spy_only_reads_and_recommends() {
         // The adversarial rule: a spy that intervenes is the failure mode.
         // Every public function in this module takes shared references and
         // returns owned readings, bands, recommendations, and booleans —
@@ -624,8 +607,7 @@ fn the_spy_only_reads_and_recommends() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn drift_band_boundaries_are_exact() {
+    fn drift_band_boundaries_are_exact() {
         // The frozen builtin ladder: watch at 300 ppm, intervene at 700 ppm,
         // intervene on three unusual decisions.
         let policy = DriftPolicy::builtin();
@@ -661,8 +643,7 @@ fn drift_band_boundaries_are_exact() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn every_band_maps_to_exactly_one_intervention() {
+    fn every_band_maps_to_exactly_one_intervention() {
         // The mapping is total: all three bands, element for element.
         let bands = [DriftBand::Calm, DriftBand::Watch, DriftBand::Intervene];
         let expected = [
@@ -680,8 +661,7 @@ fn every_band_maps_to_exactly_one_intervention() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn bracket_roles_are_the_callers_declaration() {
+    fn bracket_roles_are_the_callers_declaration() {
         // The struct carries two roles; which person fills the deterministic
         // role and which the generative role is declared by the caller, and
         // assembly inspects only distinctness of personnel, never the kind
@@ -711,8 +691,7 @@ fn bracket_roles_are_the_callers_declaration() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn is_bracked_negative_paths_and_split_ownership() {
+    fn is_bracked_negative_paths_and_split_ownership() {
         let pair = bracket("security", person("scanner"), person("reviewer")).unwrap();
         // An empty shape owns nothing: unbracked.
         let empty = crate::domain::PersonnelShape {
@@ -749,8 +728,7 @@ fn is_bracked_negative_paths_and_split_ownership() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn surveillance_directives_admit_only_on_their_triggers() {
+    fn surveillance_directives_admit_only_on_their_triggers() {
         // The spy fires from Guarded upward.
         let guarded = context_at(RiskBand::Guarded, None);
         let spy = directive(SurveillanceKind::Spy, &guarded);

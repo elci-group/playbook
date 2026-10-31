@@ -67,19 +67,16 @@ struct Action {
     occurred: Option<bool>,
     reason: Option<String>,
 }
-#[tracing::instrument]
 fn parse<T: DeserializeOwned>(body: &str) -> Result<T, PlaybookError> {
     serde_json::from_str(if body.trim().is_empty() { "{}" } else { body })
         .map_err(PlaybookError::json)
 }
-#[tracing::instrument]
 fn required<T>(value: Option<T>, name: &str) -> Result<T, PlaybookError> {
     value.ok_or_else(|| PlaybookError::Evidence(format!("{name} is required")))
 }
 
 impl FranchiseApi {
-    pub(super) #[tracing::instrument]
-fn open(directory: &Path) -> Result<Self, PlaybookError> {
+    pub(super) fn open(directory: &Path) -> Result<Self, PlaybookError> {
         std::fs::create_dir_all(directory).map_err(|e| PlaybookError::Io(e.to_string()))?;
         let mut entries = BTreeMap::new();
         for entry in std::fs::read_dir(directory).map_err(|e| PlaybookError::Io(e.to_string()))? {
@@ -106,15 +103,13 @@ fn open(directory: &Path) -> Result<Self, PlaybookError> {
             entries: Mutex::new(entries),
         })
     }
-    pub(super) #[tracing::instrument]
-fn handle(&self, method: &str, path: &[&str], body: &str) -> Response {
+    pub(super) fn handle(&self, method: &str, path: &[&str], body: &str) -> Response {
         match self.route(method, path, body) {
             Ok(response) => response,
             Err(error) => error_of(error),
         }
     }
-    #[tracing::instrument]
-fn route(&self, method: &str, path: &[&str], body: &str) -> Result<Response, PlaybookError> {
+    fn route(&self, method: &str, path: &[&str], body: &str) -> Result<Response, PlaybookError> {
         let mut entries = self.entries.lock().expect("franchise registry");
         if path.is_empty() {
             return match method {

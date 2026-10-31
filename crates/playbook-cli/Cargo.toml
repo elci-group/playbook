@@ -12,6 +12,7 @@ name = "playbook"
 path = "src/main.rs"
 
 [dependencies]
+playbook-cards.workspace = true
 playbook-core.workspace = true
 playbook-events.workspace = true
 playbook-journal.workspace = true

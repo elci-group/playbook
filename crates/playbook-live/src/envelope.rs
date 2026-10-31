@@ -43,8 +43,7 @@ impl ExecutionEnvelope {
     /// Validate the envelope against the drive policy's authority rules.
     /// Every refusal names the missing or exceeding authority; nothing is
     /// defaulted.
-    pub #[tracing::instrument]
-fn validate(&self, policy_side_effects: &[SideEffectClass]) -> Result<(), PlaybookError> {
+    pub fn validate(&self, policy_side_effects: &[SideEffectClass]) -> Result<(), PlaybookError> {
         if self.execution.idempotency_key.is_none() {
             return Err(PlaybookError::Inadmissible(
                 self.execution.operation.clone(),
@@ -112,8 +111,7 @@ pub struct CostReport {
 
 impl CostReport {
     /// A fully measured report.
-    pub #[tracing::instrument]
-fn measured(budget: DriveBudget, provider_reported: bool) -> Self {
+    pub fn measured(budget: DriveBudget, provider_reported: bool) -> Self {
         Self {
             measured: budget,
             tokens_known: true,
@@ -124,8 +122,7 @@ fn measured(budget: DriveBudget, provider_reported: bool) -> Self {
 
     /// The spend could not be measured. Wall clock is always knowable to the
     /// executor; everything else is reserved, not zero.
-    pub #[tracing::instrument]
-fn partially_unknown(wall_clock_ms: u64, tool_calls: u64) -> Self {
+    pub fn partially_unknown(wall_clock_ms: u64, tool_calls: u64) -> Self {
         Self {
             measured: DriveBudget {
                 wall_clock_ms,
@@ -141,8 +138,7 @@ fn partially_unknown(wall_clock_ms: u64, tool_calls: u64) -> Self {
     /// The budget the authority must reserve for this report: known
     /// dimensions are taken as reported; unknown dimensions are reserved at
     /// the envelope ceiling, because booking zero would be fiction.
-    pub #[tracing::instrument]
-fn reserved(&self, envelope: &ExecutionEnvelope) -> DriveBudget {
+    pub fn reserved(&self, envelope: &ExecutionEnvelope) -> DriveBudget {
         let ceiling = envelope.budget_envelope;
         DriveBudget {
             tokens: if self.tokens_known {
@@ -165,8 +161,7 @@ mod tests {
     use super::*;
     use playbook_core::{CapabilityId, Down, DriveId, PersonnelId, PlayId, RetryPolicy};
 
-    #[tracing::instrument]
-fn execution(operation: &str, side_effect: SideEffectClass) -> PlayExecution {
+    fn execution(operation: &str, side_effect: SideEffectClass) -> PlayExecution {
         PlayExecution {
             drive_id: DriveId::new("drive-live").unwrap(),
             play_id: PlayId::new("play-1").unwrap(),
@@ -197,8 +192,7 @@ fn execution(operation: &str, side_effect: SideEffectClass) -> PlayExecution {
         }
     }
 
-    #[tracing::instrument]
-fn envelope(operation: &str, side_effect: SideEffectClass) -> ExecutionEnvelope {
+    fn envelope(operation: &str, side_effect: SideEffectClass) -> ExecutionEnvelope {
         ExecutionEnvelope {
             execution_id: playbook_core::ExecutionId::new("exec-1").unwrap(),
             execution: execution(operation, side_effect),
@@ -224,8 +218,7 @@ fn envelope(operation: &str, side_effect: SideEffectClass) -> ExecutionEnvelope 
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_complete_envelope_validates_and_a_missing_field_is_refused() {
+    fn a_complete_envelope_validates_and_a_missing_field_is_refused() {
         let policy_effects = vec![SideEffectClass::ReadOnly, SideEffectClass::LocalMutation];
         envelope("compile", SideEffectClass::ReadOnly)
             .validate(&policy_effects)
@@ -266,8 +259,7 @@ fn a_complete_envelope_validates_and_a_missing_field_is_refused() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn unknown_cost_is_reserved_at_the_ceiling_never_booked_as_zero() {
+    fn unknown_cost_is_reserved_at_the_ceiling_never_booked_as_zero() {
         let envelope = envelope("compile", SideEffectClass::ReadOnly);
         let unknown = CostReport::partially_unknown(1_500, 1);
         let reserved = unknown.reserved(&envelope);

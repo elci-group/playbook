@@ -20,8 +20,7 @@ macro_rules! huddle_id {
         pub struct $name(String);
 
         impl $name {
-            pub #[tracing::instrument]
-fn new(value: impl Into<String>) -> Result<Self, playbook_core::PlaybookError> {
+            pub fn new(value: impl Into<String>) -> Result<Self, playbook_core::PlaybookError> {
                 let value = value.into();
                 if value.is_empty() || value.len() > 200 {
                     return Err(playbook_core::PlaybookError::InvalidId);
@@ -35,15 +34,13 @@ fn new(value: impl Into<String>) -> Result<Self, playbook_core::PlaybookError> {
                 Ok(Self(value))
             }
 
-            pub #[tracing::instrument]
-fn as_str(&self) -> &str {
+            pub fn as_str(&self) -> &str {
                 &self.0
             }
         }
 
         impl std::fmt::Display for $name {
-            #[tracing::instrument]
-fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.write_str(&self.0)
             }
         }
@@ -63,8 +60,7 @@ pub enum HuddleScope {
 }
 
 impl HuddleScope {
-    pub #[tracing::instrument]
-fn machine_id(&self) -> &'static str {
+    pub fn machine_id(&self) -> &'static str {
         match self {
             Self::Position => "POSITION",
             Self::Unit => "UNIT",
@@ -74,8 +70,7 @@ fn machine_id(&self) -> &'static str {
         }
     }
 
-    pub #[tracing::instrument]
-fn presentation(&self) -> &'static str {
+    pub fn presentation(&self) -> &'static str {
         match self {
             Self::Position => "Position huddle",
             Self::Unit => "Unit huddle",
@@ -87,8 +82,7 @@ fn presentation(&self) -> &'static str {
 
     /// Escalation ordering. A huddle may only move up this ladder, and only
     /// with scope justification.
-    pub #[tracing::instrument]
-fn rank(&self) -> u8 {
+    pub fn rank(&self) -> u8 {
         match self {
             Self::Position => 0,
             Self::Unit => 1,
@@ -98,8 +92,7 @@ fn rank(&self) -> u8 {
         }
     }
 
-    pub #[tracing::instrument]
-fn next_up(&self) -> Option<Self> {
+    pub fn next_up(&self) -> Option<Self> {
         match self {
             Self::Position => Some(Self::Unit),
             Self::Unit => Some(Self::Coordinator),
@@ -140,8 +133,7 @@ pub enum HuddleRole {
 }
 
 impl HuddleRole {
-    pub #[tracing::instrument]
-fn reports(&self) -> bool {
+    pub fn reports(&self) -> bool {
         !matches!(self, Self::Observer)
     }
 }
@@ -175,8 +167,7 @@ pub struct HuddleCost {
 }
 
 impl HuddleCost {
-    pub #[tracing::instrument]
-fn zero() -> Self {
+    pub fn zero() -> Self {
         Self {
             tokens: 0,
             cost_microunits: 0,
@@ -450,23 +441,20 @@ pub struct ActiveHuddle {
 }
 
 impl ActiveHuddle {
-    pub #[tracing::instrument]
-fn reported(&self, personnel: &PersonnelId) -> bool {
+    pub fn reported(&self, personnel: &PersonnelId) -> bool {
         self.reports
             .iter()
             .any(|report| &report.participant == personnel)
     }
 
-    pub #[tracing::instrument]
-fn contradiction(&self, id: &ContradictionId) -> bool {
+    pub fn contradiction(&self, id: &ContradictionId) -> bool {
         self.contradictions.iter().any(|item| &item.id == id)
     }
 
     /// The state partition this huddle locks: its participants and the
     /// evidence its trigger cites. Two huddles with disjoint partitions may
     /// run concurrently.
-    pub #[tracing::instrument]
-fn partition(&self) -> Vec<String> {
+    pub fn partition(&self) -> Vec<String> {
         self.partition.clone()
     }
 }
@@ -512,87 +500,71 @@ pub struct HuddleLedger {
 }
 
 impl HuddleLedger {
-    pub #[tracing::instrument]
-fn empty() -> Self {
+    pub fn empty() -> Self {
         Self::default()
     }
 
-    pub #[tracing::instrument]
-fn active(&self) -> &[ActiveHuddle] {
+    pub fn active(&self) -> &[ActiveHuddle] {
         &self.active
     }
 
-    pub #[tracing::instrument]
-fn closed(&self) -> &[HuddleRecord] {
+    pub fn closed(&self) -> &[HuddleRecord] {
         &self.closed
     }
 
-    pub #[tracing::instrument]
-fn assignments(&self) -> &BTreeMap<String, Assignment> {
+    pub fn assignments(&self) -> &BTreeMap<String, Assignment> {
         &self.assignments
     }
 
-    pub #[tracing::instrument]
-fn substitutions(&self) -> &[PersonnelChange] {
+    pub fn substitutions(&self) -> &[PersonnelChange] {
         &self.substitutions
     }
 
-    pub #[tracing::instrument]
-fn proposals(&self) -> &[PlayProposal] {
+    pub fn proposals(&self) -> &[PlayProposal] {
         &self.proposals
     }
 
-    pub #[tracing::instrument]
-fn conditions(&self) -> &[HuddleCondition] {
+    pub fn conditions(&self) -> &[HuddleCondition] {
         &self.conditions
     }
 
-    pub #[tracing::instrument]
-fn requested_total(&self) -> u32 {
+    pub fn requested_total(&self) -> u32 {
         self.requested_total
     }
 
-    pub #[tracing::instrument]
-fn rejected_total(&self) -> u32 {
+    pub fn rejected_total(&self) -> u32 {
         self.rejected_total
     }
 
-    pub #[tracing::instrument]
-fn committed_total(&self) -> u32 {
+    pub fn committed_total(&self) -> u32 {
         self.committed_total
     }
 
-    pub #[tracing::instrument]
-fn escalated_total(&self) -> u32 {
+    pub fn escalated_total(&self) -> u32 {
         self.escalated_total
     }
 
-    pub #[tracing::instrument]
-fn active_by_id(&self, id: &HuddleId) -> Option<&ActiveHuddle> {
+    pub fn active_by_id(&self, id: &HuddleId) -> Option<&ActiveHuddle> {
         self.active.iter().find(|item| &item.id == id)
     }
 
-    pub #[tracing::instrument]
-fn active_by_scope(&self, scope: HuddleScope) -> Option<&ActiveHuddle> {
+    pub fn active_by_scope(&self, scope: HuddleScope) -> Option<&ActiveHuddle> {
         self.active.iter().find(|item| item.scope == scope)
     }
 
-    pub #[tracing::instrument]
-fn known_id(&self, id: &HuddleId) -> bool {
+    pub fn known_id(&self, id: &HuddleId) -> bool {
         self.active_by_id(id).is_some() || self.closed.iter().any(|record| &record.id == id)
     }
 
     /// The most recent closed huddle for a scope, or none.
-    pub #[tracing::instrument]
-fn last_closed(&self, scope: HuddleScope) -> Option<&HuddleRecord> {
+    pub fn last_closed(&self, scope: HuddleScope) -> Option<&HuddleRecord> {
         self.closed
             .iter()
             .rev()
             .find(|record| record.scope == scope)
     }
 
-    pub(crate) #[tracing::instrument]
-fn active_mut(
+    pub(crate) fn active_mut(
         &mut self,
         id: &HuddleId,
     ) -> Result<&mut ActiveHuddle, playbook_core::PlaybookError> {
@@ -604,8 +576,7 @@ fn active_mut(
             })
     }
 
-    pub(crate) #[tracing::instrument]
-fn close_active(
+    pub(crate) fn close_active(
         &mut self,
         id: &HuddleId,
         closure: HuddleClosure,
@@ -634,37 +605,31 @@ fn close_active(
         Ok(())
     }
 
-    pub(crate) #[tracing::instrument]
-fn push_active(&mut self, huddle: ActiveHuddle) {
+    pub(crate) fn push_active(&mut self, huddle: ActiveHuddle) {
         self.requested_total = self.requested_total.saturating_add(1);
         self.active.push(huddle);
     }
 
-    pub(crate) #[tracing::instrument]
-fn count_rejected(&mut self) {
+    pub(crate) fn count_rejected(&mut self) {
         self.rejected_total = self.rejected_total.saturating_add(1);
     }
 
-    pub(crate) #[tracing::instrument]
-fn count_committed(&mut self, escalated: bool) {
+    pub(crate) fn count_committed(&mut self, escalated: bool) {
         self.committed_total = self.committed_total.saturating_add(1);
         if escalated {
             self.escalated_total = self.escalated_total.saturating_add(1);
         }
     }
 
-    pub(crate) #[tracing::instrument]
-fn count_escalated(&mut self) {
+    pub(crate) fn count_escalated(&mut self) {
         self.escalated_total = self.escalated_total.saturating_add(1);
     }
 
-    pub(crate) #[tracing::instrument]
-fn set_conditions(&mut self, conditions: Vec<HuddleCondition>) {
+    pub(crate) fn set_conditions(&mut self, conditions: Vec<HuddleCondition>) {
         self.conditions = conditions;
     }
 
-    pub(crate) #[tracing::instrument]
-fn apply_assignment(&mut self, change: &AssignmentChange, target: Option<GateId>) {
+    pub(crate) fn apply_assignment(&mut self, change: &AssignmentChange, target: Option<GateId>) {
         let assignment = Assignment {
             personnel_id: change.personnel_id.clone(),
             operation: change.to.clone(),
@@ -674,13 +639,11 @@ fn apply_assignment(&mut self, change: &AssignmentChange, target: Option<GateId>
             .insert(change.personnel_id.as_str().to_string(), assignment);
     }
 
-    pub(crate) #[tracing::instrument]
-fn record_substitutions(&mut self, changes: &[PersonnelChange]) {
+    pub(crate) fn record_substitutions(&mut self, changes: &[PersonnelChange]) {
         self.substitutions.extend(changes.iter().cloned());
     }
 
-    pub(crate) #[tracing::instrument]
-fn record_proposal(&mut self, proposal: &PlayProposal) {
+    pub(crate) fn record_proposal(&mut self, proposal: &PlayProposal) {
         self.proposals.push(proposal.clone());
     }
 }

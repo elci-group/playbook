@@ -40,18 +40,15 @@ pub struct ExportSummary {
 }
 
 /// The 16-byte OTLP trace id, derived from the logical drive id.
-pub #[tracing::instrument]
-fn wire_trace_id(drive_id: &str) -> String {
+pub fn wire_trace_id(drive_id: &str) -> String {
     sha256_hex(format!("playbook-trace:{drive_id}").as_bytes())[..32].to_string()
 }
 
 /// The 8-byte OTLP span id, derived from the logical span id.
-pub #[tracing::instrument]
-fn wire_span_id(logical_span_id: &str) -> String {
+pub fn wire_span_id(logical_span_id: &str) -> String {
     sha256_hex(format!("playbook-span:{logical_span_id}").as_bytes())[..16].to_string()
 }
 
-#[tracing::instrument]
 fn span_value(node: &SpanNode, trace_id: &str, start: u64, end: u64) -> Value {
     let mut span = json!({
         "traceId": trace_id,
@@ -79,7 +76,6 @@ fn span_value(node: &SpanNode, trace_id: &str, start: u64, end: u64) -> Value {
     span
 }
 
-#[tracing::instrument]
 fn cut_points(window: TimeWindow, count: usize) -> Vec<u64> {
     let span_total = window.end_unix_nano.saturating_sub(window.start_unix_nano);
     let denominator = count.max(1) as u128;
@@ -93,8 +89,7 @@ fn cut_points(window: TimeWindow, count: usize) -> Vec<u64> {
 }
 
 /// Encode the spans as an OTLP/HTTP JSON `ExportTraceServiceRequest`.
-pub #[tracing::instrument]
-fn encode_request(
+pub fn encode_request(
     service_name: &str,
     spans: &[SpanNode],
     window: TimeWindow,
@@ -131,7 +126,6 @@ struct Endpoint {
     path: String,
 }
 
-#[tracing::instrument]
 fn parse_endpoint(endpoint: &str) -> Result<Endpoint, PlaybookError> {
     let Some(rest) = endpoint.strip_prefix("http://") else {
         return Err(PlaybookError::Io(format!(
@@ -164,7 +158,6 @@ struct Response {
     body: String,
 }
 
-#[tracing::instrument]
 fn parse_response(bytes: &[u8]) -> Result<Response, PlaybookError> {
     let text = String::from_utf8_lossy(bytes);
     let (head, body) = text
@@ -189,7 +182,6 @@ fn parse_response(bytes: &[u8]) -> Result<Response, PlaybookError> {
     })
 }
 
-#[tracing::instrument]
 fn post_once(endpoint: &Endpoint, body: &str) -> Result<Response, PlaybookError> {
     let request = format!(
         "POST {} HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -216,7 +208,6 @@ fn post_once(endpoint: &Endpoint, body: &str) -> Result<Response, PlaybookError>
     parse_response(&bytes)
 }
 
-#[tracing::instrument]
 fn partial_error(body: &str) -> Option<String> {
     let parsed: Value = serde_json::from_str(body).ok()?;
     parsed["partialSuccess"]["errorMessage"]
@@ -226,8 +217,7 @@ fn partial_error(body: &str) -> Option<String> {
 
 /// Export the spans to the collector. Only transport failures are errors; the
 /// summary carries the final HTTP status and any partial-success report.
-pub #[tracing::instrument]
-fn export(
+pub fn export(
     config: &OtlpConfig,
     spans: &[SpanNode],
     window: TimeWindow,
@@ -258,8 +248,7 @@ mod tests {
     use std::net::TcpListener;
     use std::thread;
 
-    #[tracing::instrument]
-fn trace() -> Vec<SpanNode> {
+    fn trace() -> Vec<SpanNode> {
         vec![
             SpanNode {
                 trace_id: "drive-otlp".into(),
@@ -288,8 +277,7 @@ fn trace() -> Vec<SpanNode> {
         ]
     }
 
-    #[tracing::instrument]
-fn serve(listener: TcpListener, responses: &[&str]) -> Vec<Vec<u8>> {
+    fn serve(listener: TcpListener, responses: &[&str]) -> Vec<Vec<u8>> {
         let mut requests = Vec::new();
         for response in responses {
             let (mut stream, _) = listener.accept().expect("accept");
@@ -308,8 +296,7 @@ fn serve(listener: TcpListener, responses: &[&str]) -> Vec<Vec<u8>> {
         requests
     }
 
-    #[tracing::instrument]
-fn ok_response(body: &str) -> String {
+    fn ok_response(body: &str) -> String {
         format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
             body.len(),
@@ -322,8 +309,7 @@ fn ok_response(body: &str) -> String {
     };
 
     #[test]
-    #[tracing::instrument]
-fn ids_are_deterministic_wire_shaped() {
+    fn ids_are_deterministic_wire_shaped() {
         let trace_id = wire_trace_id("drive-otlp");
         let span_id = wire_span_id("drive-otlp:drive");
         assert_eq!(trace_id.len(), 32);
@@ -337,8 +323,7 @@ fn ids_are_deterministic_wire_shaped() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn encode_request_matches_the_otlp_json_contract() {
+    fn encode_request_matches_the_otlp_json_contract() {
         let document: Value =
             serde_json::from_str(&encode_request("playbook", &trace(), WINDOW).unwrap()).unwrap();
         let resource = &document["resourceSpans"][0];
@@ -392,8 +377,7 @@ fn encode_request_matches_the_otlp_json_contract() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn empty_span_batch_is_rejected() {
+    fn empty_span_batch_is_rejected() {
         assert_eq!(
             encode_request("playbook", &[], WINDOW).unwrap_err(),
             PlaybookError::Incomplete
@@ -401,8 +385,7 @@ fn empty_span_batch_is_rejected() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn export_posts_and_reads_a_collector_response() {
+    fn export_posts_and_reads_a_collector_response() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let server = thread::spawn(move || serve(listener, &[&ok_response("{}")]));
@@ -429,8 +412,7 @@ fn export_posts_and_reads_a_collector_response() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn partial_success_is_surfaced() {
+    fn partial_success_is_surfaced() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let body = r#"{"partialSuccess":{"errorMessage":"dropped 1 span"}}"#;
@@ -450,8 +432,7 @@ fn partial_success_is_surfaced() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn server_error_is_retried_once() {
+    fn server_error_is_retried_once() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let responses = [
@@ -479,8 +460,7 @@ fn server_error_is_retried_once() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn refused_connection_is_an_io_error() {
+    fn refused_connection_is_an_io_error() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
@@ -497,8 +477,7 @@ fn refused_connection_is_an_io_error() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn https_endpoint_is_refused() {
+    fn https_endpoint_is_refused() {
         let result = export(
             &OtlpConfig {
                 endpoint: "https://collector:4318/v1/traces".into(),

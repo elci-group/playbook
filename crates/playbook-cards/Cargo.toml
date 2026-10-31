@@ -1,0 +1,17 @@
+[package]
+name = "playbook-cards"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "The NFL-playbook visualiser: animated X-and-O play cards rendered from the live tactical repertoire, with 3form event-line output."
+
+[dependencies]
+playbook-core.workspace = true
+playbook-tactics.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

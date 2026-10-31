@@ -66,7 +66,6 @@ pub struct DispatchLedger {
     records: BTreeMap<String, DispatchRecord>,
 }
 
-#[tracing::instrument]
 fn unknown(execution_id: &ExecutionId) -> PlaybookError {
     PlaybookError::Inadmissible(
         "dispatch".into(),
@@ -75,24 +74,20 @@ fn unknown(execution_id: &ExecutionId) -> PlaybookError {
 }
 
 impl DispatchLedger {
-    pub #[tracing::instrument]
-fn empty() -> Self {
+    pub fn empty() -> Self {
         Self::default()
     }
 
-    pub #[tracing::instrument]
-fn record(&self, execution_id: &ExecutionId) -> Option<&DispatchRecord> {
+    pub fn record(&self, execution_id: &ExecutionId) -> Option<&DispatchRecord> {
         self.records.get(execution_id.as_str())
     }
 
-    pub #[tracing::instrument]
-fn all(&self) -> Vec<&DispatchRecord> {
+    pub fn all(&self) -> Vec<&DispatchRecord> {
         self.records.values().collect()
     }
 
     /// How many invocations await reconciliation.
-    pub #[tracing::instrument]
-fn unreconciled(&self) -> u32 {
+    pub fn unreconciled(&self) -> u32 {
         self.records
             .values()
             .filter(|record| record.stage == DispatchStage::EffectUnknown)
@@ -101,8 +96,7 @@ fn unreconciled(&self) -> u32 {
 
     /// Persist an invocation before anything is sent. This is the only entry
     /// into the ledger; dispatch without persistence is refused.
-    pub #[tracing::instrument]
-fn persist(
+    pub fn persist(
         &mut self,
         execution_id: ExecutionId,
         idempotency_key: impl Into<String>,
@@ -136,8 +130,7 @@ fn persist(
     /// The transport was handed the invocation. Attempts increment here and
     /// only here, and only from the persisted stage: a re-dispatch of an
     /// `EffectUnknown` invocation is a reconciliation, never a blind retry.
-    pub #[tracing::instrument]
-fn mark_dispatched(&mut self, execution_id: &ExecutionId) -> Result<u32, PlaybookError> {
+    pub fn mark_dispatched(&mut self, execution_id: &ExecutionId) -> Result<u32, PlaybookError> {
         let record = self
             .records
             .get_mut(execution_id.as_str())
@@ -154,8 +147,7 @@ fn mark_dispatched(&mut self, execution_id: &ExecutionId) -> Result<u32, Playboo
     }
 
     /// The outcome arrived normally.
-    pub #[tracing::instrument]
-fn mark_outcome(
+    pub fn mark_outcome(
         &mut self,
         execution_id: &ExecutionId,
         accepted: bool,
@@ -181,8 +173,7 @@ fn mark_outcome(
     /// The caller did not receive a response. The invocation moves to
     /// `EffectUnknown`; the ledger refuses any further dispatch of it until
     /// reconciliation answers what actually happened.
-    pub #[tracing::instrument]
-fn mark_effect_unknown(
+    pub fn mark_effect_unknown(
         &mut self,
         execution_id: &ExecutionId,
         note: impl Into<String>,
@@ -210,8 +201,7 @@ fn mark_effect_unknown(
     }
 
     /// Reconciliation answered the question: did the effect occur?
-    pub #[tracing::instrument]
-fn reconcile(
+    pub fn reconcile(
         &mut self,
         execution_id: &ExecutionId,
         occurred: bool,
@@ -243,8 +233,7 @@ fn reconcile(
     /// An invocation whose effect provably did not occur may be re-persisted
     /// under the same idempotency key: at-least-once, with the ledger as the
     /// referee.
-    pub #[tracing::instrument]
-fn re_persist(
+    pub fn re_persist(
         &mut self,
         execution_id: &ExecutionId,
         idempotency_key: impl Into<String>,
@@ -285,14 +274,12 @@ fn re_persist(
 mod tests {
     use super::*;
 
-    #[tracing::instrument]
-fn exec(id: &str) -> ExecutionId {
+    fn exec(id: &str) -> ExecutionId {
         ExecutionId::new(id).unwrap()
     }
 
     #[test]
-    #[tracing::instrument]
-fn the_happy_path_is_persisted_attempted_accepted() {
+    fn the_happy_path_is_persisted_attempted_accepted() {
         let mut ledger = DispatchLedger::empty();
         ledger.persist(exec("e-1"), "play-1-compile").unwrap();
         let attempts = ledger.mark_dispatched(&exec("e-1")).unwrap();
@@ -306,8 +293,7 @@ fn the_happy_path_is_persisted_attempted_accepted() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn a_lost_response_is_never_blindly_retried() {
+    fn a_lost_response_is_never_blindly_retried() {
         let mut ledger = DispatchLedger::empty();
         ledger.persist(exec("e-2"), "play-2-compile").unwrap();
         ledger.mark_dispatched(&exec("e-2")).unwrap();
@@ -338,8 +324,7 @@ fn a_lost_response_is_never_blindly_retried() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn reconciliation_of_a_real_effect_never_re_dispatches() {
+    fn reconciliation_of_a_real_effect_never_re_dispatches() {
         let mut ledger = DispatchLedger::empty();
         ledger.persist(exec("e-3"), "play-3-compile").unwrap();
         ledger.mark_dispatched(&exec("e-3")).unwrap();
@@ -358,8 +343,7 @@ fn reconciliation_of_a_real_effect_never_re_dispatches() {
     }
 
     #[test]
-    #[tracing::instrument]
-fn dispatch_without_persistence_is_refused() {
+    fn dispatch_without_persistence_is_refused() {
         let mut ledger = DispatchLedger::empty();
         assert_eq!(
             ledger.mark_dispatched(&exec("e-4")).unwrap_err(),
