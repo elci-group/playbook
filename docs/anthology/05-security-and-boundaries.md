@@ -328,14 +328,19 @@ claim. The following are known, deliberate, and unenforced today:
   allowlist constrains *which* programs run, not what a program can reach
   once running.
 - **Secret storage is the host's responsibility.** No Playbook crate accepts
-  or stores credential material, and the serialized surfaces are scanned for
-  competitive metadata — but the leak scanner is a substring scan over a
-  fixed key list, not a semantic classifier. It reliably catches the listed
-  keys (the tests prove it, including injected top-level keys), and it is not
-  a general-purpose DLP engine: a novel key shape, or a secret embedded in a
-  free-text field that the host wrote, is not something the scan promises to
-  catch. Hosts must keep credentials out of the inputs they hand to
-  envelopes, package drafts, and harvest payloads in the first place.
+  or stores credential material. The serialized surfaces are scanned for
+  competitive metadata, and the CERS packet boundary additionally scans for
+  credential-shaped material (`api_key=`, `bearer `, `password=`,
+  `private_key=`, `authorization:`, and relatives): a harvest fact that
+  embeds a credential value refuses the packet with `AmnesiaLeak` before it
+  can cross the handoff. The scanners are substring scans over fixed
+  needle lists, not a semantic classifier — they reliably catch the listed
+  needles (the tests prove it, including injected keys and credential-shaped
+  facts), and they are not a general-purpose DLP engine: a novel key shape,
+  or a secret in a form the needles do not match, is not something the scans
+  promise to catch. Hosts must still keep credentials out of the inputs they
+  hand to envelopes, package drafts, and harvest payloads in the first
+  place.
 - **Two scanner-corollary notes for reviewers.** First, the forbidden-key
   list is versioned source: extending it changes what sealing accepts, so it
   should change only with a test that exercises the new key. Second, the
