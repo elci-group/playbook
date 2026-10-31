@@ -1,0 +1,14 @@
+[package]
+name = "playbook-presentation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+playbook-core.workspace = true
+playbook-events.workspace = true
+playbook-state.workspace = true
+playbook-policy.workspace = true
+playbook-field.workspace = true
+playbook-huddle.workspace = true
+playbook-blitz.workspace = true
+serde.workspace = true
