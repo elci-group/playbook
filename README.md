@@ -52,7 +52,9 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 ## Matchday: the command environment
 
-`playbook-presentation` is the deterministic 3form semantic projection layer: every important Playbook noun and event has a glance form (one line), a tactical form (the spatial block) and an analytical form (forensic rows), all pure functions of the authoritative fold — the same journal always projects the same frames, so terminal, web, cards and recordings cannot drift from the doctrine. `playbook-tui` is its first renderer: Manager Mode (the dugout), Broadcast Mode (persistent scorebug, field rail, evidence, Blitz/Huddle overlays), and the Film Room — `playbook-tui --replay journal.jsonl` steps frame-by-frame through any journal with per-frame parity against the fold, because a replayable UI is how film review stays honest. The contract, the snapshot model and the film-room keys are specified in [the matchday contract](docs/matchday.md).
+`playbook-presentation` is the deterministic 3form semantic projection layer: every important Playbook noun and event has a glance form (one line), a tactical form (the spatial block) and an analytical form (forensic rows), all pure functions of the authoritative fold — the same journal always projects the same frames, so terminal, web, cards and recordings cannot drift from the doctrine. `playbook-tui` is its first renderer: Manager Mode (the dugout), Broadcast Mode (persistent scorebug, field rail, evidence, Blitz/Huddle overlays), and the Film Room — `playbook-tui --replay journal.jsonl` steps frame-by-frame through any journal with per-frame parity against the fold (glance → tactical → analytical on `f`), because a replayable UI is how film review stays honest. The contract, the snapshot model and the film-room keys are specified in [the matchday contract](docs/matchday.md).
+
+![Matchday: the dugout, the broadcast and the film room](docs/assets/matchday-manager.gif)
 
 ## The play-card gallery
 

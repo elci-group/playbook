@@ -201,8 +201,8 @@ pub fn render_manager(snapshot: &PresentationSnapshot, width: usize) -> String {
     for player in snapshot.roster.iter().take(4) {
         out.push(box_row(
             &format!(
-                "{:<4} {:<14} {:<9} {}",
-                fit(&player.id, 3),
+                "{:<7} {:<14} {:<9} {}",
+                fit(&player.id, 6),
                 fit(&player.display_name, 13),
                 player.kind.to_uppercase(),
                 player.role.to_uppercase()

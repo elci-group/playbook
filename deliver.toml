@@ -627,3 +627,28 @@ name = "playbook-tui matchday tests"
 cmd = ["cargo", "test", "-p", "playbook-tui", "--offline"]
 expect_exit = 0
 timeout_secs = 300
+
+[[file]]
+path = "docs/tapes/broadcast.tape"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "docs/tapes/manager.tape"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "docs/tapes/filmroom.tape"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "fixtures/matchday-demo.jsonl"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = ".baby-tui.toml"
+required = true
+min_size_bytes = 50

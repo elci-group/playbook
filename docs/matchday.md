@@ -82,7 +82,8 @@ Frame *i* is asserted equal to the snapshot of the prefix fold — the film
 cannot drift from what the authority actually did.
 
 Film-room keys: `ENTER`/`n` next frame, `p` back, `f` cycles the depth
-switch (glance → tactical → forensic), `k` the kick decision moment,
+switch (glance → tactical → forensic), `F` returns to the full-frame form,
+`k` the kick decision moment,
 `d` the Lastdown decision moment, `r` roster depth, `h` the heat map,
 `g` jump to the final whistle, `q` quit.
 
@@ -93,6 +94,24 @@ MANAGER MODE  → control    (the dugout: formation, roster, play call)
 BROADCAST     → observe    (scorebug, field rail, evidence, overlays)
 FILM ROOM     → understand (frame-by-frame replay of any journal)
 ```
+
+### Manager Mode — the dugout
+
+![Manager Mode: the dugout](assets/matchday-manager.gif)
+
+### Broadcast Mode — what is happening right now
+
+![Broadcast Mode: scorebug, field rail and evidence](assets/matchday-broadcast.gif)
+
+### Film Room — the depth switch on the Lastdown punt call
+
+![Film Room: glance → tactical → analytical](assets/matchday-filmroom.gif)
+
+The gifs are rendered with [vhs](https://github.com/charmbracelet/vhs) from
+the tapes in `docs/tapes/` against the committed demo journal
+`fixtures/matchday-demo.jsonl` — the recordings are made from the same
+binary and the same journal the authority folds, so what the docs show is
+what the drive did (`vhs docs/tapes/broadcast.tape` regenerates them).
 
 Design constraint: no dense hacker-terminal aesthetics. Large empty
 regions, strong typographic hierarchy, a small number of huge statistics,
@@ -112,3 +131,5 @@ geometry, film parity, three-form coverage) and the Matchday campaign in
 `crates/playbook-tui/tests/frames.rs` (golden scorebug, dugout, broadcast,
 overlays, Shadow Defence on the dugout, and a full film-room replay of a
 real MVP journal with per-frame parity).
+
+> The demo journal is folded frame-by-frame in the Film Room tests.
