@@ -61,7 +61,7 @@ fn execute(args: &[&str]) -> (i32, String) {
         }
         Some("mvp") => rendered(print_mvp(style, &args[1..])),
         Some("sim") => rendered(print_sim(style, &args[1..])),
-        Some("sprint") => rendered(print_sprint()),
+        Some("sprint") => rendered(print_sprint(style)),
         Some("priors") => rendered(print_priors(style)),
         Some("explain") => rendered(print_explain(style)),
         Some("status") => rendered(print_status(style)),
@@ -697,14 +697,28 @@ fn load_trace(name: &str) -> Result<Vec<DriveEvent>, PlaybookError> {
     serde_json::from_str(&text).map_err(PlaybookError::json)
 }
 
-/// The event transcript. A machine contract: identical in every style.
-fn print_sprint() -> Result<String, PlaybookError> {
+/// The event transcript. Plain mode reads as the campaign report over the
+/// JSON transcript; basic and form3 mode are the bare JSON — a machine
+/// contract, identical in both.
+fn print_sprint(style: OutputStyle) -> Result<String, PlaybookError> {
     let report = accepted_report()?;
+    let transcript = serde_json::to_string_pretty(&report.events).map_err(PlaybookError::json)?;
     let mut out = String::new();
-    line(
-        &mut out,
-        serde_json::to_string_pretty(&report.events).map_err(PlaybookError::json)?,
-    );
+    match style {
+        OutputStyle::Plain => {
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("BLITZ CAMPAIGN TRANSCRIPT"));
+            line(
+                &mut out,
+                painter.kv("events", &report.events.len().to_string()),
+            );
+            line(&mut out, String::new());
+            line(&mut out, transcript);
+        }
+        OutputStyle::Basic | OutputStyle::Form3 => {
+            line(&mut out, transcript);
+        }
+    }
     Ok(out)
 }
 
@@ -874,19 +888,21 @@ fn print_status(style: OutputStyle) -> Result<String, PlaybookError> {
     Ok(out)
 }
 
-/// One policy variant. Plain and basic mode print the JSON document; form3
-/// mode emits one `event=policy <field>=<value>` per top-level field, using
-/// the document's own key names.
+/// One policy variant. Plain mode reads as the enforced policy document;
+/// basic mode is the bare JSON document; form3 mode emits one
+/// `event=policy <field>=<value>` per top-level field, using the document's
+/// own key names.
 fn print_policy(style: OutputStyle, variant: Option<&str>) -> Result<String, PlaybookError> {
     let policy = match variant {
         Some("pass-heavy") => Policy::pass_heavy_contrast(),
         _ => Policy::builtin(),
     };
+    let document = serde_json::to_string_pretty(&policy).map_err(PlaybookError::json)?;
     let mut out = String::new();
     match style {
         OutputStyle::Form3 => {
-            let document = serde_json::to_value(&policy).map_err(PlaybookError::json)?;
-            if let serde_json::Value::Object(fields) = document {
+            let value = serde_json::to_value(&policy).map_err(PlaybookError::json)?;
+            if let serde_json::Value::Object(fields) = value {
                 for (key, field) in fields {
                     line(
                         &mut out,
@@ -895,11 +911,15 @@ fn print_policy(style: OutputStyle, variant: Option<&str>) -> Result<String, Pla
                 }
             }
         }
-        OutputStyle::Plain | OutputStyle::Basic => {
-            line(
-                &mut out,
-                serde_json::to_string_pretty(&policy).map_err(PlaybookError::json)?,
-            );
+        OutputStyle::Plain => {
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("POLICY DOCUMENT"));
+            line(&mut out, painter.kv("version", &policy.version));
+            line(&mut out, String::new());
+            line(&mut out, document);
+        }
+        OutputStyle::Basic => {
+            line(&mut out, document);
         }
     }
     Ok(out)
@@ -932,40 +952,59 @@ fn print_recover(style: OutputStyle, path: Option<&str>) -> Result<String, Playb
     let mut out = String::new();
     match style {
         OutputStyle::Plain => {
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("RECOVERED DRIVE"));
+            line(&mut out, painter.kv("journal", path));
             if recovery.repaired_tail {
-                line(&mut out, "repaired_tail true");
+                line(
+                    &mut out,
+                    painter.flag_value("repaired tail — the torn record was truncated"),
+                );
             }
-            line(&mut out, format!("drive_id {}", state.drive_id().as_str()));
-            line(&mut out, format!("status {:?}", state.status()));
-            line(&mut out, format!("down {}", state.down().machine_id()));
-            line(&mut out, format!("ytg_milli {}", state.ytg_milli()));
+            line(&mut out, String::new());
+            line(&mut out, painter.kv("drive_id", state.drive_id().as_str()));
             line(
                 &mut out,
-                format!(
-                    "budget_remaining_ppm {}",
-                    state.budget_remaining_ppm(&policy)
+                painter.kv("status", &format!("{:?}", state.status())),
+            );
+            line(&mut out, painter.kv("down", state.down().machine_id()));
+            line(
+                &mut out,
+                painter.kv("ytg_milli", &state.ytg_milli().to_string()),
+            );
+            line(
+                &mut out,
+                painter.kv(
+                    "budget_remaining_ppm",
+                    &state.budget_remaining_ppm(&policy).to_string(),
                 ),
             );
-            line(&mut out, format!("events {}", recovery.events.len()));
+            line(
+                &mut out,
+                painter.kv("events", &recovery.events.len().to_string()),
+            );
             match state.open_execution() {
                 Some(execution) => {
                     line(
                         &mut out,
-                        format!("open_execution {}", execution.play_id.as_str()),
+                        painter.kv("open_execution", execution.play_id.as_str()),
                     );
                     line(
                         &mut out,
-                        format!(
-                            "reconcile_required {}",
-                            execution.idempotency_key.as_deref().unwrap_or("none")
+                        painter.kv(
+                            "reconcile_required",
+                            execution.idempotency_key.as_deref().unwrap_or("none"),
                         ),
                     );
                 }
-                None => line(&mut out, "open_execution none"),
+                None => line(&mut out, painter.kv("open_execution", "none")),
             }
             line(
                 &mut out,
-                format!("unresolved_effects {}", state.unresolved_effects().len()),
+                painter.kv(
+                    "unresolved_effects",
+                    &state.unresolved_effects().len().to_string(),
+                ),
             );
         }
         OutputStyle::Basic => {
@@ -1090,8 +1129,14 @@ fn print_otlp(style: OutputStyle, args: &[&str]) -> Result<String, PlaybookError
     let mut out = String::new();
     match style {
         OutputStyle::Plain => {
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("TRACE EXPORT"));
             for (key, value) in &fields {
-                line(&mut out, format!("{key} {value}"));
+                if key == &"partial_error" {
+                    line(&mut out, painter.kv(key, &painter.flag_value(value)));
+                } else {
+                    line(&mut out, painter.kv(key, value));
+                }
             }
         }
         OutputStyle::Basic => {
@@ -1221,7 +1266,31 @@ fn print_otlp_bench(style: OutputStyle, args: &[&str]) -> Result<String, Playboo
     }
     let mut out = String::new();
     match style {
-        OutputStyle::Plain | OutputStyle::Basic => {
+        OutputStyle::Plain => {
+            let painter = form3::Painter::detect();
+            line(&mut out, painter.headline("OTLP BENCHMARK"));
+            if painter.colored() {
+                let mut table = ::form3::table::Table::new();
+                table.set_style(::form3::table::TableStyle::Rounded);
+                table.set_header(vec![
+                    ::form3::table::Cell::new("metric")
+                        .fg(::form3::ansi::Color::Cyan)
+                        .add_attribute(::form3::table::Attribute::Bold),
+                    ::form3::table::Cell::new("value")
+                        .fg(::form3::ansi::Color::Cyan)
+                        .add_attribute(::form3::table::Attribute::Bold),
+                ]);
+                for (key, value) in &fields {
+                    table.add_row(vec![*key, value]);
+                }
+                line(&mut out, table);
+            } else {
+                for (key, value) in &fields {
+                    line(&mut out, format!("{key} {value}"));
+                }
+            }
+        }
+        OutputStyle::Basic => {
             for (key, value) in &fields {
                 line(&mut out, format!("{key} {value}"));
             }
@@ -1294,10 +1363,14 @@ fn print_cards(style: OutputStyle, args: &[&str]) -> Result<String, PlaybookErro
             std::fs::write(&path, &gallery).map_err(|error| {
                 PlaybookError::Io(format!("cannot write {}: {error}", path.display()))
             })?;
-            line(&mut page, format!("wrote {}", path.display()));
+            let painter = form3::Painter::detect();
             line(
                 &mut page,
-                format!("cards {}", playbook_cards::all_cards().len()),
+                painter.pass(&format!("wrote {}", path.display())),
+            );
+            line(
+                &mut page,
+                painter.kv("cards", &playbook_cards::all_cards().len().to_string()),
             );
         }
         None => page.push_str(&gallery),

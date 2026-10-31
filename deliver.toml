@@ -678,3 +678,59 @@ min_size_bytes = 100
 path = "docs/tapes/cli-recover.tape"
 required = true
 min_size_bytes = 100
+
+[[file]]
+path = "crates/value-lab/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/frozen.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/corpus.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/value.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/stats.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/run.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/lab.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/src/report.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/value-lab/tests/study.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/value.md"
+required = true
+min_size_bytes = 2500
+
+[[command]]
+name = "value-lab tests"
+cmd = ["cargo", "test", "-p", "value-lab", "--offline"]
+expect_exit = 0
+timeout_secs = 300

@@ -21,14 +21,14 @@ pub mod run;
 pub mod stats;
 pub mod value;
 
-pub use corpus::{Assignment, Corpus, Stratum, TaskClass};
+pub use corpus::{corpus_for_study, Assignment, Corpus, Stratum, TaskClass};
 pub use frozen::{DecisionSnapshot, ExperimentalSnap, ModelEntry, PersonnelOption, Regime};
+pub use lab::emit_protocol;
 pub use lab::{
-    ablation_table, classify, emit_protocol, huddle_comparison, lastdown_audit, stopped_by,
-    AblationRow, Fault, FaultClass, FaultSchedule, FrozenThresholds, LabHealth, Phase,
-    StopCondition, Verdict,
+    ablation_table, classify, huddle_comparison, lastdown_audit, stopped_by, AblationRow, Fault,
+    FaultClass, FaultSchedule, FrozenThresholds, LabHealth, Phase, Verdict,
 };
-pub use report::emit_scoreboard;
-pub use run::{RunRecord, Scoreboard, ScoreRow};
+pub use report::{emit_scoreboard, Scoreboard};
+pub use run::{scoreboard, RunRecord, ScoreRow};
 pub use stats::{bootstrap_ci, mean, median, paired_differences, percentile, stddev};
 pub use value::{ocav, regret, utility, ShadowPrediction, Utility, UtilityWeights};

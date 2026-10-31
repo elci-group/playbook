@@ -56,6 +56,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 ![Matchday: the dugout, the broadcast and the film room](docs/assets/matchday-manager.gif)
 
+## Project VALUE: the research apparatus
+
+`value-lab` is the independent evaluator that exists so Playbook can be proven wrong. Playbook is the experimental subject; the lab freezes the experimental conditions (same model pool for every regime, hashed snaps, decision snapshots with no hindsight), reconstructs counterfactuals, computes opportunity-cost-adjusted value and cumulative regret, scores Shadow Defence's predictions against outcomes — its agreement with the lab is itself a measured variable — classifies the study verdict against pre-registered thresholds, and pauses fail-closed on any stop condition including subject-controls-authority. A feature existing in the architecture is not evidence; ablations rank each subsystem's marginal contribution. The contract, the value math and the verdict mechanics are specified in [the VALUE contract](docs/value.md).
+
 ## The command surface
 
 The `playbook` CLI renders every human-readable output through the real [3form](../3form) presentation library: a bold cyan `▌ PLAYBOOK` headline, dimmed keys, green ✓ / red ✗ verdicts and the broadcast stage bar. Colour resolves against stdout — piped output and `NO_COLOR` strip to plain text automatically, `--form3` emits the machine-readable HUD event grammar, and `--basic` is the plainest text a pipe can read. The styled surface and the machine grammars carry the same facts; they cannot disagree because they are projected from the same report. `playbook --help` opens with the same treatment — an animated, plain-English tour of every command. The CLI surfaces are argued claim-by-claim in PEEVE form (Point, Evidence, Explanation, Visualisation, Evaluation) in [the command surface contract](docs/command-surface.md); the Matchday presentation contract carries the same discipline in [the matchday contract](docs/matchday.md).
