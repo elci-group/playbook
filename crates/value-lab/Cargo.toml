@@ -1,0 +1,17 @@
+[package]
+name = "value-lab"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "value-lab"
+path = "src/main.rs"
+
+[dependencies]
+playbook-core.workspace = true
+playbook-lastdown.workspace = true
+playbook-sim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
