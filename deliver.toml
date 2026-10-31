@@ -657,3 +657,24 @@ min_size_bytes = 50
 path = "docs/tapes/help.tape"
 required = true
 min_size_bytes = 100
+
+[[file]]
+path = "docs/command-surface.md"
+required = true
+min_size_bytes = 2500
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/tapes/cli-mvp.tape"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "docs/tapes/cli-sim.tape"
+required = true
+min_size_bytes = 100
+
+[[file]]
+path = "docs/tapes/cli-recover.tape"
+required = true
+min_size_bytes = 100
