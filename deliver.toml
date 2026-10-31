@@ -775,3 +775,60 @@ name = "playbook-ci tests"
 cmd = ["cargo", "test", "-p", "playbook-ci", "--offline"]
 expect_exit = 0
 timeout_secs = 300
+
+[[file]]
+path = "crates/ci-evidence/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/ci-evidence/tests/contract.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "crates/ci-authorities/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-integrity/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/ci-governance/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/ci.md"
+required = true
+min_size_bytes = 2500
+
+[[command]]
+name = "ci-evidence contract tests"
+cmd = ["cargo", "test", "-p", "ci-evidence", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "playbook-integrity determinism suite"
+cmd = ["cargo", "test", "-p", "playbook-integrity", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "ci-authorities adapter tests"
+cmd = ["cargo", "test", "-p", "ci-authorities", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "ci-governance tests"
+cmd = ["cargo", "test", "-p", "ci-governance", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+# value-lab + ci campaign registered
+
