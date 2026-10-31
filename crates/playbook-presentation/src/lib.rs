@@ -18,6 +18,7 @@ mod threeform;
 
 pub use replay::{frames, Frame};
 pub use snapshot::{
-    FieldProjection, PlayerRow, PresentationSnapshot, ScoreBug, SegmentMark, ShadowCompare,
+    BlitzOverlay, FieldProjection, GateRow, PlayerRow, PresentationSnapshot, ScoreBug, SegmentMark,
+    ShadowCompare, SubstitutionRow,
 };
-pub use threeform::{present_event, kind, ThreeForm};
+pub use threeform::{kind, present_event, ThreeForm};

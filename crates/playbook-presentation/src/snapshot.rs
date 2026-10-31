@@ -253,9 +253,7 @@ impl PresentationSnapshot {
             roster.push(player_row(active, "active"));
         }
         for assessed in state.assessments() {
-            if state.personnel().map(|p| p.id.clone()).as_deref()
-                != Some(assessed.id.as_str())
-            {
+            if state.personnel().map(|p| p.id.as_str()) != Some(assessed.id.as_str()) {
                 roster.push(player_row(assessed, "assessed"));
             }
         }
@@ -321,7 +319,7 @@ impl PresentationSnapshot {
                 .winner
                 .as_ref()
                 .map(|winner| winner.candidate_id.as_str().to_string()),
-            waves: blitz.closed_waves,
+            waves: blitz.closed_waves.len() as u16,
         });
         let huddles = state
             .huddles()
@@ -338,7 +336,11 @@ impl PresentationSnapshot {
             .iter()
             .map(|record| SubstitutionRow {
                 out: record.out.as_str().to_string(),
-                replacement: record.replacement.as_str().to_string(),
+                replacement: record
+                    .replacement
+                    .as_ref()
+                    .map(|id| id.as_str().to_string())
+                    .unwrap_or_else(|| "none".into()),
                 at_ms: record.at_ms,
             })
             .collect();

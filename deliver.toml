@@ -565,3 +565,65 @@ name = "playbook-state field geometry tests"
 cmd = ["cargo", "test", "-p", "playbook-state", "--offline", "--test", "field_geometry"]
 expect_exit = 0
 timeout_secs = 300
+
+[[file]]
+path = "crates/playbook-presentation/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-presentation/src/snapshot.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-presentation/src/threeform.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-presentation/src/replay.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-presentation/tests/projection.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "crates/playbook-tui/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-tui/src/render.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-tui/src/main.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-tui/tests/frames.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/matchday.md"
+required = true
+min_size_bytes = 2000
+
+[[command]]
+name = "playbook-presentation tests"
+cmd = ["cargo", "test", "-p", "playbook-presentation", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "playbook-tui matchday tests"
+cmd = ["cargo", "test", "-p", "playbook-tui", "--offline"]
+expect_exit = 0
+timeout_secs = 300

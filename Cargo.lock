@@ -304,6 +304,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-presentation"
+version = "0.1.0"
+dependencies = [
+ "playbook-blitz",
+ "playbook-core",
+ "playbook-events",
+ "playbook-field",
+ "playbook-huddle",
+ "playbook-policy",
+ "playbook-state",
+ "serde",
+]
+
+[[package]]
 name = "playbook-routing"
 version = "0.1.0"
 dependencies = [
@@ -397,6 +411,19 @@ dependencies = [
  "playbook-policy",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "playbook-tui"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-events",
+ "playbook-journal",
+ "playbook-policy",
+ "playbook-presentation",
+ "playbook-sim",
+ "playbook-state",
 ]
 
 [[package]]

@@ -1,0 +1,19 @@
+[package]
+name = "playbook-tui"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "playbook-tui"
+path = "src/main.rs"
+
+[dependencies]
+playbook-core.workspace = true
+playbook-events.workspace = true
+playbook-journal.workspace = true
+playbook-presentation = { path = "../playbook-presentation" }
+playbook-policy.workspace = true
+playbook-state.workspace = true
+
+[dev-dependencies]
+playbook-sim.workspace = true

@@ -9,6 +9,8 @@ members = [
     "crates/playbook-budget",
     "crates/playbook-security",
     "crates/playbook-policy",
+    "crates/playbook-presentation",
+    "crates/playbook-tui",
     "crates/playbook-elci",
     "crates/playbook-state",
     "crates/playbook-journal",
