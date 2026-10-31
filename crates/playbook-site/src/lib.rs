@@ -254,3 +254,96 @@ pub fn generate(workspace_root: &Path, out_dir: &Path) -> std::io::Result<Vec<St
     }
     Ok(written)
 }
+
+/// The content type for one served file, by extension.
+pub fn content_type(path: &str) -> &'static str {
+    if path.ends_with(".html") {
+        "text/html; charset=utf-8"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else if path.ends_with(".md") {
+        "text/markdown; charset=utf-8"
+    } else if path.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+/// Resolve one HTTP request target to `(status, content_type, body)`:
+/// `/` maps to index.html, traversal is forbidden, misses are 404. Pure —
+/// the HTTP listener below only writes what this returns.
+pub fn respond(out_dir: &Path, target: &str) -> (u16, &'static str, Vec<u8>) {
+    let relative = target
+        .split('?')
+        .next()
+        .unwrap_or("/")
+        .trim_start_matches('/');
+    let relative = if relative.is_empty() {
+        "index.html"
+    } else {
+        relative
+    };
+    if relative.contains("..") {
+        return (403, "text/plain; charset=utf-8", b"forbidden\n".to_vec());
+    }
+    match std::fs::read(out_dir.join(relative)) {
+        Ok(body) => (200, content_type(relative), body),
+        Err(_) => (404, "text/plain; charset=utf-8", b"not found\n".to_vec()),
+    }
+}
+
+/// Serve the generated site over local HTTP (loopback only).
+pub fn serve_dir(out_dir: &Path, port: u16) -> std::io::Result<()> {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    if !out_dir.join("index.html").is_file() {
+        return Err(std::io::Error::other(
+            "no index.html — run generation first",
+        ));
+    }
+    let listener = TcpListener::bind(("127.0.0.1", port))?;
+    println!(
+        "▌ PLAYBOOK SITE — SERVING http://127.0.0.1:{port} from {}",
+        out_dir.display()
+    );
+    for stream in listener.incoming() {
+        let mut stream = stream?;
+        let mut buffer = [0u8; 2048];
+        let _ = stream.read(&mut buffer);
+        let request = String::from_utf8_lossy(&buffer);
+        let target = request.split_whitespace().nth(1).unwrap_or("/");
+        let (status, content_type, body) = respond(out_dir, target);
+        let header = format!(
+            "HTTP/1.1 {status} OK\r\ncontent-type: {content_type}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream.write_all(header.as_bytes());
+        let _ = stream.write_all(&body);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_resolution_is_pure_and_fail_closed() {
+        let dir = std::env::temp_dir().join("playbook-site-resolve");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.html"), b"<html>ok</html>").unwrap();
+        let (status, content_type, body) = respond(&dir, "/");
+        assert_eq!(status, 200);
+        assert_eq!(content_type, "text/html; charset=utf-8");
+        assert_eq!(body, b"<html>ok</html>");
+        assert_eq!(respond(&dir, "/missing.gif").0, 404);
+        assert_eq!(
+            respond(&dir, "/../Cargo.toml").0,
+            403,
+            "traversal is forbidden"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
