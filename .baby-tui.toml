@@ -1,0 +1,8 @@
+# baby installation recipe — playbook-tui (Matchday surface)
+schema = "baby.install/v1"
+build_system = "cargo"
+binary = "playbook-tui"
+artifact = "target/release/playbook-tui"
+commands = [
+  ["cargo", "build", "--release", "--bin", "playbook-tui", "-p", "playbook-tui"],
+]
