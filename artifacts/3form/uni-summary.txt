@@ -1,0 +1,10 @@
+uni --fail-under 80 . → exit 1 (environmental)
+
+Overall weighted score: 97.78 — PASSES the >= 80 hard minimum.
+Primary structural tool score: 100.0.
+
+The exit-1 is NOT a score failure: uni's poka prerequisite stage fails with
+"unknown tool 'lwoodz'" — a host tooling-config issue unrelated to code
+quality. Secondary readiness dimensions (deployment packaging, license
+headers) score low but are pre-existing v0.2.x P3 non-goals, not 3form
+regressions. Both pre-date this campaign.
