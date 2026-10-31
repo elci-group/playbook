@@ -1,0 +1,16 @@
+[package]
+name = "playbook-field"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+description = "The YTG field geometry: 9+1 validation segments, banked and unvalidated progress, the Opposition Kicker's initial decomposition, causal field adjustments, semantic Red Zone, and field-goal-range economics."
+
+[dependencies]
+playbook-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

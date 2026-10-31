@@ -18,6 +18,7 @@ playbook-budget.workspace = true
 playbook-policy.workspace = true
 playbook-security.workspace = true
 playbook-elci.workspace = true
+playbook-field.workspace = true
 playbook-huddle.workspace = true
 playbook-routing.workspace = true
 playbook-lastdown.workspace = true

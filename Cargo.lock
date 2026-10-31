@@ -168,6 +168,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "playbook-field"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "playbook-franchise"
 version = "0.1.0"
 dependencies = [
@@ -367,6 +376,7 @@ dependencies = [
  "playbook-elci",
  "playbook-events",
  "playbook-evidence",
+ "playbook-field",
  "playbook-gates",
  "playbook-huddle",
  "playbook-lastdown",

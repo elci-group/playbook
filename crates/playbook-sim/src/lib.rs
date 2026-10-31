@@ -20,7 +20,10 @@ pub use mvp::{
     compare_policies, compare_policies_with, control_duplicate_failures, run_mvp,
     run_mvp_with_journal, stage_names, MvpReport, PolicyComparison,
 };
-pub use normalise::{normalise_test_report, try_tov_normalise, NormaliseOutcome};
+pub use normalise::{
+    normalise_field_boundary, normalise_test_report, try_tov_field_normalise, try_tov_normalise,
+    NormaliseOutcome,
+};
 
 pub use playbook_core::{
     leaks_competitive_metadata, ArtefactId, ArtefactRef, Disposition, Down, DriveBudget, DriveId,

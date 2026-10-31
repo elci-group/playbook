@@ -480,3 +480,88 @@ min_size_bytes = 2000
 path = "docs/integrations.md"
 required = true
 min_size_bytes = 2000
+
+[[file]]
+path = "crates/playbook-field/src/domain.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/geometry.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/penalties.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/kicker.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/redzone.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/fieldgoal.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/routing.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/shadow.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-field/src/state.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-state/tests/field_geometry.rs"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "docs/field-geometry.md"
+required = true
+min_size_bytes = 2000
+
+[[file]]
+path = "tov/adapters/field-normalise.tov"
+required = true
+min_size_bytes = 500
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[command]]
+name = "tov check field-normalise adapter"
+cmd = ["tov", "check", "--json", "tov/adapters/field-normalise.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "tov test field-normalise adapter"
+cmd = ["tov", "test", "tov/adapters/field-normalise.tov"]
+expect_exit = 0
+timeout_secs = 120
+
+[[command]]
+name = "playbook-field lib tests"
+cmd = ["cargo", "test", "-p", "playbook-field", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "playbook-state field geometry tests"
+cmd = ["cargo", "test", "-p", "playbook-state", "--offline", "--test", "field_geometry"]
+expect_exit = 0
+timeout_secs = 300

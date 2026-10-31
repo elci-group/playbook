@@ -274,6 +274,7 @@ pub struct DriveState {
     pub(crate) tinker_deviations: u32,
     pub(crate) tactics: TacticsLedger,
     pub(crate) integrations: IntegrationLedger,
+    pub(crate) field: playbook_field::state::FieldGeometryState,
 }
 
 impl DriveState {
@@ -350,6 +351,7 @@ impl DriveState {
             tinker_deviations: 0,
             tactics: TacticsLedger::empty(),
             integrations: IntegrationLedger::empty(),
+            field: playbook_field::state::FieldGeometryState::empty(),
         }
     }
 
@@ -439,6 +441,11 @@ impl DriveState {
     /// Event-sourced integration ledger: what the advisory plane observed.
     pub fn integrations(&self) -> &IntegrationLedger {
         &self.integrations
+    }
+    /// The fold-maintained field geometry: banked frontier, unvalidated
+    /// progress, red-zone state, and the kick record.
+    pub fn field(&self) -> &playbook_field::state::FieldGeometryState {
+        &self.field
     }
     /// Personnel the Bench has benched. They are excluded from the
     /// selection pool until the verdict is reversed.

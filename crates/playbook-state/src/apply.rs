@@ -1189,6 +1189,312 @@ fn apply_open(
                 &format!("confidence={confidence_ppm} conflicts={conflicts}"),
             );
         }
+        DriveEvent::OppositionKickDeclared {
+            objective_id,
+            gate_count,
+        } => {
+            ensure_active(&next)?;
+            next.field.field_yards = u32::try_from(*gate_count).unwrap_or(u32::MAX);
+            next.integrations.push(
+                "opposition_kick_declared",
+                objective_id,
+                &format!("{gate_count} productive gates"),
+            );
+        }
+        DriveEvent::FieldConstructed {
+            objective_id,
+            total_weight_ppm: _,
+            consolidation_boundaries,
+        } => {
+            ensure_active(&next)?;
+            let _ = objective_id;
+            let requirement = playbook_field::domain::BoundaryRequirement::new(vec![
+                playbook_field::domain::ValidationEvidence::Test,
+            ])?;
+            let field_yards = consolidation_boundaries
+                .last()
+                .copied()
+                .unwrap_or(0)
+                .saturating_mul(playbook_field::domain::SEGMENT_YARDS);
+            next.field.segments =
+                playbook_field::geometry::SegmentLedger::construct(field_yards, requirement);
+            next.field.field_yards = field_yards;
+        }
+        DriveEvent::SegmentStarted {
+            segment_number,
+            start_yard,
+        } => {
+            ensure_active(&next)?;
+            next.field.field_yards = next.field.field_yards.max(*start_yard);
+            let _ = segment_number;
+        }
+        DriveEvent::UnvalidatedProgressRecorded {
+            yards,
+            unvalidated_total,
+        } => {
+            ensure_active(&next)?;
+            if *unvalidated_total > playbook_field::domain::MAX_UNVALIDATED_YARDS {
+                return Err(PlaybookError::Inadmissible(
+                    "field".into(),
+                    "unvalidated progress exceeds the nine-yard ceiling".into(),
+                ));
+            }
+            let _ = yards;
+            next.field.position.unvalidated = *unvalidated_total;
+        }
+        DriveEvent::ValidationBoundaryReached { yard } => {
+            ensure_active(&next)?;
+            next.field
+                .segments
+                .records()
+                .iter()
+                .find(|record| record.end_yard == *yard)
+                .ok_or_else(|| {
+                    PlaybookError::Inadmissible(
+                        "field".into(),
+                        format!("no boundary at yard {yard}"),
+                    )
+                })?;
+        }
+        DriveEvent::ValidationBoundaryPassed {
+            yard,
+            evidence_classes: _,
+        } => {
+            ensure_active(&next)?;
+            next.field.bank(*yard);
+        }
+        DriveEvent::ValidationBoundaryFailed { yard, reason } => {
+            ensure_active(&next)?;
+            next.field.segments.fail(*yard, reason)?;
+        }
+        DriveEvent::ProgressBanked {
+            banked_yard,
+            banked_yards_total,
+        } => {
+            ensure_active(&next)?;
+            next.field.bank(*banked_yard);
+            let _ = banked_yards_total;
+        }
+        DriveEvent::FieldAdjustmentDeclared {
+            adjustment_id,
+            direction,
+            magnitude_yards,
+            cause,
+            foreseeability,
+        } => {
+            ensure_active(&next)?;
+            let direction = match direction.as_str() {
+                "harder" => playbook_field::domain::AdjustmentDirection::Harder,
+                "easier" => playbook_field::domain::AdjustmentDirection::Easier,
+                other => {
+                    return Err(PlaybookError::Inadmissible(
+                        "field".into(),
+                        format!("unknown adjustment direction {other}"),
+                    ))
+                }
+            };
+            let foreseeability = match foreseeability.as_str() {
+                "exogenous" => playbook_field::domain::Foreseeability::Exogenous,
+                "discovery" => playbook_field::domain::Foreseeability::Discovery,
+                "estimation_error" => playbook_field::domain::Foreseeability::EstimationError,
+                "execution_created" => playbook_field::domain::Foreseeability::ExecutionCreated,
+                other => {
+                    return Err(PlaybookError::Inadmissible(
+                        "field".into(),
+                        format!("unknown foreseeability {other}"),
+                    ))
+                }
+            };
+            let adjustment = playbook_field::domain::FieldAdjustment {
+                adjustment_id: adjustment_id.clone(),
+                direction,
+                magnitude_yards: *magnitude_yards,
+                cause: cause.clone(),
+                evidence_ref: None,
+                foreseeability,
+                affected_gates: Vec::new(),
+                at_ms: 0,
+            };
+            // The journal is authoritative: record the adjustment exactly
+            // as declared (the fold's gate already admitted it).
+            next.field
+                .adjustments
+                .push(playbook_field::domain::FieldAdjustment {
+                    adjustment_id: adjustment.adjustment_id.clone(),
+                    direction: adjustment.direction,
+                    magnitude_yards: adjustment.magnitude_yards,
+                    cause: adjustment.cause.clone(),
+                    evidence_ref: adjustment.evidence_ref.clone(),
+                    foreseeability: adjustment.foreseeability,
+                    affected_gates: adjustment.affected_gates.clone(),
+                    at_ms: adjustment.at_ms,
+                });
+            let yard_delta = match adjustment.direction {
+                playbook_field::domain::AdjustmentDirection::Harder => {
+                    i64::from(adjustment.magnitude_yards)
+                }
+                playbook_field::domain::AdjustmentDirection::Easier => {
+                    -i64::from(adjustment.magnitude_yards)
+                }
+            };
+            next.field.field_yards =
+                u32::try_from(i64::from(next.field.field_yards).saturating_add(yard_delta))
+                    .unwrap_or(next.field.field_yards);
+            next.integrations.push(
+                "field_adjustment_declared",
+                adjustment_id,
+                &format!("{} yards, {}", adjustment.magnitude_yards, cause),
+            );
+        }
+        DriveEvent::OffensivePenaltyApplied {
+            adjustment_id,
+            magnitude_yards,
+            cause,
+        } => {
+            ensure_active(&next)?;
+            next.field
+                .adjustments
+                .push(playbook_field::domain::FieldAdjustment {
+                    adjustment_id: adjustment_id.clone(),
+                    direction: playbook_field::domain::AdjustmentDirection::Harder,
+                    magnitude_yards: *magnitude_yards,
+                    cause: cause.clone(),
+                    evidence_ref: None,
+                    foreseeability: playbook_field::domain::Foreseeability::Exogenous,
+                    affected_gates: Vec::new(),
+                    at_ms: 0,
+                });
+            next.integrations.push(
+                "offensive_penalty_applied",
+                adjustment_id,
+                &format!("{} yards, {}", magnitude_yards, cause),
+            );
+        }
+        DriveEvent::DefensivePenaltyApplied {
+            adjustment_id,
+            magnitude_yards,
+            cause,
+        } => {
+            ensure_active(&next)?;
+            next.field
+                .adjustments
+                .push(playbook_field::domain::FieldAdjustment {
+                    adjustment_id: adjustment_id.clone(),
+                    direction: playbook_field::domain::AdjustmentDirection::Easier,
+                    magnitude_yards: *magnitude_yards,
+                    cause: cause.clone(),
+                    evidence_ref: None,
+                    foreseeability: playbook_field::domain::Foreseeability::Discovery,
+                    affected_gates: Vec::new(),
+                    at_ms: 0,
+                });
+            next.integrations.push(
+                "defensive_penalty_applied",
+                adjustment_id,
+                &format!("{} yards, {}", magnitude_yards, cause),
+            );
+        }
+        DriveEvent::RedZoneEntered {
+            outstanding_mandatory,
+        } => {
+            ensure_active(&next)?;
+            next.field.enter_red_zone();
+            let _ = outstanding_mandatory;
+        }
+        DriveEvent::RedZoneExited {
+            outstanding_mandatory,
+        } => {
+            ensure_active(&next)?;
+            next.field.exit_red_zone();
+            let _ = outstanding_mandatory;
+        }
+        DriveEvent::FieldGoalRangeEntered { candidate_action } => {
+            ensure_active(&next)?;
+            next.field.enter_field_goal_range();
+            let _ = candidate_action;
+        }
+        DriveEvent::FieldGoalRangeExited { candidate_action } => {
+            ensure_active(&next)?;
+            next.field.exit_field_goal_range();
+            let _ = candidate_action;
+        }
+        DriveEvent::KickerCandidateEvaluated {
+            personnel,
+            score_ppm,
+        } => {
+            ensure_active(&next)?;
+            next.integrations.push(
+                "kicker_candidate_evaluated",
+                personnel,
+                &format!("score_ppm={score_ppm}"),
+            );
+        }
+        DriveEvent::KickAdmitted { personnel, action } => {
+            ensure_active(&next)?;
+            next.field.enter_field_goal_range();
+            next.integrations.push("kick_admitted", personnel, action);
+        }
+        DriveEvent::KickAttempted {
+            personnel,
+            validated_frontier_yard,
+        } => {
+            ensure_active(&next)?;
+            next.integrations.push(
+                "kick_attempted",
+                personnel,
+                &format!("frontier={validated_frontier_yard}"),
+            );
+        }
+        DriveEvent::KickScored {
+            personnel,
+            evidence_count,
+        } => {
+            ensure_active(&next)?;
+            next.field
+                .record_kick(playbook_field::domain::KickOutcome::Score, 1_000_000);
+            next.integrations.push(
+                "kick_scored",
+                personnel,
+                &format!("evidence_count={evidence_count}"),
+            );
+        }
+        DriveEvent::KickMissed {
+            personnel,
+            possession_recoverable,
+        } => {
+            ensure_active(&next)?;
+            next.field
+                .record_kick(playbook_field::domain::KickOutcome::CleanMiss, 1_000_000);
+            next.integrations.push(
+                "kick_missed",
+                personnel,
+                &format!("possession_recoverable={possession_recoverable}"),
+            );
+        }
+        DriveEvent::KickBlocked { personnel, reason } => {
+            ensure_active(&next)?;
+            next.field
+                .record_kick(playbook_field::domain::KickOutcome::Blocked, 1_000_000);
+            next.integrations.push("kick_blocked", personnel, reason);
+        }
+        DriveEvent::KickTurnover { personnel, harm } => {
+            ensure_active(&next)?;
+            next.field
+                .record_kick(playbook_field::domain::KickOutcome::Turnover, 1_000_000);
+            next.integrations.push("kick_turnover", personnel, harm);
+        }
+        DriveEvent::TouchdownScored {
+            banked_yards_total,
+            evidence_count,
+        } => {
+            ensure_active(&next)?;
+            next.field.score_touchdown();
+            next.integrations.push(
+                "touchdown_scored",
+                "offence",
+                &format!("banked={banked_yards_total} evidence={evidence_count}"),
+            );
+        }
         DriveEvent::DirectiveExecuted { report, at_ms } => {
             ensure_active(&next)?;
             let directive = next.directive.as_ref().ok_or_else(|| {

@@ -448,6 +448,99 @@ pub enum DriveEvent {
         confidence_ppm: u32,
         conflicts: u32,
     },
+    OppositionKickDeclared {
+        objective_id: String,
+        gate_count: usize,
+    },
+    FieldConstructed {
+        objective_id: String,
+        total_weight_ppm: u64,
+        consolidation_boundaries: Vec<u32>,
+    },
+    SegmentStarted {
+        segment_number: u16,
+        start_yard: u32,
+    },
+    UnvalidatedProgressRecorded {
+        yards: u32,
+        unvalidated_total: u32,
+    },
+    ValidationBoundaryReached {
+        yard: u32,
+    },
+    ValidationBoundaryPassed {
+        yard: u32,
+        evidence_classes: Vec<String>,
+    },
+    ValidationBoundaryFailed {
+        yard: u32,
+        reason: String,
+    },
+    ProgressBanked {
+        banked_yard: u32,
+        banked_yards_total: u32,
+    },
+    FieldAdjustmentDeclared {
+        adjustment_id: String,
+        direction: String,
+        magnitude_yards: u32,
+        cause: String,
+        foreseeability: String,
+    },
+    OffensivePenaltyApplied {
+        adjustment_id: String,
+        magnitude_yards: u32,
+        cause: String,
+    },
+    DefensivePenaltyApplied {
+        adjustment_id: String,
+        magnitude_yards: u32,
+        cause: String,
+    },
+    RedZoneEntered {
+        outstanding_mandatory: u32,
+    },
+    RedZoneExited {
+        outstanding_mandatory: u32,
+    },
+    FieldGoalRangeEntered {
+        candidate_action: String,
+    },
+    FieldGoalRangeExited {
+        candidate_action: String,
+    },
+    KickerCandidateEvaluated {
+        personnel: String,
+        score_ppm: u32,
+    },
+    KickAdmitted {
+        personnel: String,
+        action: String,
+    },
+    KickAttempted {
+        personnel: String,
+        validated_frontier_yard: u32,
+    },
+    KickScored {
+        personnel: String,
+        evidence_count: u32,
+    },
+    KickMissed {
+        personnel: String,
+        possession_recoverable: bool,
+    },
+    KickBlocked {
+        personnel: String,
+        reason: String,
+    },
+    KickTurnover {
+        personnel: String,
+        harm: String,
+    },
+    TouchdownScored {
+        banked_yards_total: u32,
+        evidence_count: u32,
+    },
 }
 
 impl DriveEvent {
@@ -548,6 +641,29 @@ impl DriveEvent {
             Self::DreamseqDriveReviewCompleted { .. } => "dreamseq_drive_review_completed",
             Self::ReeceQbQueryRequested { .. } => "reece_qb_query_requested",
             Self::ReeceQbConsiderationReturned { .. } => "reece_qb_consideration_returned",
+            Self::OppositionKickDeclared { .. } => "opposition_kick_declared",
+            Self::FieldConstructed { .. } => "field_constructed",
+            Self::SegmentStarted { .. } => "segment_started",
+            Self::UnvalidatedProgressRecorded { .. } => "unvalidated_progress_recorded",
+            Self::ValidationBoundaryReached { .. } => "validation_boundary_reached",
+            Self::ValidationBoundaryPassed { .. } => "validation_boundary_passed",
+            Self::ValidationBoundaryFailed { .. } => "validation_boundary_failed",
+            Self::ProgressBanked { .. } => "progress_banked",
+            Self::FieldAdjustmentDeclared { .. } => "field_adjustment_declared",
+            Self::OffensivePenaltyApplied { .. } => "offensive_penalty_applied",
+            Self::DefensivePenaltyApplied { .. } => "defensive_penalty_applied",
+            Self::RedZoneEntered { .. } => "red_zone_entered",
+            Self::RedZoneExited { .. } => "red_zone_exited",
+            Self::FieldGoalRangeEntered { .. } => "field_goal_range_entered",
+            Self::FieldGoalRangeExited { .. } => "field_goal_range_exited",
+            Self::KickerCandidateEvaluated { .. } => "kicker_candidate_evaluated",
+            Self::KickAdmitted { .. } => "kick_admitted",
+            Self::KickAttempted { .. } => "kick_attempted",
+            Self::KickScored { .. } => "kick_scored",
+            Self::KickMissed { .. } => "kick_missed",
+            Self::KickBlocked { .. } => "kick_blocked",
+            Self::KickTurnover { .. } => "kick_turnover",
+            Self::TouchdownScored { .. } => "touchdown_scored",
         }
     }
 }

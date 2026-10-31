@@ -1,0 +1,71 @@
+// Field-geometry normalisation: a validation-boundary presentation is
+// accepted only when the consolidation checkpoint is complete AND the
+// presented evidence covers every class the boundary requires (all-of).
+// Rust remains the authority when this adapter is missing or fails to run.
+
+export type BoundaryPresentation = {
+  boundary_classes: string[]
+  presented_classes: string[]
+  checkpoint_complete: bool
+}
+
+export type Normalised = {
+  class: string
+  accepted: bool
+  missing_classes: string[]
+}
+
+function covers(required: string[], presented: string[]): string[] {
+  const missing: string[] = []
+  for (const need of required) {
+    if (!presented.includes(need)) {
+      missing.push(need)
+    }
+  }
+  return missing
+}
+
+export function presentationAccepted(p: BoundaryPresentation): bool {
+  return p.checkpoint_complete && covers(p.boundary_classes, p.presented_classes).length === 0
+}
+
+export function normalisePresentation(p: BoundaryPresentation): string {
+  const body: Normalised = {
+    class: "field_boundary",
+    accepted: presentationAccepted(p),
+    missing_classes: covers(p.boundary_classes, p.presented_classes),
+  }
+  return JSON.stringify(body)
+}
+
+function sample(): BoundaryPresentation {
+  return {
+    boundary_classes: ["test"],
+    presented_classes: ["test"],
+    checkpoint_complete: true,
+  }
+}
+
+function main(): int {
+  console.log(normalisePresentation(sample()))
+  return 0
+}
+
+test("a complete checkpoint with covered evidence is accepted", () => {
+  expect(presentationAccepted(sample())).toBe(true)
+})
+
+test("an incomplete checkpoint is refused even with covered evidence", () => {
+  const p = sample()
+  p.checkpoint_complete = false
+  expect(presentationAccepted(p)).toBe(false)
+})
+
+test("an uncovered evidence class is refused with the gap named", () => {
+  const p = sample()
+  p.boundary_classes = ["test", "benchmark"]
+  const out = try JSON.parse(normalisePresentation(p)) as Normalised
+  expect(out.accepted).toBe(false)
+  expect(out.missing_classes.length).toBe(1)
+})
+

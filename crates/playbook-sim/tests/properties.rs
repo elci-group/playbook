@@ -127,6 +127,53 @@ fn a_missing_tov_adapter_stays_isolated() {
 }
 
 #[test]
+fn field_boundary_normalisation_is_all_of_over_the_required_classes() {
+    use playbook_sim::{normalise_field_boundary, try_tov_field_normalise};
+    // A complete checkpoint with every required class covered is accepted.
+    let outcome = normalise_field_boundary(&json!({
+        "boundary_classes": ["test", "benchmark"],
+        "presented_classes": ["test", "benchmark"],
+        "checkpoint_complete": true
+    }))
+    .unwrap();
+    assert!(outcome.accepted);
+    assert_eq!(outcome.source, "rust");
+    // A missing class is refused even with the checkpoint complete (I-13).
+    let outcome = normalise_field_boundary(&json!({
+        "boundary_classes": ["test", "benchmark"],
+        "presented_classes": ["test"],
+        "checkpoint_complete": true
+    }))
+    .unwrap();
+    assert!(!outcome.accepted);
+    // An incomplete checkpoint is refused even with covered evidence.
+    let outcome = normalise_field_boundary(&json!({
+        "boundary_classes": ["test"],
+        "presented_classes": ["test"],
+        "checkpoint_complete": false
+    }))
+    .unwrap();
+    assert!(!outcome.accepted);
+    // A presentation without required classes is inadmissible.
+    assert!(normalise_field_boundary(&json!({ "checkpoint_complete": true })).is_err());
+    // The tov adapter (when present) reaches the same verdict on the
+    // covered presentation; a missing adapter falls back to Rust.
+    let covered = json!({
+        "boundary_classes": ["test"],
+        "presented_classes": ["test"],
+        "checkpoint_complete": true
+    });
+    let via_adapter =
+        try_tov_field_normalise(Path::new("tov/adapters/field-normalise.tov"), &covered).unwrap();
+    assert!(via_adapter.accepted, "the tov adapter agrees on coverage");
+    assert!(via_adapter.isolated);
+    let via_fallback =
+        try_tov_field_normalise(Path::new("tov/adapters/missing.tov"), &covered).unwrap();
+    assert!(via_fallback.accepted);
+    assert_eq!(via_fallback.source, "rust");
+}
+
+#[test]
 fn inconsistent_nonzero_test_exit_reopens_an_already_satisfied_gate() {
     let (mut drive, _) = open_drive(
         FixturePlane::ready(),
