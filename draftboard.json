@@ -1,0 +1,85 @@
+[
+  {
+    "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "personnel_id": "nvidia--nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "completed": 6,
+    "total": 6,
+    "total_tokens": 609,
+    "median_latency_ms": 988,
+    "completion_rate_ppm": 1000000,
+    "failures": []
+  },
+  {
+    "model": "dots-studio/dots-3-note-preview:free",
+    "personnel_id": "dots-studio--dots-3-note-preview:free",
+    "completed": 5,
+    "total": 6,
+    "total_tokens": 903,
+    "median_latency_ms": 2471,
+    "completion_rate_ppm": 833333,
+    "failures": [
+      "arithmetic: ok (answer: \"\")"
+    ]
+  },
+  {
+    "model": "cohere/north-mini-code:free",
+    "personnel_id": "cohere--north-mini-code:free",
+    "completed": 5,
+    "total": 6,
+    "total_tokens": 624,
+    "median_latency_ms": 6798,
+    "completion_rate_ppm": 833333,
+    "failures": [
+      "counting: ok (answer: \"\")"
+    ]
+  },
+  {
+    "model": "liquid/lfm-2.5-2.6b:free",
+    "personnel_id": "liquid--lfm-2.5-2.6b:free",
+    "completed": 2,
+    "total": 6,
+    "total_tokens": 270,
+    "median_latency_ms": 290,
+    "completion_rate_ppm": 333333,
+    "failures": [
+      "arithmetic: provider error: Provider returned error (answer: \"\")",
+      "instruction_following: provider error: Provider returned error (answer: \"\")",
+      "json: provider error: Provider returned error (answer: \"\")",
+      "planet: provider error: Provider returned error (answer: \"\")"
+    ]
+  },
+  {
+    "model": "google/gemma-4-26b-a4b-it:free",
+    "personnel_id": "google--gemma-4-26b-a4b-it:free",
+    "completed": 0,
+    "total": 6,
+    "total_tokens": 0,
+    "median_latency_ms": 212,
+    "completion_rate_ppm": 0,
+    "failures": [
+      "arithmetic: provider error: Provider returned error (answer: \"\")",
+      "capital: provider error: Provider returned error (answer: \"\")",
+      "instruction_following: provider error: Provider returned error (answer: \"\")",
+      "counting: provider error: Provider returned error (answer: \"\")",
+      "json: provider error: Provider returned error (answer: \"\")",
+      "planet: provider error: Provider returned error (answer: \"\")"
+    ]
+  },
+  {
+    "model": "google/gemma-4-31b-it:free",
+    "personnel_id": "google--gemma-4-31b-it:free",
+    "completed": 0,
+    "total": 6,
+    "total_tokens": 0,
+    "median_latency_ms": 247,
+    "completion_rate_ppm": 0,
+    "failures": [
+      "arithmetic: provider error: Provider returned error (answer: \"\")",
+      "capital: provider error: Provider returned error (answer: \"\")",
+      "instruction_following: provider error: Provider returned error (answer: \"\")",
+      "counting: provider error: Provider returned error (answer: \"\")",
+      "json: provider error: Provider returned error (answer: \"\")",
+      "planet: provider error: Provider returned error (answer: \"\")"
+    ]
+  }
+]

@@ -263,12 +263,9 @@ pub fn play(key: &str, models: &[String], tasks: &[LiveTask]) -> Vec<DraftRow> {
             completed,
             total: tasks.len() as u32,
             total_tokens,
-            median_latency_ms: latencies
-                .get(latencies.len() / 2)
-                .copied()
-                .unwrap_or(0),
-            completion_rate_ppm: ((u64::from(completed) * 1_000_000)
-                / tasks.len().max(1) as u64) as u32,
+            median_latency_ms: latencies.get(latencies.len() / 2).copied().unwrap_or(0),
+            completion_rate_ppm: ((u64::from(completed) * 1_000_000) / tasks.len().max(1) as u64)
+                as u32,
             failures,
         });
     }

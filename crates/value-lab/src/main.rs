@@ -117,6 +117,99 @@ fn main() {
         }
         Some("failures") => print!("{}", emit_failures(&load_results(&args))),
         Some("economics") => print!("{}", emit_economics(&load_results(&args))),
+        Some("live-draftboard") => {
+            let key_file = parse_flag(&args, "--key-file").expect("--key-file requires a path");
+            let out_dir = parse_flag(&args, "--out").unwrap_or_else(|| ".".into());
+            let model_count = parse_flag(&args, "--models")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(6);
+            let key = std::fs::read_to_string(&key_file)
+                .map(|text| text.trim().to_string())
+                .unwrap_or_else(|error| {
+                    eprintln!("cannot read key file {key_file}: {error}");
+                    std::process::exit(1);
+                });
+            println!("▌ LIVE DRAFTBOARD — querying the free model pool");
+            let models = value_lab::free_models(&key, model_count);
+            if models.is_empty() {
+                eprintln!("no free models reachable — check connectivity");
+                std::process::exit(1);
+            }
+            for model in &models {
+                println!("  rostered: {model}");
+            }
+            println!("playing {} tasks per model...", value_lab::corpus().len());
+            let rows = value_lab::play(&key, &models, &value_lab::corpus());
+            // The draftboard, as JSON for the site.
+            let board = match serde_json::to_string_pretty(&rows) {
+                Ok(board) => board,
+                Err(error) => {
+                    eprintln!("serialise failed: {error}");
+                    std::process::exit(1);
+                }
+            };
+            std::fs::write(format!("{out_dir}/draftboard.json"), &board)
+                .unwrap_or_else(|error| eprintln!("cannot write draftboard: {error}"));
+            // The roster: every model becomes franchise personnel, acquired
+            // on measured record — reliability IS the completion rate.
+            let franchise_path = format!("{out_dir}/draftboard-franchise.json");
+            let _ = std::fs::remove_file(&franchise_path);
+            match playbook_franchise::Franchise::create(
+                std::path::Path::new(&franchise_path),
+                playbook_core::FranchiseId::new("draftboard").unwrap(),
+                playbook_core::DriveBudget::zero(),
+            ) {
+                Ok(mut franchise) => {
+                    for row in &rows {
+                        let member = playbook_franchise::RosterMember {
+                            personnel: playbook_core::Personnel {
+                                id: playbook_core::PersonnelId::new(&row.personnel_id).unwrap(),
+                                kind: playbook_core::PersonnelKind::Model,
+                                display_name: row.model.clone(),
+                                cost_tokens: row.total_tokens,
+                                latency_ms: row.median_latency_ms,
+                                capability_fit_ppm: row.completion_rate_ppm,
+                                reliability_ppm: row.completion_rate_ppm,
+                                quota_remaining_ppm: 1_000_000,
+                                evidence_quality_ppm: row.completion_rate_ppm,
+                                own_ytg_milli: None,
+                            },
+                            position: "kicker".into(),
+                            provider: Some("openrouter".into()),
+                            model: Some(row.model.clone()),
+                            availability: playbook_franchise::Availability::Ready,
+                        };
+                        let reason = format!(
+                            "measured record: {}/{} validated tasks, {} tokens",
+                            row.completed, row.total, row.total_tokens
+                        );
+                        if let Err(error) = franchise.acquire(member, &reason) {
+                            eprintln!("roster acquisition failed for {}: {error}", row.model);
+                        }
+                    }
+                    println!(
+                        "roster: {} models registered in {franchise_path}",
+                        rows.len()
+                    );
+                }
+                Err(error) => eprintln!("franchise creation failed: {error}"),
+            }
+            println!();
+            println!(
+                "{:^8} {:<8} {:<10} {:<9} model",
+                "rank", "done", "rate", "latency"
+            );
+            for (rank, row) in rows.iter().enumerate() {
+                println!(
+                    "{:^8} {:<8} {:<10} {:<9} {}",
+                    format!("#{}", rank + 1),
+                    format!("{}/{}", row.completed, row.total),
+                    format!("{:.1}%", row.completion_rate_ppm as f64 / 10_000.0),
+                    format!("{}ms", row.median_latency_ms),
+                    row.model
+                );
+            }
+        }
         Some("replication") => {
             let protocol = value_lab::emit_protocol();
             let hash = playbook_core::sha256_hex(protocol.as_bytes());

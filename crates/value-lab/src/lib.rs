@@ -25,7 +25,6 @@ pub mod stats;
 pub mod value;
 
 pub use corpus::{corpus_for_study, Assignment, Corpus, Stratum, TaskClass};
-pub use live::{chat, corpus, free_models, play, validated, Completion, DraftRow, LiveTask};
 pub use derive::decision_snapshots;
 pub use frozen::{DecisionSnapshot, ExperimentalSnap, ModelEntry, PersonnelOption, Regime};
 pub use integrity::{
@@ -37,6 +36,7 @@ pub use lab::{
     ablation_table, classify, huddle_comparison, lastdown_audit, stopped_by, AblationRow, Fault,
     FaultClass, FaultSchedule, FrozenThresholds, LabHealth, Phase, Verdict,
 };
+pub use live::{chat, corpus, free_models, play, validated, Completion, DraftRow, LiveTask};
 pub use report::{
     emit_ablations, emit_corpus, emit_economics, emit_failures, emit_replication, emit_report,
     emit_scoreboard, emit_shadow, Scoreboard,

@@ -27,6 +27,8 @@ pub struct Workspace {
     pub docs: Vec<String>,
     /// Recording file names under docs/assets.
     pub recordings: Vec<String>,
+    /// The repository root the facts were extracted from.
+    pub root: String,
 }
 
 fn first_doc_line(path: &Path) -> String {
@@ -117,13 +119,28 @@ pub fn extract(workspace_root: &Path) -> Workspace {
         crates,
         docs,
         recordings,
+        root: workspace_root.display().to_string(),
     }
+}
+
+fn draftboard_rows_from(workspace: &Workspace) -> Vec<serde_json::Value> {
+    draftboard_rows(Path::new(&workspace.root))
 }
 
 fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+/// The live draftboard rows, read from `draftboard.json` at the
+/// workspace root when a benchmark run has been recorded there.
+fn draftboard_rows(workspace_root: &Path) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(workspace_root.join("draftboard.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|value| value.as_array().cloned())
+        .unwrap_or_default()
 }
 
 /// Render the site. Deterministic: the same workspace always yields the
@@ -207,6 +224,32 @@ pub fn render(workspace: &Workspace) -> String {
             ));
         }
         out.push_str("</section>\n");
+    }
+    // The live draftboard — rendered only from measured runs.
+    let draftboard = draftboard_rows_from(workspace);
+    if !draftboard.is_empty() {
+        out.push_str("<section>\n<h2>Live model draftboard</h2>\n");
+        out.push_str("<p style=\"color:var(--dim)\">Free models from the live provider pool, each playing the same six mechanically verified tasks. A task counts only when its validator passes — self-report scores nothing.</p>\n");
+        out.push_str("<div class=\"grid\">\n");
+        for (rank, row) in draftboard.iter().enumerate() {
+            let model = row["model"].as_str().unwrap_or("unknown");
+            let completed = row["completed"].as_u64().unwrap_or(0);
+            let total = row["total"].as_u64().unwrap_or(0);
+            let tokens = row["total_tokens"].as_u64().unwrap_or(0);
+            let latency = row["median_latency_ms"].as_u64().unwrap_or(0);
+            let rate = row["completion_rate_ppm"].as_u64().unwrap_or(0) as f64 / 10_000.0;
+            out.push_str(&format!(
+                "<div class=\"card\"><b>#{} {}</b><p>{}/{} validated · {:.1}% · {} tokens · {}ms median</p></div>\n",
+                rank + 1,
+                escape(model),
+                completed,
+                total,
+                rate,
+                tokens,
+                latency
+            ));
+        }
+        out.push_str("</div>\n</section>\n");
     }
     // Docs.
     if !workspace.docs.is_empty() {
