@@ -111,7 +111,7 @@ pub fn chat(key: &str, model: &str, prompt: &str, timeout_secs: u64) -> Completi
     let body = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 200,
+        "max_tokens": 2_000,
         "temperature": 0,
     });
     let output = std::process::Command::new("curl")

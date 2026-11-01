@@ -1,0 +1,13 @@
+[package]
+name = "site-foreman"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+playbook-core.workspace = true
+playbook-policy.workspace = true
+playbook-site = { path = "../playbook-site" }
+playbook-sim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+value-lab = { path = "../value-lab" }

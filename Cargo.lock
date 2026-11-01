@@ -574,6 +574,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "site-foreman"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "playbook-policy",
+ "playbook-sim",
+ "playbook-site",
+ "serde",
+ "serde_json",
+ "value-lab",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
