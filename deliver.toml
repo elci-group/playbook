@@ -860,7 +860,7 @@ expect_exit = 0
 timeout_secs = 300
 
 [[command]]
-name = "playbook-site generation"
-cmd = ["target/debug/playbook-site", "--workspace", ".", "--out", "site"]
+name = "playbook-site generation reference render"
+cmd = ["target/debug/playbook-site", "--workspace", ".", "--out", "target/site-reference"]
 expect_exit = 0
 timeout_secs = 120

@@ -9,19 +9,61 @@
   {
     "seq": 2,
     "actor": "operator",
+    "action": "resolved a pipeline collision: the deliver gate's generator command overwrote the model-authored page with the generator's version",
+    "why": "two pipeline steps claimed the same output path — site/index.html — and the later one won silently",
+    "critique": "ownership of output paths is now explicit: site/ belongs to the foreman run, the generator renders to a scratch reference. a silent clobber became a named, decided boundary"
+  },
+  {
+    "seq": 3,
+    "actor": "operator",
     "action": "wrote the site-foreman orchestration crate itself",
     "why": "Playbook's tool plane is fixture-backed; dispatching open-ended authoring to live models needed a harness that does not exist yet",
     "critique": "the single largest intervention of the whole exercise: the platform governed the work but could not yet BE the agent loop"
   },
   {
-    "seq": 3,
+    "seq": 4,
     "actor": "operator",
     "action": "runs 1–2 rejected every section; two harness defects found and fixed",
     "why": "run 1: markdown fences + literal heading match. run 2: max_tokens=200 starved the reasoning models — finish_reason was 'length' and the visible HTML was decapitated before the heading appeared",
     "critique": "the gates refused truncated work and the foreman never faked a pass — but the operator had to own the diagnosis both times. raising the envelope to 2000 tokens lowered no standard: the full fragment is now demanded and validated"
   },
   {
-    "seq": 4,
+    "seq": 5,
+    "actor": "model:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "action": "section crates-grid-1 rejected: missing required content: ci-authorities",
+    "why": "the fragment failed mechanical validation",
+    "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
+  },
+  {
+    "seq": 6,
+    "actor": "model:dots-studio/dots-3-note-preview:free",
+    "action": "section crates-grid-1 rejected: missing required content: ci-authorities",
+    "why": "the fragment failed mechanical validation",
+    "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
+  },
+  {
+    "seq": 7,
+    "actor": "model:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "action": "section crates-grid-1 rejected: missing required content: ci-evidence",
+    "why": "the fragment failed mechanical validation",
+    "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
+  },
+  {
+    "seq": 8,
+    "actor": "model:dots-studio/dots-3-note-preview:free",
+    "action": "section crates-grid-1 rejected: missing required content: ci-authorities",
+    "why": "the fragment failed mechanical validation",
+    "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
+  },
+  {
+    "seq": 9,
+    "actor": "operator",
+    "action": "hand-wrote the crates-grid-1 section",
+    "why": "every model attempt failed validation twice",
+    "critique": "the operator fallback is the honest cost of free-model reliability today; an end user would have to do exactly this"
+  },
+  {
+    "seq": 10,
     "actor": "foreman",
     "action": "assembled the page on an operator-authored CSS skeleton",
     "why": "the builders authored content sections; the page chrome predates this run",

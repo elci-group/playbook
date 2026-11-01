@@ -43,6 +43,12 @@ fn main() {
     );
     log.record(
         "operator",
+        "resolved a pipeline collision: the deliver gate's generator command overwrote the model-authored page with the generator's version",
+        "two pipeline steps claimed the same output path — site/index.html — and the later one won silently",
+        "ownership of output paths is now explicit: site/ belongs to the foreman run, the generator renders to a scratch reference. a silent clobber became a named, decided boundary",
+    );
+    log.record(
+        "operator",
         "wrote the site-foreman orchestration crate itself",
         "Playbook's tool plane is fixture-backed; dispatching open-ended authoring to live models needed a harness that does not exist yet",
         "the single largest intervention of the whole exercise: the platform governed the work but could not yet BE the agent loop",
@@ -87,8 +93,10 @@ fn main() {
                 _n => "crates-grid-more",
             },
             instruction: format!(
-                "{heading} Include EVERY crate in this list, all {} of them, in order:\n{}",
+                "{heading} Include EVERY crate in this list, all {} of them, in order. Your output must BEGIN with the card for '{}' and END with the card for '{}'.\n{}",
                 chunk.len(),
+                chunk.first().map(|c| c.name.as_str()).unwrap_or(""),
+                chunk.last().map(|c| c.name.as_str()).unwrap_or(""),
                 facts(chunk)
             ),
             must_contain: chunk.iter().map(|c| c.name.clone()).collect(),
