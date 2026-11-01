@@ -21,6 +21,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use playbook_core::deployment::{DeploymentStatus, Eligibility, Fitness, Workload};
 use playbook_core::*;
 use playbook_franchise::*;
 use playbook_live::{CostReport, ExecutionEnvelope};
@@ -154,6 +155,10 @@ impl Fixture {
                     provider: Some("cap-fixture".into()),
                     model: None,
                     availability,
+                    deployment: DeploymentStatus::TwoWay,
+                    fitness: Fitness::Fit,
+                    eligibility: Eligibility::Eligible,
+                    workload: Workload::Starter,
                 },
                 reason,
             )

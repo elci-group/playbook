@@ -1,3 +1,4 @@
+use playbook_core::deployment::{DeploymentStatus, Eligibility, Fitness, Workload};
 use playbook_core::*;
 use playbook_franchise::{Availability, Objective, RosterMember};
 use playbook_server::{ServerConfig, Service};
@@ -45,14 +46,22 @@ impl Host {
                 json!({"member": RosterMember {
                 personnel, position: "engineering".into(), provider: None, model: None,
                 availability: Availability::Ready,
-            }, "reason":"initial acquisition"}),
+                deployment: DeploymentStatus::TwoWay,
+                fitness: Fitness::Fit,
+                eligibility: Eligibility::Eligible,
+                workload: Workload::Starter,
+            }, "reason":"initial acquisition"}), //
                 200,
             );
         }
         self.request("POST", "/v1/franchises/team/roster", json!({"member": RosterMember {
             personnel: playbook_sim::person("replacement", PersonnelKind::DeterministicProcedure, 1, None),
             position:"engineering".into(), provider:Some("other".into()), model:None, availability:Availability::Benched,
-        }, "reason":"preseason depth"}), 200);
+            deployment: DeploymentStatus::TwoWay,
+            fitness: Fitness::Fit,
+            eligibility: Eligibility::Eligible,
+            workload: Workload::Starter,
+        }, "reason":"preseason depth"}), 200); //
         self.request(
             "POST",
             "/v1/franchises/team/objectives",
@@ -241,6 +250,10 @@ fn offline_roster_endpoint_and_transaction_window_enforce_the_plane_boundary() {
             json!({"member":RosterMember {
             provider:Some(personnel.id.to_string()), personnel, position:"engineering".into(),
             model:None, availability:Availability::Ready,
+            deployment: DeploymentStatus::TwoWay,
+            fitness: Fitness::Fit,
+            eligibility: Eligibility::Eligible,
+            workload: Workload::Starter,
         }, "reason":"preseason inventory"}),
             200,
         );

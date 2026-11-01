@@ -32,6 +32,8 @@ pub enum Availability {
     Unavailable,
 }
 
+use playbook_core::deployment::{DeploymentStatus, Eligibility, Fitness, Workload};
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RosterMember {
@@ -40,6 +42,16 @@ pub struct RosterMember {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub availability: Availability,
+    /// Deployment status: the roster dimension answering *on which side
+    /// of the ball* a player should normally be deployed --- separate from
+    /// health/eligibility.
+    pub deployment: DeploymentStatus,
+    /// Physical/workload state (the health axis).
+    pub fitness: Fitness,
+    /// Eligibility separate from health: a fit player can be suspended.
+    pub eligibility: Eligibility,
+    /// Workload character: how the player may be spent across the game.
+    pub workload: Workload,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +111,14 @@ pub struct FranchiseSnapshot {
     pub current_roster: Option<RosterContract>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub staged_roster: Option<RosterContract>,
+    /// The policy this franchise's drives fold and route under. Legacy
+    /// snapshots default to the builtin policy, preserving their meaning.
+    #[serde(default = "default_policy")]
+    pub policy: Policy,
+}
+
+fn default_policy() -> Policy {
+    Policy::builtin()
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -120,7 +140,7 @@ impl FranchiseSnapshot {
     pub fn scouting(&self) -> Result<HistoricalPriorTable, PlaybookError> {
         let mut result = HistoricalPriorTable::empty();
         for drive in self.drives.values() {
-            let state = drive.state()?;
+            let state = drive.state_with_policy(&self.policy)?;
             result.merge_observations(state.priors(), &drive.seed)?;
         }
         Ok(result)
@@ -138,7 +158,7 @@ impl FranchiseSnapshot {
                 record.unmeasured_spend_reserved =
                     record.unmeasured_spend_reserved.checked_add(*reserve)?;
             }
-            let state = drive.state()?;
+            let state = drive.state_with_policy(&self.policy)?;
             record.unresolved_invocations += usize::from(state.open_execution().is_some());
             match state.status() {
                 DriveStatus::Completed => record.completed += 1,
@@ -209,7 +229,7 @@ impl FranchiseSnapshot {
                 .objectives
                 .get(drive.objective_id.as_str())
                 .ok_or_else(|| invalid("drive objective is missing"))?;
-            let state = drive.state()?;
+            let state = drive.state_with_policy(&self.policy)?;
             if let Some(frozen) = &drive.frozen_roster {
                 if let Some(contract) = &frozen.contract {
                     contract.verify()?;
@@ -317,7 +337,14 @@ impl FranchiseSnapshot {
 
 impl ManagedDrive {
     pub fn state(&self) -> Result<DriveState, PlaybookError> {
-        fold(&self.events, &Policy::builtin(), ApplyMode::Audit)
+        self.state_with_policy(&Policy::builtin())
+    }
+
+    /// Fold this drive under an explicit policy. Franchise snapshots carry
+    /// the policy that produced their events; callers inside a snapshot use
+    /// that policy instead of the builtin default.
+    pub fn state_with_policy(&self, policy: &Policy) -> Result<DriveState, PlaybookError> {
+        fold(&self.events, policy, ApplyMode::Audit)
     }
 }
 
@@ -393,6 +420,18 @@ impl Franchise {
         id: FranchiseId,
         salary_cap: DriveBudget,
     ) -> Result<Self, PlaybookError> {
+        Self::create_with_policy(path, id, salary_cap, Policy::builtin())
+    }
+
+    /// Create a franchise whose drives route under an explicit policy. The
+    /// policy is durable franchise state: every fold and routing decision
+    /// inside this franchise uses it.
+    pub fn create_with_policy(
+        path: &Path,
+        id: FranchiseId,
+        salary_cap: DriveBudget,
+        policy: Policy,
+    ) -> Result<Self, PlaybookError> {
         FranchiseId::new(id.as_str())?;
         let state = FranchiseSnapshot {
             schema_version: SCHEMA_VERSION,
@@ -405,6 +444,7 @@ impl Franchise {
             management: Vec::new(),
             current_roster: None,
             staged_roster: None,
+            policy,
         };
         // Exclusive creation prevents accidental replacement of an existing franchise.
         let file = OpenOptions::new()
@@ -516,7 +556,7 @@ impl Franchise {
         require_reason(reason)?;
         self.update(|next| {
             for drive in next.drives.values() {
-                let state = drive.state()?;
+                let state = drive.state_with_policy(&next.policy)?;
                 if matches!(state.status(), DriveStatus::Active | DriveStatus::Punted)
                     || state.open_execution().is_some()
                     || !state.unresolved_effects().is_empty()
@@ -606,7 +646,7 @@ impl Franchise {
                 drive_id.clone(),
                 objective.task,
                 budget,
-                Policy::builtin(),
+                next.policy.clone(),
                 Vec::new(),
                 at_ms,
             )?;
@@ -653,7 +693,8 @@ impl Franchise {
         let mut busy = Vec::new();
         for (other_id, other) in &snapshot.drives {
             if other_id != id.as_str() {
-                if let Some(execution) = other.state()?.open_execution() {
+                if let Some(execution) = other.state_with_policy(&snapshot.policy)?.open_execution()
+                {
                     busy.push(execution.personnel_id.clone());
                 }
             }
@@ -666,11 +707,11 @@ impl Franchise {
             .members
             .values()
             .filter(|m| {
-                snapshot
-                    .roster
-                    .get(m.id.as_str())
-                    .is_some_and(|member| member.availability == Availability::Ready)
-                    && !busy.contains(&m.id)
+                snapshot.roster.get(m.id.as_str()).is_some_and(|member| {
+                    member.availability == Availability::Ready
+                        && member.eligibility == Eligibility::Eligible
+                        && member.fitness.selectable()
+                }) && !busy.contains(&m.id)
                     && player.is_none_or(|id| id == &m.id)
             })
             .cloned()

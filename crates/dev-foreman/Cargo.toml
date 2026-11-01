@@ -1,0 +1,12 @@
+[package]
+name = "dev-foreman"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+capability-plane = { path = "../capability-plane" }
+playbook-core.workspace = true
+playbook-resolution = { path = "../playbook-resolution" }
+serde.workspace = true
+serde_json.workspace = true
+work-adaptation = { path = "../work-adaptation" }

@@ -1,3 +1,4 @@
+use playbook_core::deployment::{DeploymentStatus, Eligibility, Fitness, Workload};
 use playbook_core::*;
 use playbook_elci::{CapabilityPlane, CapabilitySnapshot, FixturePlane, PlaneResult};
 use playbook_franchise::*;
@@ -37,7 +38,11 @@ impl Fixture {
                         position: "engineering".into(),
                         model: None,
                         availability: Availability::Ready,
-                    },
+                        deployment: DeploymentStatus::TwoWay,
+                        fitness: Fitness::Fit,
+                        eligibility: Eligibility::Eligible,
+                        workload: Workload::Starter,
+                    }, //
                     "initial roster",
                 )
                 .unwrap();
@@ -93,6 +98,10 @@ fn vanished_player_is_replaced_without_losing_accepted_progress() {
                 provider: Some("alternative".into()),
                 model: None,
                 availability: Availability::Benched,
+                deployment: DeploymentStatus::TwoWay,
+                fitness: Fitness::Fit,
+                eligibility: Eligibility::Eligible,
+                workload: Workload::Starter,
             },
             "replacement acquired",
         )
@@ -500,7 +509,11 @@ fn future_contracts_are_quarantined_and_live_acquisitions_cannot_change_eligibil
                 provider: Some("future-provider".into()),
                 model: None,
                 availability: Availability::Ready,
-            },
+                deployment: DeploymentStatus::TwoWay,
+                fitness: Fitness::Fit,
+                eligibility: Eligibility::Eligible,
+                workload: Workload::Starter,
+            }, //
             "future inventory",
         )
         .unwrap();

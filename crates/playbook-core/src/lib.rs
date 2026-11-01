@@ -7,6 +7,7 @@
 
 pub mod canonical;
 pub mod contract;
+pub mod deployment;
 pub mod domain;
 pub mod error;
 pub mod ids;

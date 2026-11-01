@@ -178,6 +178,10 @@ fn main() {
                             provider: Some("openrouter".into()),
                             model: Some(row.model.clone()),
                             availability: playbook_franchise::Availability::Ready,
+                            deployment: playbook_core::deployment::DeploymentStatus::TwoWay,
+                            fitness: playbook_core::deployment::Fitness::Fit,
+                            eligibility: playbook_core::deployment::Eligibility::Eligible,
+                            workload: playbook_core::deployment::Workload::Starter,
                         };
                         let reason = format!(
                             "measured record: {}/{} validated tasks, {} tokens",

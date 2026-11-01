@@ -84,6 +84,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dev-foreman"
+version = "0.1.0"
+dependencies = [
+ "capability-plane",
+ "playbook-core",
+ "playbook-resolution",
+ "serde",
+ "serde_json",
+ "work-adaptation",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
