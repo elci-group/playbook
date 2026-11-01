@@ -1,0 +1,11 @@
+[package]
+name = "claims"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ci-evidence = { path = "../ci-evidence" }
+playbook-core = { path = "../playbook-core" }
+serde.workspace = true
+serde_json.workspace = true
+

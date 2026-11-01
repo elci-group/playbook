@@ -11,4 +11,5 @@ playbook-policy.workspace = true
 playbook-field.workspace = true
 playbook-huddle.workspace = true
 playbook-blitz.workspace = true
+playbook-resolution = { path = "../playbook-resolution" }
 serde.workspace = true

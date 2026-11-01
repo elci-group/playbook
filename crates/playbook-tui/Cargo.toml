@@ -13,7 +13,9 @@ playbook-events.workspace = true
 playbook-journal.workspace = true
 playbook-presentation = { path = "../playbook-presentation" }
 playbook-policy.workspace = true
+playbook-resolution = { path = "../playbook-resolution" }
 playbook-state.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 playbook-sim.workspace = true

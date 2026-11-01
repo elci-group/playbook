@@ -1,0 +1,12 @@
+[package]
+name = "work-adaptation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+playbook-resolution = { path = "../playbook-resolution" }
+serde.workspace = true
+serde_json.workspace = true
+
+# Deliberately not a workspace member (directive: do not touch the root
+# manifest); this empty table keeps cargo from inferring membership.

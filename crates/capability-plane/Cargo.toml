@@ -1,0 +1,17 @@
+[package]
+name = "capability-plane"
+version = "0.1.0"
+edition = "2021"
+
+# Standalone: excluded from the parent workspace by an empty table here
+# (we may not touch the root manifest).
+# Intentionally NOT a workspace member: this is the production Live
+# CapabilityPlane, built and tested standalone (manifest-path commands only).
+
+[dependencies]
+playbook-resolution = { path = "../playbook-resolution" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

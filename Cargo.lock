@@ -12,6 +12,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "capability-plane"
+version = "0.1.0"
+dependencies = [
+ "playbook-resolution",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -41,6 +50,16 @@ name = "ci-governance"
 version = "0.1.0"
 dependencies = [
  "ci-evidence",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "claims"
+version = "0.1.0"
+dependencies = [
+ "ci-evidence",
+ "playbook-core",
  "serde",
  "serde_json",
 ]
@@ -370,8 +389,18 @@ dependencies = [
  "playbook-field",
  "playbook-huddle",
  "playbook-policy",
+ "playbook-resolution",
  "playbook-state",
  "serde",
+]
+
+[[package]]
+name = "playbook-resolution"
+version = "0.1.0"
+dependencies = [
+ "playbook-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -490,8 +519,10 @@ dependencies = [
  "playbook-journal",
  "playbook-policy",
  "playbook-presentation",
+ "playbook-resolution",
  "playbook-sim",
  "playbook-state",
+ "serde_json",
 ]
 
 [[package]]
@@ -660,6 +691,15 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "work-adaptation"
+version = "0.1.0"
+dependencies = [
+ "playbook-resolution",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "zmij"

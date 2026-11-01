@@ -17,11 +17,11 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use playbook_policy::Policy;
-use playbook_presentation::{frames, Frame};
+use playbook_presentation::{frames, Frame, ProjectionParts, ResolutionSnapshot};
 
 use playbook_tui::{
     render_broadcast, render_heatmap, render_kick_decision, render_lastdown, render_manager,
-    render_player_depth, render_three, FormKey, BROADCAST_WIDTH, MANAGER_WIDTH,
+    render_player_depth, render_refusal, render_three, FormKey, BROADCAST_WIDTH, MANAGER_WIDTH,
 };
 
 const USAGE: &str = "\
@@ -35,17 +35,22 @@ usage:
 forms:
   manager      the dugout (default)
   broadcast    the live telemetry view
+  refusal      the refusal-under-review panel (needs --refusal)
   glance       one line per frame
   tactical     the spatial block
   analytical   the forensic rows
   heat         the possession heat map
   basic        form3-style key=value lines (no box drawing)
 
+options:
+  --refusal <snapshot.json>   a projected ResolutionSnapshot to review
+
 film room keys (with --replay and no --frame):
   ENTER / n    next frame          p    previous frame
   f            next form           F    previous form
   k            kick decision       d    lastdown decision
-  r            roster depth        h    heat map
+  r            refusal review      R   roster depth
+  h            heat map
   q            quit";
 
 struct Options {
@@ -55,6 +60,10 @@ struct Options {
     form: String,
     width: usize,
     interval_ms: u64,
+    refusal_path: Option<String>,
+    /// The loaded `--refusal` snapshot, if any. Absent means there is no
+    /// live refusal state: the film room says so rather than inventing one.
+    refusal: Option<ResolutionSnapshot>,
     help: bool,
 }
 
@@ -66,6 +75,8 @@ fn parse_options() -> Options {
         form: "manager".into(),
         width: BROADCAST_WIDTH,
         interval_ms: 1_000,
+        refusal_path: None,
+        refusal: None,
         help: false,
     };
     let mut args = std::env::args().skip(1);
@@ -93,6 +104,7 @@ fn parse_options() -> Options {
                     options.interval_ms = ms;
                 }
             }
+            "--refusal" => options.refusal_path = value(),
             other => {
                 eprintln!("unknown argument: {other}");
                 exit(2);
@@ -143,6 +155,10 @@ fn draw(frame: &Frame, options: &Options) -> String {
             "frame={} kind={} glance=\"{}\"",
             frame.index, frame.kind, frame.forms.glance
         ),
+        "refusal" => match &options.refusal {
+            Some(snapshot) => render_refusal(snapshot, options.width),
+            None => "no refusal under review".into(),
+        },
         other => {
             eprintln!("unknown form: {other}");
             exit(2);
@@ -205,7 +221,18 @@ fn film_room(film: &[Frame], options: &Options) {
                     println!("no lastdown decision yet");
                 }
             }
-            "r" => println!("{}", render_player_depth(&frame.snapshot.roster)),
+            "r" => {
+                // §36: refusal review. There is no live refusal state in
+                // the film room yet, so the panel comes from the
+                // projected --refusal snapshot when present, and the key
+                // says so when it is not — never an invented fact.
+                if let Some(snapshot) = &options.refusal {
+                    println!("{}", render_refusal(snapshot, options.width));
+                } else {
+                    println!("no refusal under review");
+                }
+            }
+            "R" => println!("{}", render_player_depth(&frame.snapshot.roster)),
             "h" => println!("{}", render_heatmap(&frame.snapshot, &[frame.kind])),
             "g" => cursor = film.len() - 1,
             _ => cursor = (cursor + 1).min(film.len() - 1),
@@ -237,7 +264,21 @@ fn live(path: &Path, options: &Options) {
 }
 
 fn main() {
-    let options = parse_options();
+    let mut options = parse_options();
+    if let Some(path) = options.refusal_path.clone() {
+        let raw = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+            eprintln!("cannot read refusal snapshot {path}: {error}");
+            exit(1);
+        });
+        options.refusal = Some(
+            serde_json::from_str::<ProjectionParts>(&raw)
+                .unwrap_or_else(|error| {
+                    eprintln!("refusal snapshot {path} does not parse: {error}");
+                    exit(1);
+                })
+                .into(),
+        );
+    }
     if options.help {
         println!("{USAGE}");
         return;

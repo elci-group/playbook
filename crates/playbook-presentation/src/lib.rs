@@ -13,10 +13,12 @@
 #![forbid(unsafe_code)]
 
 mod replay;
+mod resolution;
 mod snapshot;
 mod threeform;
 
 pub use replay::{frames, Frame};
+pub use resolution::{ProjectionParts, ResolutionSnapshot};
 pub use snapshot::{
     BlitzOverlay, FieldProjection, GateRow, PlayerRow, PresentationSnapshot, ScoreBug, SegmentMark,
     ShadowCompare, SubstitutionRow,

@@ -8,9 +8,11 @@
 
 mod heat;
 mod render;
+mod resolution_view;
 
 pub use heat::render_heatmap;
 pub use render::{
     render_blitz_overlay, render_broadcast, render_kick_decision, render_lastdown, render_manager,
     render_player_depth, render_scorebug, render_three, FormKey, BROADCAST_WIDTH, MANAGER_WIDTH,
 };
+pub use resolution_view::{render_lineage, render_refusal};

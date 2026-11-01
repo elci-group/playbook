@@ -870,3 +870,67 @@ path = "docs/findings-report.md"
 required = true
 min_size_bytes = 4000
 forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-resolution/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-resolution/src/classify.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-resolution/src/policy.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/playbook-resolution/tests/interventions.rs"
+required = true
+min_size_bytes = 3000
+
+[[file]]
+path = "crates/capability-plane/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/work-adaptation/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "crates/claims/src/lib.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "docs/kaptaind-reliability.md"
+required = true
+min_size_bytes = 1500
+
+[[command]]
+name = "playbook-resolution RRP tests"
+cmd = ["cargo", "test", "-p", "playbook-resolution", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "capability-plane tests"
+cmd = ["cargo", "test", "-p", "capability-plane", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "work-adaptation tests"
+cmd = ["cargo", "test", "-p", "work-adaptation", "--offline"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "claims tests"
+cmd = ["cargo", "test", "-p", "claims", "--offline"]
+expect_exit = 0
+timeout_secs = 300

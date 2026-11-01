@@ -56,6 +56,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 ![Matchday: the dugout, the broadcast and the film room](docs/assets/matchday-manager.gif)
 
+## The Refusal Resolution Plane
+
+`playbook-resolution` is the RRP: Playbook's evolution from *execute → validate → refuse → human repair* to *refuse → classify → prescribe → repair execution conditions → replay → revalidate*. Refusals are typed, structured data; classification is deterministic-first with honest confidence; the policy engine prescribes but never executes; remediation budgets, loop guards and anchor contracts bound the autonomy; and the constitutional invariant is type-enforced — **the system that repairs a failure is never the system that decides whether the repair succeeded**, and the acceptance standard cannot change from inside a run. The Phase A/B corpus proves it on the real recorded interventions: 8/8 deterministic classification, every prescription agreeing with the remedy that worked, and exactly the two genuinely unautomatable cases escalating. Around it: `capability-plane` (live OpenRouter dispatch with cancellation-uncertainty semantics), `work-adaptation` (envelope controller, brief normaliser, decomposition contracts), `claims` (CLAIMS/1 admission registry), and the Matchday refusal panel with the mandatory `Acceptance standard changed: NO` line.
+
 ## Major findings
 
 The consolidated findings report — the live model draftboard, the five-run governed site build with its published intervention audit, the CI federation's first admission, and the platform's honest gap analysis — is [the findings report](docs/findings-report.md).
