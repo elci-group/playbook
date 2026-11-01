@@ -13,6 +13,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod rrp;
+
 use value_lab::chat;
 
 /// One recorded intervention: anything an end user or agent had to do

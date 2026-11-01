@@ -7,7 +7,10 @@ edition = "2021"
 playbook-core.workspace = true
 playbook-policy.workspace = true
 playbook-site = { path = "../playbook-site" }
+playbook-resolution = { path = "../playbook-resolution" }
 playbook-sim.workspace = true
+work-adaptation = { path = "../work-adaptation" }
+capability-plane = { path = "../capability-plane" }
 serde.workspace = true
 serde_json.workspace = true
 value-lab = { path = "../value-lab" }

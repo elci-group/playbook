@@ -64,6 +64,10 @@ struct Options {
     /// The loaded `--refusal` snapshot, if any. Absent means there is no
     /// live refusal state: the film room says so rather than inventing one.
     refusal: Option<ResolutionSnapshot>,
+    /// `theme` subcommand: run the interactive selector.
+    selector: bool,
+    /// `--theme <name>`: apply a named theme for this run.
+    theme: Option<String>,
     help: bool,
 }
 
@@ -77,13 +81,21 @@ fn parse_options() -> Options {
         interval_ms: 1_000,
         refusal_path: None,
         refusal: None,
+        selector: false,
+        theme: None,
         help: false,
     };
-    let mut args = std::env::args().skip(1);
+    let mut all: Vec<String> = std::env::args().skip(1).collect();
+    if all.first().map(String::as_str) == Some("theme") {
+        options.selector = true;
+        all.remove(0);
+    }
+    let mut args = all.into_iter();
     while let Some(arg) = args.next() {
         let mut value = || -> Option<String> { args.next() };
         match arg.as_str() {
             "--help" | "-h" | "help" => options.help = true,
+            "--theme" => options.theme = value(),
             "--replay" => options.replay = value(),
             "--live" => options.live = value(),
             "--frame" => {
@@ -265,6 +277,28 @@ fn live(path: &Path, options: &Options) {
 
 fn main() {
     let mut options = parse_options();
+    // Theme application: selector or --theme, terminal-wide via OSC
+    // palette redefinition; the persisted choice applies by default.
+    if options.selector {
+        if let Some(theme) = playbook_tui::run_selector(&playbook_tui::load_all()) {
+            match playbook_tui::persist(&theme) {
+                Ok(path) => println!("theme persisted to {}", path.display()),
+                Err(error) => eprintln!("persist failed: {error}"),
+            }
+            print!("{}", playbook_tui::apply_osc(&theme));
+            println!("▌ PLAYBOOK TUI — THEME: {}", theme.name);
+        }
+        return;
+    }
+    let applied = match &options.theme {
+        Some(name) => playbook_tui::load_all()
+            .into_iter()
+            .find(|theme| theme.name.eq_ignore_ascii_case(name)),
+        None => playbook_tui::persisted(),
+    };
+    if let Some(theme) = &applied {
+        print!("{}", playbook_tui::apply_osc(theme));
+    }
     if let Some(path) = options.refusal_path.clone() {
         let raw = std::fs::read_to_string(&path).unwrap_or_else(|error| {
             eprintln!("cannot read refusal snapshot {path}: {error}");

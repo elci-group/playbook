@@ -1,8 +1,10 @@
 //! `site-foreman` — run the model-authored, Playbook-governed site build.
 
+use capability_plane::OpenRouterPlane;
+use playbook_resolution::ResolutionPolicy;
 use playbook_sim::{gate_one, open_drive, FixturePlane};
 use site_foreman::{
-    assemble, author_section, select_builders, AuthoredSection, Brief, InterventionLog,
+    assemble, rrp::author_under_rrp, select_builders, AuthoredSection, Brief, InterventionLog,
 };
 
 fn main() {
@@ -19,9 +21,8 @@ fn main() {
     };
     let out_dir = flag("--out").unwrap_or_else(|| "site".into());
     let repo = flag("--workspace").unwrap_or_else(|| ".".into());
-    let key = std::fs::read_to_string(&key_file)
-        .map(|t| t.trim().to_string())
-        .expect("key file");
+    let plane = OpenRouterPlane::from_key_file(std::path::Path::new(&key_file))
+        .expect("plane initialisation");
 
     // The facts are extracted from the workspace; the builders only ever
     // see what the repo actually contains.
@@ -118,11 +119,33 @@ fn main() {
         ),
         must_contain: vec!["The contracts".into(), workspace.docs.first().cloned().unwrap_or_default()],
     });
+    let policy = ResolutionPolicy::default();
     let mut sections: Vec<AuthoredSection> = Vec::new();
+    let mut operator_interventions = 0u32;
     for brief in &briefs {
-        println!("[foreman] commissioning section: {}", brief.id);
-        sections.push(author_section(&mut log, &key, &builders, brief));
+        println!(
+            "[foreman] commissioning section: {} (RRP-governed)",
+            brief.id
+        );
+        let authored = author_under_rrp(
+            &mut log,
+            &plane,
+            &builders,
+            brief,
+            &policy,
+            brief.id.starts_with("crates-grid"),
+        );
+        operator_interventions += authored.operator_interventions;
+        println!(
+            "[rrp] {}: {} (provenance {}, {} events)",
+            brief.id,
+            authored.section.provenance,
+            authored.section.builder,
+            authored.events.len()
+        );
+        sections.push(authored.section);
     }
+    println!("[rrp] operator interventions this run: {operator_interventions} (target: 0)");
 
     // The skeleton is the foreman's, honestly recorded.
     let skeleton_head = std::fs::read_to_string("site/index.html")

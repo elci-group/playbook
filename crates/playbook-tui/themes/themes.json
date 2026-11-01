@@ -1,0 +1,184 @@
+[
+ {
+  "league": "NFL",
+  "municipality": "Foxborough",
+  "name": "Foxborough Slate",
+  "colors": {
+   "background": "#0a0e14",
+   "ink": "#f5f5f5",
+   "dim": "#212121",
+   "primary": "#00447a",
+   "secondary": "#b01024",
+   "accent": "#006699"
+  }
+ },
+ {
+  "league": "NFL",
+  "municipality": "Green Bay",
+  "name": "Green Bay Charcoal",
+  "colors": {
+   "background": "#0a0e14",
+   "ink": "#f0f0f0",
+   "dim": "#2b2b2b",
+   "primary": "#2b4b44",
+   "secondary": "#e69900",
+   "accent": "#339966"
+  }
+ },
+ {
+  "league": "NFL",
+  "municipality": "Tampa",
+  "name": "Tampa Azure",
+  "colors": {
+   "background": "#0a0e14",
+   "ink": "#f5f5f5",
+   "dim": "#212121",
+   "primary": "#006699",
+   "secondary": "#a00020",
+   "accent": "#ff5a66"
+  }
+ },
+ {
+  "league": "NCAA football",
+  "municipality": "Seattle",
+  "name": "Seattle Slate",
+  "colors": {
+   "background": "#0d111a",
+   "ink": "#e2e8f0",
+   "dim": "#2a3545",
+   "primary": "#6A3AB5",
+   "secondary": "#D67B28",
+   "accent": "#0099A8"
+  }
+ },
+ {
+  "league": "NCAA football",
+  "municipality": "Austin",
+  "name": "Austin Cobalt",
+  "colors": {
+   "background": "#0d111a",
+   "ink": "#f0f4f8",
+   "dim": "#2c3845",
+   "primary": "#C76A1A",
+   "secondary": "#D67B28",
+   "accent": "#006688"
+  }
+ },
+ {
+  "league": "NCAA football",
+  "municipality": "Ann Arbor",
+  "name": "Ann Arbor Saffron",
+  "colors": {
+   "background": "#0d111a",
+   "ink": "#e8edf2",
+   "dim": "#2b3542",
+   "primary": "#E6B833",
+   "secondary": "#003A7A",
+   "accent": "#00A3A3"
+  }
+ },
+ {
+  "league": "NCAA football",
+  "municipality": "Gainesville",
+  "name": "Gainesville Emerald",
+  "colors": {
+   "background": "#0d111a",
+   "ink": "#f2f6f9",
+   "dim": "#2a3545",
+   "primary": "#0044B5",
+   "secondary": "#E67A1A",
+   "accent": "#8C5E9F"
+  }
+ },
+ {
+  "league": "NFL",
+  "municipality": "Arlington",
+  "name": "Arlington Charcoal",
+  "colors": {
+   "background": "#0a0e14",
+   "ink": "#d0d0d0",
+   "dim": "#2b2f33",
+   "primary": "#0055b2",
+   "secondary": "#b0b0b0",
+   "accent": "#c45a5a"
+  }
+ },
+ {
+  "league": "NCAA football",
+  "municipality": "Tuscaloosa",
+  "name": "Tuscaloosa Charcoal",
+  "colors": {
+   "background": "#0d111a",
+   "ink": "#e5e5e5",
+   "dim": "#2b2f37",
+   "primary": "#8b1524",
+   "secondary": "#5a5a5a",
+   "accent": "#d0d0d0"
+  }
+ },
+ {
+  "league": "NCAA football",
+  "municipality": "Columbus",
+  "name": "Columbus Slate",
+  "colors": {
+   "background": "#0d111a",
+   "ink": "#e2e2e2",
+   "dim": "#2b2f37",
+   "primary": "#993300",
+   "secondary": "#5a5a5a",
+   "accent": "#7a7a7a"
+  }
+ },
+ {
+  "league": "NCAA football",
+  "municipality": "Athens",
+  "name": "Athens Umber",
+  "colors": {
+   "background": "#0a0e14",
+   "ink": "#e0e0e0",
+   "dim": "#2c3440",
+   "primary": "#8f081e",
+   "secondary": "#444444",
+   "accent": "#c45a6a"
+  }
+ },
+ {
+  "league": "NFL",
+  "municipality": "Kansas City",
+  "name": "Kansas City Slate",
+  "colors": {
+   "background": "#0a0e14",
+   "ink": "#e0e0e0",
+   "dim": "#2b2f33",
+   "primary": "#c00f2b",
+   "secondary": "#e09f10",
+   "accent": "#3a0d14"
+  }
+ },
+ {
+  "league": "NFL",
+  "municipality": "Los Angeles",
+  "name": "Los Angeles Azure",
+  "colors": {
+   "background": "#0a0e14",
+   "ink": "#f5f5f5",
+   "dim": "#2b2b33",
+   "primary": "#480808",
+   "secondary": "#c97a0c",
+   "accent": "#320706"
+  }
+ },
+ {
+  "league": "NFL",
+  "municipality": "Philadelphia",
+  "name": "Philadelphia Slate",
+  "colors": {
+   "background": "#0d1118",
+   "ink": "#f5f9fc",
+   "dim": "#2b3542",
+   "primary": "#005760",
+   "secondary": "#c0c8d0",
+   "accent": "#d97b00"
+  }
+ }
+]

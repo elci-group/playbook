@@ -9,6 +9,7 @@
 mod heat;
 mod render;
 mod resolution_view;
+mod theme;
 
 pub use heat::render_heatmap;
 pub use render::{
@@ -16,3 +17,4 @@ pub use render::{
     render_player_depth, render_scorebug, render_three, FormKey, BROADCAST_WIDTH, MANAGER_WIDTH,
 };
 pub use resolution_view::{render_lineage, render_refusal};
+pub use theme::{apply_osc, load_all, persist, persisted, run_selector, swatch, Theme};

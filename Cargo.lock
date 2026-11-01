@@ -522,6 +522,7 @@ dependencies = [
  "playbook-resolution",
  "playbook-sim",
  "playbook-state",
+ "serde",
  "serde_json",
 ]
 
@@ -608,13 +609,16 @@ dependencies = [
 name = "site-foreman"
 version = "0.1.0"
 dependencies = [
+ "capability-plane",
  "playbook-core",
  "playbook-policy",
+ "playbook-resolution",
  "playbook-sim",
  "playbook-site",
  "serde",
  "serde_json",
  "value-lab",
+ "work-adaptation",
 ]
 
 [[package]]
