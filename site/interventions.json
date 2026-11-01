@@ -30,40 +30,26 @@
   {
     "seq": 5,
     "actor": "model:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    "action": "section crates-grid-1 rejected: missing required content: ci-authorities",
+    "action": "section draftboard rejected: unclosed tags: [\"section\", \"table\", \"tr\"]",
     "why": "the fragment failed mechanical validation",
     "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
   },
   {
     "seq": 6,
     "actor": "model:dots-studio/dots-3-note-preview:free",
-    "action": "section crates-grid-1 rejected: missing required content: ci-authorities",
+    "action": "section draftboard rejected: unclosed tags: [\"section\", \"table\", \"tr\", \"td\"]",
     "why": "the fragment failed mechanical validation",
     "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
   },
   {
     "seq": 7,
     "actor": "model:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    "action": "section crates-grid-1 rejected: missing required content: ci-evidence",
-    "why": "the fragment failed mechanical validation",
-    "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
+    "action": "section draftboard passed on the repair attempt",
+    "why": "the first attempt failed validation; the validator feedback was fed back verbatim",
+    "critique": "validator-in-the-loop repair works — but note the orchestrator had to own the retry loop; the platform does not yet run evidence-checked revision natively"
   },
   {
     "seq": 8,
-    "actor": "model:dots-studio/dots-3-note-preview:free",
-    "action": "section crates-grid-1 rejected: missing required content: ci-authorities",
-    "why": "the fragment failed mechanical validation",
-    "critique": "mechanical gates catch model errors before a human ever would — this is the platform earning its keep"
-  },
-  {
-    "seq": 9,
-    "actor": "operator",
-    "action": "hand-wrote the crates-grid-1 section",
-    "why": "every model attempt failed validation twice",
-    "critique": "the operator fallback is the honest cost of free-model reliability today; an end user would have to do exactly this"
-  },
-  {
-    "seq": 10,
     "actor": "foreman",
     "action": "assembled the page on an operator-authored CSS skeleton",
     "why": "the builders authored content sections; the page chrome predates this run",
