@@ -864,3 +864,9 @@ name = "playbook-site generation reference render"
 cmd = ["target/debug/playbook-site", "--workspace", ".", "--out", "target/site-reference"]
 expect_exit = 0
 timeout_secs = 120
+
+[[file]]
+path = "docs/findings-report.md"
+required = true
+min_size_bytes = 4000
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]

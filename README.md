@@ -56,6 +56,10 @@ Journal events, eligibility, envelopes and the state machine are specified in [t
 
 ![Matchday: the dugout, the broadcast and the film room](docs/assets/matchday-manager.gif)
 
+## Major findings
+
+The consolidated findings report — the live model draftboard, the five-run governed site build with its published intervention audit, the CI federation's first admission, and the platform's honest gap analysis — is [the findings report](docs/findings-report.md).
+
 ## Evidence-gated CI
 
 `ci-evidence` is the canonical `CI_EVIDENCE/1` contract for Playbook's evidence-gated continuous integration: a federation of independently scoped engineering authorities — Scrawny, UNI, Traci, Amber, Verity, Ferret, tests, Deliver, Tov, VALUE — whose results converge on one machine-readable envelope. The verdict is mechanically derivable from the evidence object; prose never overrides it. Failure semantics are closed (`ERROR` never equals `PASS`, `INCONCLUSIVE` never equals `PASS`), waivers are explicit, attributable and expiring, evidence generated against one revision never authorises another, and `playbook-ci` runs the gate matrix — deterministic build/test gates, Playbook's own replay/recovery determinism checks, and conditional dependency and claim gates — before Kaptaind's admission question is even asked: *does this exact revision possess the evidence required by the current policy?* `playbook` may report its own interpretation; the evidence decides. The campaign contract is specified in [the CI contract](docs/ci.md).
