@@ -25,6 +25,7 @@ members = [
     "crates/work-adaptation",
     "crates/capability-plane",
     "crates/playbook-elci",
+    "crates/playbook-press",
     "crates/playbook-state",
     "crates/playbook-journal",
     "crates/playbook-routing",
@@ -43,7 +44,7 @@ members = [
     "crates/playbook-tactics",
     "crates/playbook-cards",
     "crates/playbook-integration",
-    "crates/playbook-field",
+    "crates/playbook-field"
 ]
 
 [workspace.package]
@@ -55,6 +56,8 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
+chrono = "0.4"
+uuid = "1"
 serde_json = "1"
 sha2 = "0.10"
 thiserror = "1"
@@ -66,7 +69,23 @@ playbook-ytg = { path = "crates/playbook-ytg" }
 playbook-budget = { path = "crates/playbook-budget" }
 playbook-security = { path = "crates/playbook-security" }
 playbook-policy = { path = "crates/playbook-policy" }
+playbook-presentation = { path = "crates/playbook-presentation" }
+playbook-tui = { path = "crates/playbook-tui" }
+value-lab = { path = "crates/value-lab" }
+ci-governance = { path = "crates/ci-governance" }
+playbook-integrity = { path = "crates/playbook-integrity" }
+ci-authorities = { path = "crates/ci-authorities" }
+playbook-ci = { path = "crates/playbook-ci" }
+ci-evidence = { path = "crates/ci-evidence" }
+playbook-site = { path = "crates/playbook-site" }
+dev-foreman = { path = "crates/dev-foreman" }
+site-foreman = { path = "crates/site-foreman" }
+playbook-resolution = { path = "crates/playbook-resolution" }
+claims = { path = "crates/claims" }
+work-adaptation = { path = "crates/work-adaptation" }
+capability-plane = { path = "crates/capability-plane" }
 playbook-elci = { path = "crates/playbook-elci" }
+playbook-press = { path = "crates/playbook-press" }
 playbook-state = { path = "crates/playbook-state" }
 playbook-journal = { path = "crates/playbook-journal" }
 playbook-routing = { path = "crates/playbook-routing" }
@@ -74,6 +93,8 @@ playbook-lastdown = { path = "crates/playbook-lastdown" }
 playbook-observability = { path = "crates/playbook-observability" }
 playbook-otlp = { path = "crates/playbook-otlp" }
 playbook-sim = { path = "crates/playbook-sim" }
+playbook-cli = { path = "crates/playbook-cli" }
+playbook-server = { path = "crates/playbook-server" }
 playbook-franchise = { path = "crates/playbook-franchise" }
 playbook-front-office = { path = "crates/playbook-front-office" }
 playbook-huddle = { path = "crates/playbook-huddle" }
