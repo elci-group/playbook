@@ -38,7 +38,7 @@ min_commit_interval = 10
 execution = "trusted"
 
 [test]
-command = "deliver --spec deliver.toml --strict --progress never"
+command = "deliver --spec deliver.toml --strict --allow-commands --progress never"
 required = true
 
 [staging]

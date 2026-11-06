@@ -3,18 +3,35 @@
 ## Purpose of this document
 
 This document is the entry point to the Playbook documentation anthology. It is
-written for executive stakeholders — buyers, sponsors, and operators — who must
-decide whether to trust and fund Playbook without reading Rust source code. It
-answers three questions: what Playbook is, what it guarantees, and how those
-guarantees are proven. It also states the maturity boundary and the honest risk
-posture.
+for readers deciding whether Playbook fits their needs, including people who do
+not read Rust. It explains what Playbook does, what rules it enforces, how those
+rules are checked, and what risks remain.
 
 This document summarises; the contracts govern. Every claim here is grounded in
 the repository's normative documents (`docs/franchise.md`,
 `docs/closure-campaign.md`, `docs/blitz.md`, `docs/tactics.md`,
 `docs/live-runtime.md`, `docs/huddles.md`) and the crates they describe. Where
 this summary and a contract disagree, the contract wins. The companion
-documents 01–07 carry the depth this overview deliberately omits.
+documents 01–08 carry the technical detail this overview deliberately omits.
+
+## Beginner play card
+
+- **Mission:** understand what Playbook controls and what it leaves to its host.
+- **Concrete example:** a model says “the repair is complete.” Playbook treats that as a claim until a test or other accepted evidence satisfies the sealed gate.
+- **Definitions:** a *drive* is one bounded attempt at an objective; a *gate* is a check that must pass; *evidence* is a recorded result that can support a gate.
+- **Reader route:** start with “What Playbook is,” then read the guarantee table, and finish with the maturity and risk sections before treating the system as production ready.
+
+![Playbook primary wordmark](../../assets/segmented/01-primary-horizontal-lockup-transparent.png)
+
+```mermaid
+flowchart LR
+    A[Objective and acceptance gates] --> B[Bounded drive]
+    B --> C[Personnel propose work]
+    C --> D[Host executes tools or models]
+    D --> E[Evidence is checked]
+    E -->|passes| F[Verified progress]
+    E -->|fails or missing| G[No progress claim]
+```
 
 ## What Playbook is
 

@@ -520,6 +520,58 @@ fn builtin_plays() -> Vec<PlayDefinition> {
             evidence_class: EvidenceClass::CapabilitySnapshot,
             expected: 0,
             tokens: 10,
+            reliability_ppm: 990_000,
+            survey: true,
+        }),
+        play(PlaySeed {
+            kind: PlayKind::InspectEnvironment,
+            name: "inspect",
+            personnel_kind: PersonnelKind::DeterministicProcedure,
+            operation: "inspect",
+            capability_id: "elci.cargo",
+            target_gate: None,
+            evidence_class: EvidenceClass::EnvironmentSnapshot,
+            expected: 0,
+            tokens: 20,
+            reliability_ppm: 980_000,
+            survey: true,
+        }),
+        play(PlaySeed {
+            kind: PlayKind::RunDeterministicTest,
+            name: "compile",
+            personnel_kind: PersonnelKind::DeterministicProcedure,
+            operation: "compile",
+            capability_id: "elci.cargo",
+            target_gate: Some("implementation"),
+            evidence_class: EvidenceClass::CompilerResult,
+            expected: 4_000,
+            tokens: 200,
+            reliability_ppm: 960_000,
+            survey: false,
+        }),
+        play(PlaySeed {
+            kind: PlayKind::RunDeterministicTest,
+            name: "unit",
+            personnel_kind: PersonnelKind::DeterministicProcedure,
+            operation: "test.unit",
+            capability_id: "elci.cargo",
+            target_gate: Some("unit_tests"),
+            evidence_class: EvidenceClass::TestReport,
+            expected: 3_000,
+            tokens: 400,
+            reliability_ppm: 950_000,
+            survey: false,
+        }),
+        play(PlaySeed {
+            kind: PlayKind::RunDeterministicTest,
+            name: "integration",
+            personnel_kind: PersonnelKind::DeterministicProcedure,
+            operation: "test.integration",
+            capability_id: "elci.cargo",
+            target_gate: Some("integration_tests"),
+            evidence_class: EvidenceClass::TestReport,
+            expected: 3_000,
+            tokens: 100,
             reliability_ppm: 940_000,
             survey: false,
         }),
@@ -561,6 +613,43 @@ mod tests {
         let text = serde_json::to_string(&Policy::builtin()).unwrap();
         let loaded = from_str(&text).unwrap();
         assert_eq!(loaded, Policy::builtin());
+    }
+
+    #[test]
+    fn builtin_keeps_acceptance_and_model_plays() {
+        let policy = Policy::builtin();
+        for operation in [
+            "discover",
+            "inspect",
+            "compile",
+            "test.unit",
+            "test.integration",
+            "specialist.review",
+            "model",
+        ] {
+            assert!(
+                policy.play(operation).is_some(),
+                "missing builtin play: {operation}"
+            );
+        }
+        assert!(policy.play("inspect").unwrap().survey);
+        assert!(policy.play("discover").unwrap().survey);
+    }
+
+    #[test]
+    fn checked_in_policy_fixtures_match_constructors() {
+        for (text, expected) in [
+            (
+                include_str!("../../../fixtures/policy.json"),
+                Policy::builtin(),
+            ),
+            (
+                include_str!("../../../fixtures/policy_pass_heavy.json"),
+                Policy::pass_heavy_contrast(),
+            ),
+        ] {
+            assert_eq!(from_str(text).unwrap(), expected);
+        }
     }
 
     /// Deterministic regeneration for the policy fixtures. Run explicitly:

@@ -1,15 +1,14 @@
 # Playbook Evidence, Journal, and Replay
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-This document is written for reliability engineers. It answers two questions
-that every other guarantee in Playbook depends on: how the system knows what
-was true, and whether it can prove it again. It covers the evidence model
-(what counts as knowledge and what does not), the journal (where knowledge is
-written durably), replay (how a journal is turned back into state, and how
-the two modes of doing that must agree), win declarations under replay (how a
-claim of completion is checked against measured state rather than believed),
-and failure and recovery semantics (what is preserved when things go wrong).
+This document explains how Playbook supports a claim with evidence and how it
+can reconstruct the same state later. It follows one path: classify and check
+evidence, write events to the journal, rebuild state by replaying those events,
+and verify any request to declare completion. It also explains what happens to
+the record when a process or host fails.
 
 The anthology summarises; the contracts govern. The normative sources for
 this document are `crates/playbook-core` (evidence, canonicalisation, and the
@@ -17,6 +16,25 @@ game contract), `crates/playbook-journal`, `crates/playbook-state` (the fold),
 `crates/playbook-live` (dispatch and reconciliation), `crates/playbook-cers`,
 and `docs/live-runtime.md`. Where this document and the code disagree, the
 code wins.
+
+## Beginner play card
+
+- **Mission:** learn how observations become trusted progress and how to reconstruct that progress later.
+- **Concrete example:** after a command succeeds, its output is packaged as evidence; the evidence class and gate policy are checked before it is accepted. Replay can then reproduce the resulting gate state from the event history.
+- **Definitions:** *sealed evidence* is content identified and protected by a digest; a *journal* is the ordered event record; *replay* rebuilds state by applying that record again.
+- **Reader route:** follow evidence validation, then journal writes, then replay and crash recovery; these sections describe one end-to-end path.
+
+```mermaid
+flowchart LR
+    A[Tool or model result] --> B[Evidence validation]
+    B -->|accepted| C[Seal evidence and digest]
+    B -->|rejected| D[Record failure or refusal]
+    C --> E[Journal event]
+    D --> E
+    E --> F[Fold current state]
+    E --> G[Replay after restart]
+    G --> F
+```
 
 ## Evidence sovereignty
 

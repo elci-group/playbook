@@ -1,14 +1,13 @@
 # Playbook Personnel and Organisation
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-Playbook is a deterministic, evidence-governed organisational control plane.
-Its raw material is personnel: models, tools, deterministic procedures,
-specialist agents, and human escalation. This document explains how the
-organisation staffs, identifies, owns, and substitutes that personnel. It is
-written for engineering leads and operators who must decide who plays, who
-sits, who owns a persistent problem, and who is replaced — and who must be
-able to defend those decisions from the record afterwards.
+Playbook's personnel include models, tools, fixed procedures, specialist
+agents and human escalation. This document explains how personnel are
+identified, selected, assigned to persistent problem areas and substituted.
+It also shows how to check those decisions in the record.
 
 Two commitments run through every section. First, selection is deterministic:
 the same measured inputs always produce the same organisational decision, and
@@ -19,6 +18,24 @@ its history shows it can do. The normative sources for this document are
 `crates/playbook-franchise`, `crates/playbook-front-office`,
 `crates/playbook-routing`, `crates/playbook-live`, and `crates/playbook-core`.
 Where this summary and the contracts disagree, the contracts win.
+
+## Beginner play card
+
+- **Mission:** understand how personnel are selected, held eligible, and replaced using measured records.
+- **Concrete example:** if a tool is the best admissible way to satisfy a gate, routing can choose it before a higher-tier model; if the tool becomes busy with an uncertain invocation, it cannot be reassigned until reconciled.
+- **Definitions:** *personnel* is a registered worker or procedure; *frozen roster* is the eligible membership captured for a drive; *Bench* is the deterministic substitution service.
+- **Reader route:** read capability tiers and franchise membership first, then follow Front Office selection, live identity, ownership (Manmark), and substitution (Bench).
+
+```mermaid
+flowchart LR
+    A[Offline history and workload] --> B[Front Office builds roster]
+    B --> C[Franchise freezes eligibility at kickoff]
+    C --> D[Routing selects admissible personnel]
+    D --> E{Worker available and reconciled?}
+    E -->|yes| F[Dispatch bounded assignment]
+    E -->|no| G[Bench may select eligible replacement]
+    G --> F
+```
 
 ## Personnel kinds and the capability hierarchy
 

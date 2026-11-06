@@ -147,6 +147,29 @@
       "evidence_class": "test_report"
     },
     {
+      "kind": "targeted_inference",
+      "name": "model",
+      "personnel_kind": "deterministic_procedure",
+      "operation": "model",
+      "capability_id": "elci.openrouter",
+      "target_gate": null,
+      "side_effect": "read_only",
+      "expected_ytg_reduction_milli": 0,
+      "marginal_cost": {
+        "tokens": 10,
+        "monetary_cost_micros": 1000,
+        "wall_clock_ms": 0,
+        "tool_calls": 1,
+        "inference_calls": 0,
+        "retry_count": 0,
+        "context_capacity": 0,
+        "provider_quota": 0
+      },
+      "reliability_ppm": 990000,
+      "survey": false,
+      "evidence_class": "tool_invocation"
+    },
+    {
       "kind": "route_specialist",
       "name": "specialist",
       "personnel_kind": "specialist_agent",

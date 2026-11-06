@@ -186,12 +186,13 @@ pub fn render(workspace: &Workspace) -> String {
     );
     out.push_str("</style>\n</head>\n<body>\n");
     // Hero — the version is the repository's own VERSION file.
-    out.push_str("<header>\n<h1><span class=\"tick\">▌</span> PLAYBOOK</h1>\n");
+    out.push_str("<header>\n<img src=\"assets/segmented/01-primary-horizontal-lockup-transparent-padded.png\" alt=\"Playbook\" style=\"width:min(100%,580px);height:auto\">\n<h1>PLAYBOOK</h1>\n");
     out.push_str("<p class=\"tagline\">The franchise authority for agentic work: evidence-gated drives, measured personnel, deterministic replay — AI systems that must earn their yards.</p>\n");
     out.push_str(&format!(
         "<span class=\"version\">v{}</span>\n</header>\n",
         escape(&workspace.version)
     ));
+    out.push_str("<section><h2>Read the playbook</h2><p><a href=\"docs/anthology/README.md\">Open the documentation anthology</a> for guided explanations, feature walkthroughs, and a crate atlas.</p></section>\n");
     // What it is.
     out.push_str("<section>\n<h2>What it is</h2>\n");
     out.push_str("<p>Playbook governs agentic workflows the way a franchise governs a team: objectives are declared with acceptance gates, work is played in bounded drives, and nothing counts as progress without independently validated evidence. The journal is the law — every decision is recorded, content-addressed, and replayable to an identical state.</p>\n");
@@ -295,13 +296,58 @@ pub fn generate(workspace_root: &Path, out_dir: &Path) -> std::io::Result<Vec<St
             written.push(format!("docs/{doc}.md"));
         }
     }
+    // Preserve repository-relative Markdown links in the exported anthology.
+    copy_tree(
+        &workspace_root.join("docs/anthology"),
+        &out_dir.join("docs/anthology"),
+        out_dir,
+        &mut written,
+    )?;
+    copy_tree(
+        &workspace_root.join("assets"),
+        &out_dir.join("assets"),
+        out_dir,
+        &mut written,
+    )?;
     Ok(written)
+}
+
+fn copy_tree(
+    source: &Path,
+    target: &Path,
+    root: &Path,
+    written: &mut Vec<String>,
+) -> std::io::Result<()> {
+    if !source.is_dir() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(target)?;
+    let mut entries = std::fs::read_dir(source)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let destination = target.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &destination, root, written)?;
+        } else if entry.file_type()?.is_file() {
+            std::fs::copy(entry.path(), &destination)?;
+            written.push(
+                destination
+                    .strip_prefix(root)
+                    .unwrap_or(&destination)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+    Ok(())
 }
 
 /// The content type for one served file, by extension.
 pub fn content_type(path: &str) -> &'static str {
     if path.ends_with(".html") {
         "text/html; charset=utf-8"
+    } else if path.ends_with(".png") {
+        "image/png"
     } else if path.ends_with(".gif") {
         "image/gif"
     } else if path.ends_with(".md") {

@@ -1,22 +1,37 @@
 # Playbook Authority and Governance Model
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-Playbook is a deterministic, evidence-governed organisational control plane
-for heterogeneous AI and tool personnel. Its value to an enterprise rests on
-one question an architecture reviewer must be able to answer precisely: who
-may decide what, and where are the boundaries? This document answers it. It
-enumerates the decision domains of the system, names the deterministic
-mechanism that decides each one, points at where that mechanism lives in the
-code, and states what each authority refuses. It then covers the system's
-posture toward refusal, the governance of change to the system itself, and
-the escalation and override paths that exist — and, just as importantly, the
-paths that deliberately do not.
+Playbook coordinates model and tool personnel, but those workers do not make
+every decision. This document shows who is allowed to decide each kind of
+question, where that rule is implemented, and what requests are refused. It
+also explains how the rules can change and which escalation paths are
+available. The goal is to make the system's authority boundaries clear enough
+to check in code and in its recorded decisions.
 
 The normative sources behind this summary are the contract documents
 (`docs/huddles.md`, `docs/blitz.md`, `docs/tactics.md`, `docs/franchise.md`,
 `docs/closure-campaign.md`) and the crate-level documentation in
 `crates/*`. Where this document and a contract disagree, the contract wins.
+
+## Beginner play card
+
+- **Mission:** identify who may make a decision and what evidence that decision needs.
+- **Concrete example:** a worker requests completion while a mandatory test gate is failing. The authority records a refusal; the worker cannot override it with a confident report.
+- **Definitions:** *authority* is the component allowed to commit a decision; *refusal* is a recorded decision not to admit a request; *governance* is the rule for changing those decision rules.
+- **Reader route:** begin with the constitutional principle, then trace the registry and refusal sections; use escalation paths only after understanding the default authority.
+
+```mermaid
+flowchart TD
+    R[Request or proposal] --> A{Authority checks policy and state}
+    A -->|admissible| J[Journal decision]
+    A -->|not admissible| X[Journal refusal and reason]
+    J --> S[Fold updates state]
+    X --> S
+    S --> O[Next action uses recorded state]
+```
 
 ## The constitutional principle
 

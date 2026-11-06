@@ -1,22 +1,36 @@
 # Playbook Metrics and Quality Gates
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-This document is written for engineering management. It answers two questions:
-how the organisation is measured, and what blocks a release. Playbook is a
-deterministic, evidence-governed control plane, and that character extends to
-its measurement: every number the system reports is derived by integer
-arithmetic from journalled, fold-replayable state, never from a narrative
-claim about how work is going. The first half of the document is the metric
-catalogue — what each subsystem measures, on what scale, and what question it
-answers. The second half covers the machinery that turns measurement into
-quality control: the verification gate that runs on every commit, the
-four-layer testing doctrine, and the release gates.
+This document explains what Playbook measures and what must pass before a
+delivery is accepted. Metrics are calculated with integer arithmetic from
+journaled state that can be replayed; a worker's description of its own
+progress is not a measurement. The metric catalogue gives each measure's
+meaning and scale. Later sections describe the verification gate, testing
+approach and release gates.
 
 The anthology summarises; the contracts govern. The normative sources for
 this document are `docs/closure-campaign.md`, `docs/blitz.md`,
 `docs/huddles.md`, `docs/tactics.md`, the crate documentation under
 `crates/*`, and the gate specification itself in `deliver.toml`.
+
+## Beginner play card
+
+- **Mission:** distinguish measurements of verified outcomes from activity counts or worker self-reports.
+- **Concrete example:** record how many mandatory gates passed and the spend incurred; a model saying “90% complete” is not itself a verified-completion metric.
+- **Definitions:** a *metric* is a reproducible measurement; a *quality gate* is a required check before delivery; *VGCR* is verified game completion rate across recorded games.
+- **Reader route:** learn the measurement philosophy, use the catalogue to interpret each number, and then follow the release-gate section to see how metrics inform a ship decision.
+
+```mermaid
+flowchart LR
+    A[Drive events and sealed evidence] --> B[Deterministic fold]
+    B --> C[Metric projection]
+    C --> D[Quality gates]
+    D -->|all required checks pass| E[Delivery eligible]
+    D -->|any required check fails| F[Delivery blocked]
+```
 
 ## The measurement philosophy
 

@@ -1,12 +1,21 @@
 # Playbook System Architecture
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-This document is the architectural map of the Playbook workspace for engineering leads. It answers four questions: which crates exist and why they are layered the way they are; how the write path (journal, fold, state) produces authority; how the coordination subsystems compose without owning the drive; and where determinism is bought with data versus compiled rules.
+This document maps the Playbook codebase. It explains the Rust packages (called crates), why they are grouped into layers, how recorded events become current state, and how coordination subsystems connect without taking control of a drive. It also points out which rules are policy data and which are compiled into code.
 
-The governing model is stated once and assumed everywhere below: Playbook is a deterministic, evidence-governed organisational control plane. A `DriveEvent` journal is the only write path; `playbook-state` folds that journal into `DriveState`; subsystem ledgers (huddles, blitzes, tactics, franchise, CERS) are folds of the same journal under one-to-one event projections. Models and inference may propose progress; only sealed evidence establishes it. Nothing in the workspace calls a model from the state machine.
+The governing model is simple: Playbook records decisions as `DriveEvent`s, then `playbook-state` applies them in order to produce `DriveState`. The huddle, blitz, tactics, franchise and CERS views are derived from that same record. Models can propose progress, but only sealed evidence can establish it. The state machine itself does not call a model.
 
-The workspace is 25 crates under `crates/`, declared in the root `Cargo.toml`, edition 2021, `unsafe_code = "forbid"` applied workspace-wide.
+The workspace has 44 members under `crates/`, declared in the root `Cargo.toml` (as of this repository snapshot), edition 2021, with `unsafe_code = "forbid"` applied workspace-wide.
+
+## Beginner play card
+
+- **Mission:** follow how a proposed action becomes an authoritative state change.
+- **Concrete example:** `playbook mvp` records events, the state reducer folds them, and the journal makes committed events available for replay.
+- **Definitions:** a *crate* is a Rust package; a *reducer* folds events into current state; *transport* is the boundary that performs external I/O.
+- **Reader route:** read the crate map first, then the journal/fold section, and use “Deterministic boundaries” to locate where model or tool calls can occur.
 
 ## The layered crate map
 
@@ -66,7 +75,7 @@ Read the diagram as authority flow, not call flow: `playbook-cli` and `playbook-
 
 ### Crate inventory
 
-Every workspace member, with its responsibility and its notable dependents. "Dependents" lists internal crates that declare the dependency in `Cargo.toml` (dev-dependencies are marked).
+The foundational runtime inventory below predates the newer support crates. The [crate atlas](11-crate-atlas.md) covers all 44 current workspace members, including CI, resolution, presentation, publication, website and evaluation components. This table describes the original runtime members and their notable dependents. "Dependents" lists internal crates that declare the dependency in `Cargo.toml` (dev-dependencies are marked).
 
 | Crate | Responsibility (one line) | Notable dependents |
 | --- | --- | --- |

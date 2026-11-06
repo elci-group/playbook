@@ -1,5 +1,9 @@
 # Playbook
 
+![Playbook](assets/segmented/01-primary-horizontal-lockup-transparent-padded.png)
+
+[Read the documentation anthology](docs/anthology/README.md) · [Visual asset catalog](assets/README.md)
+
 Playbook is Lucid's franchise and tactical control plane. A persistent franchise owns objectives, roster, resource allocations and measured history; disposable players execute bounded assignments. Playbook classifies each drive's state and selects the next admissible intervention.
 
 The football words are presentation metadata. The machine state is:

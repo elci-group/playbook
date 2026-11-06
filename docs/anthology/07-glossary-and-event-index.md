@@ -1,18 +1,32 @@
 # Playbook Glossary and Event Index
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-Playbook is a deterministic, evidence-governed organisational control plane written
-in Rust, and it uses football vocabulary as its institutional language. Every
-football word in this system pairs a familiar name with one precise computational
-meaning; the football words are presentation metadata, and the machine state is a
-fold of the journal event log. This document is the reference for all readers: it
-defines every load-bearing term, indexes every journal event the drive authority
-can emit, and states the rule that decides when a football concept is allowed into
-the system at all.
+Playbook uses football terms such as *drive*, *punt* and *yards-to-go* as
+labels for specific software concepts. The label helps describe the workflow;
+the actual system state comes from recorded events. This reference defines the
+important terms, lists events the drive authority can emit, and explains how
+new football terms are reviewed before they enter the system.
 
 This document summarises; the contracts govern. Where this glossary and a contract
 document disagree, the contract wins and this glossary should be corrected.
+
+## Beginner play card
+
+- **Mission:** decode the football terms and event names used throughout the technical documents.
+- **Concrete example:** `evidence_accepted` records evidence admitted by policy; `player_substituted` records a roster decision and does not, by itself, prove task progress.
+- **Definitions:** an *event* is an immutable recorded fact or decision; an *event index* groups event types by the subsystem that emits them; *folding* applies events in order to derive state.
+- **Reader route:** look up unfamiliar concepts in the glossary, then use the event index to find the subsystem and continue to its dedicated guide.
+
+```mermaid
+flowchart TD
+    A[Event recorded] --> B[Subsystem projection]
+    B --> C[Event index identifies meaning]
+    C --> D[Glossary defines terms]
+    D --> E[Follow cross-reference to contract]
+```
 
 ## Glossary
 

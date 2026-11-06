@@ -230,6 +230,7 @@
         "compile / cargo-toolchain: play compile is not admissible: first down surveys the field before implementation",
         "test.unit rejected: dependency is not terminal",
         "test.integration rejected: dependency is not terminal",
+        "model rejected: capability elci.openrouter is not in the snapshot",
         "specialist.review rejected: capability personnel.specialist is not in the snapshot"
       ],
       "evidence_refs": []
@@ -357,6 +358,7 @@
         "discover rejected: preflight already recorded the capability snapshot",
         "test.unit rejected: dependency is not terminal",
         "test.integration rejected: dependency is not terminal",
+        "model rejected: capability elci.openrouter is not in the snapshot",
         "specialist.review rejected: capability personnel.specialist is not in the snapshot"
       ],
       "evidence_refs": [
@@ -472,6 +474,7 @@
         "discover rejected: preflight already recorded the capability snapshot",
         "compile rejected: target gate is terminal",
         "test.integration rejected: dependency is not terminal",
+        "model rejected: capability elci.openrouter is not in the snapshot",
         "specialist.review rejected: capability personnel.specialist is not in the snapshot"
       ],
       "evidence_refs": [
@@ -593,6 +596,7 @@
         "discover rejected: preflight already recorded the capability snapshot",
         "compile rejected: target gate is terminal",
         "test.unit rejected: target gate is terminal",
+        "model rejected: capability elci.openrouter is not in the snapshot",
         "specialist.review rejected: capability personnel.specialist is not in the snapshot"
       ],
       "evidence_refs": [
@@ -982,6 +986,7 @@
         "discover rejected: preflight already recorded the capability snapshot",
         "compile rejected: target gate is terminal",
         "test.unit rejected: target gate is terminal",
+        "model rejected: capability elci.openrouter is not in the snapshot",
         "specialist.review rejected: capability personnel.specialist is not in the snapshot"
       ],
       "evidence_refs": [

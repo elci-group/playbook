@@ -69,6 +69,13 @@ fn the_website_is_completed_under_the_authority() {
     // GATE 1 — the real generator renders the real site.
     render_site(&out).expect("the render must succeed");
     let index = std::fs::read_to_string(out.join("index.html")).expect("index.html");
+    assert!(index.contains("assets/segmented/01-primary-horizontal-lockup-transparent-padded.png"));
+    assert!(index.contains("docs/anthology/README.md"));
+    assert!(out.join("docs/anthology/11-crate-atlas.md").is_file());
+    assert!(out
+        .join("assets/segmented/06-small-emblem-transparent.png")
+        .is_file());
+    assert_eq!(playbook_site::content_type("logo.png"), "image/png");
     let rendered_markers = ["PLAYBOOK", "What it is", "The ", "crates", "Watch it play"]
         .iter()
         .filter(|marker| index.contains(*marker))

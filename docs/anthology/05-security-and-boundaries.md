@@ -1,13 +1,13 @@
 # Playbook Security and Boundary Model
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-Playbook is a deterministic, evidence-governed organisational control plane for
-heterogeneous AI and tool personnel. A security reviewer asking "what can the
-personnel touch, and what can they never touch?" needs more than a threat
-model written in prose: they need to see where every boundary is enforced in
-code, what is refused outright, and — just as importantly — what is *not*
-enforced today. This document is that inventory.
+This document maps Playbook's security boundaries. It answers what a worker can
+access, what the system blocks, where each check runs, and what remains the
+host's responsibility. It pairs the threat model with the implementation
+locations so that readers can verify the claimed boundary in code.
 
 The design stance can be stated in four rules, each of which is developed in a
 section below:
@@ -28,6 +28,23 @@ section below:
 Where this anthology summarises and a contract document or the crate-level
 documentation disagree, the contract wins. The normative source for the live
 material here is `docs/live-runtime.md`.
+
+## Beginner play card
+
+- **Mission:** see which component is trusted with each permission and where untrusted data is contained.
+- **Concrete example:** a command plane receives an allowlisted command and a narrowed budget; it cannot use a model response to grant itself broader filesystem access.
+- **Definitions:** *least authority* means granting only the permissions needed for a task; *envelope* is the bounded set of permissions and budgets for one invocation; *untrusted input* is data that must not become policy merely by being read.
+- **Reader route:** start with the execution model, then follow information boundaries and supply-chain controls; finish with residual risks to understand what remains host-owned.
+
+```mermaid
+flowchart TD
+    A[Sealed task and policy] --> B[Authority creates narrow envelope]
+    B --> C[Plane checks allowed operation]
+    C -->|allowed| D[Execute within budget and deadline]
+    C -->|denied| E[Refuse and record reason]
+    D --> F[Return result as evidence candidate]
+    F --> G[Independent evidence validation]
+```
 
 ## The least-authority execution model
 

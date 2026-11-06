@@ -1,19 +1,38 @@
 # Playbook Operations Runbook
 
+<img src="../../assets/segmented/06-small-emblem-transparent-padded.png" alt="Playbook chapter emblem" width="112">
+
 ## Purpose of this document
 
-This document tells platform operators how to run Playbook: how a game is
-registered, sealed, driven, coordinated, defended, and closed; what the HTTP
-service exposes; what the system does automatically when a worker, provider,
-or budget fails; and what the operator must do by hand because no machine may
-decide it. The governing model is fixed: Playbook is a deterministic,
-evidence-governed control plane. Models and workers may propose progress; only
-sealed evidence establishes it. Every rule below is enforced by the fold in
-`playbook-state`; the HTTP adapter can do nothing the event log refuses.
+This runbook explains how to prepare, start, operate and close a Playbook
+drive. It also describes the HTTP service, common worker/provider/budget
+failures, and the steps an operator must take when the system cannot safely
+decide on its own. Workers may report progress, but only sealed evidence can
+establish it. `playbook-state` enforces the rules by folding recorded events;
+the HTTP adapter cannot bypass a refusal in that record.
 
 This document summarises. The contracts govern: `docs/franchise.md`,
 `docs/huddles.md`, `docs/blitz.md`, `docs/live-runtime.md`, and
 `docs/server-directive.md` carry the normative rules.
+
+## Beginner play card
+
+- **Mission:** operate a drive without losing track of authority, budget, or uncertain tool effects.
+- **Concrete example:** after a live command times out, inspect its invocation and reconcile whether it ran before issuing another attempt.
+- **Definitions:** *invocation* is one dispatched operation; *reconciliation* resolves an uncertain outcome; *punt* ends the current possession while preserving the objective and ledger.
+- **Reader route:** use the lifecycle procedure for normal operation, then jump to the failure playbook matching the observed condition; consult observability to confirm recovery.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Prepared
+    Prepared --> Running: authorize and dispatch
+    Running --> Reconcile: response missing or uncertain
+    Reconcile --> Running: outcome resolved
+    Running --> Verified: gates satisfied
+    Running --> Punt: possession ended
+    Punt --> Prepared: fresh possession
+    Verified --> [*]
+```
 
 ## Operating model at a glance
 

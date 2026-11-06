@@ -1,0 +1,97 @@
+{
+  "source": "Logo-Kit.jpeg",
+  "sha256": "c208ba6572264be77a22e5066be1410d4f1fa6b8eb0f648dd6c60b0ed8b3b35f",
+  "transparent_padding_px": 64,
+  "regions": [
+    {
+      "name": "01-primary-horizontal-lockup",
+      "source_box_xywh": [
+        190,
+        235,
+        1420,
+        335
+      ],
+      "files": [
+        "01-primary-horizontal-lockup-source.png",
+        "01-primary-horizontal-lockup-transparent.png",
+        "01-primary-horizontal-lockup-transparent-padded.png",
+        "01-primary-horizontal-lockup-whitespace-transparent.png"
+      ]
+    },
+    {
+      "name": "02-large-standalone-emblem",
+      "source_box_xywh": [
+        490,
+        820,
+        810,
+        770
+      ],
+      "files": [
+        "02-large-standalone-emblem-source.png",
+        "02-large-standalone-emblem-transparent.png",
+        "02-large-standalone-emblem-transparent-padded.png",
+        "02-large-standalone-emblem-whitespace-transparent.png"
+      ]
+    },
+    {
+      "name": "03-small-application-icons",
+      "source_box_xywh": [
+        145,
+        1960,
+        570,
+        280
+      ],
+      "files": [
+        "03-small-application-icons-source.png",
+        "03-small-application-icons-transparent.png",
+        "03-small-application-icons-transparent-padded.png",
+        "03-small-application-icons-whitespace-transparent.png"
+      ]
+    },
+    {
+      "name": "04-monochrome-lockup",
+      "source_box_xywh": [
+        920,
+        1985,
+        740,
+        225
+      ],
+      "files": [
+        "04-monochrome-lockup-source.png",
+        "04-monochrome-lockup-transparent.png",
+        "04-monochrome-lockup-transparent-padded.png",
+        "04-monochrome-lockup-whitespace-transparent.png"
+      ]
+    },
+    {
+      "name": "05-application-tile",
+      "source_box_xywh": [
+        145,
+        1960,
+        270,
+        280
+      ],
+      "files": [
+        "05-application-tile-source.png",
+        "05-application-tile-transparent.png",
+        "05-application-tile-transparent-padded.png",
+        "05-application-tile-whitespace-transparent.png"
+      ]
+    },
+    {
+      "name": "06-small-emblem",
+      "source_box_xywh": [
+        470,
+        1970,
+        245,
+        260
+      ],
+      "files": [
+        "06-small-emblem-source.png",
+        "06-small-emblem-transparent.png",
+        "06-small-emblem-transparent-padded.png",
+        "06-small-emblem-whitespace-transparent.png"
+      ]
+    }
+  ]
+}
