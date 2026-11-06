@@ -80,6 +80,32 @@ layer expresses the same idea from the other side: `authorize` in
 spending cannot purchase permission — in its own words, "a third-down pass
 cannot spend its way past it."
 
+## From a proposal to accepted progress
+
+The arrows below show responsibilities, rather than a single function call.
+A worker proposes or returns results; the policy and evidence rules decide
+what may run and what counts. Spending more budget never grants permission.
+
+```mermaid
+flowchart TD
+  Proposal[Proposed action] --> Permission{Permitted side-effect class?}
+  Permission -->|No| Refuse[Refuse and record the reason]
+  Permission -->|Yes| Limits{Admissible within current limits?}
+  Limits -->|No| Refuse
+  Limits -->|Yes| Execute[Execute bounded action]
+  Execute --> Observation[Collect result and sealed evidence]
+  Observation --> Evidence{Evidence accepted for this gate?}
+  Evidence -->|No| Hold[Record outcome; gate stays open]
+  Evidence -->|Yes| Advance[Record accepted transition]
+  Advance --> Completion{All completion conditions satisfied?}
+  Completion -->|No| Next[Continue with remaining work]
+  Completion -->|Yes| Done[Completion may be accepted]
+```
+
+A model saying “done” follows the same evidence boundary: its statement alone
+does not move a mandatory gate. An explicit authorised waiver is a separate,
+recorded path described below, rather than an implicit exception to this flow.
+
 ## The authority registry
 
 Every consequential decision in Playbook belongs to exactly one deterministic

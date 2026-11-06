@@ -18,6 +18,32 @@ flowchart LR
 
 A useful mental model is a sports playbook. A coach proposes a play, but the rules decide whether it is allowed. The team performs work, the scorekeeper records what happened, and the film room checks the record afterward. In Playbook, models and tools may suggest or perform bounded work; evidence and policy determine what counts.
 
+## Translate the football analogy
+
+Read each row from left to right: the football term names a software concept,
+and the last box shows a concrete example. The analogy helps navigation;
+accepted evidence and policy still determine the result.
+
+```mermaid
+flowchart LR
+  subgraph Terms[Playbook language]
+    D[Drive]
+    P[Play]
+    Y[Yardage]
+    R[Roster]
+    F[Film room]
+  end
+  D --> Goal[Bounded attempt at a goal] --> Example[Make a change pass its required gates]
+  P --> Action[One bounded action] --> Test[Run the integration tests]
+  Y --> Progress[Accepted measured progress] --> Gate[A required test gate is satisfied]
+  R --> People[Eligible tools and personnel] --> Tool[A tool with permission to run tests]
+  F --> Audit[Inspect recorded history] --> Replay[Replay the journal and explain decisions]
+```
+
+A successful play can contribute to a drive without finishing it. A test
+passing is one accepted result; completing the goal requires every applicable
+mandatory condition.
+
 ## 1. The field and the rules
 
 ![Standalone Playbook emblem](../../assets/segmented/02-large-standalone-emblem-transparent-padded.png)

@@ -119,6 +119,34 @@ by construction, not a silent rewrite of history. The closure campaign
 records the stronger property these tests protect: replay is proven by
 checked-in fixtures that must fold identically under audit and resimulate.
 
+## Write ahead, then rebuild
+
+The journal acts like a scorebook: record an accepted event durably before
+committing its change to the live state. Replay applies the recorded events
+again to rebuild the state. The external system remains a separate source of
+facts when an action may have happened during a crash.
+
+```mermaid
+sequenceDiagram
+  participant A as Drive authority
+  participant J as Durable journal
+  participant S as In-memory state
+  participant R as Restart and replay
+  A->>A: Validate the proposed event
+  A->>J: Append checksummed event
+  J->>J: Flush durable record
+  J-->>A: Durable write acknowledged
+  A->>S: Commit validated state change
+  Note over J,S: A crash can lose memory while the durable event survives
+  R->>J: Read and verify the valid record prefix
+  J-->>R: Ordered recorded events
+  R->>S: Fold events to reconstruct state
+```
+
+A matching replay proves consistency with the recorded history. It does not
+prove that an unrecorded remote side effect never occurred. A broken or torn
+journal tail is handled by the recovery rules below.
+
 ## Replay
 
 **Two modes, one answer.** `fold(events, policy, ApplyMode::Audit |

@@ -230,6 +230,32 @@ out-of-order state changes by design.
    reconcile uncertain outcomes before further execution or closing the drive.
    Terminal drive traces can be exported to an OTLP endpoint via `--otlp`.
 
+## Why a timeout needs reconciliation
+
+Imagine sending a payment and losing the connection before the receipt
+arrives. The missing receipt cannot tell you whether the payment happened.
+The same ambiguity applies to a dispatched tool action with side effects.
+This analogy explains uncertainty; it does not imply Playbook has a payment
+integration.
+
+```mermaid
+flowchart TD
+  Dispatch[Invocation dispatched] --> Response{Definitive outcome received?}
+  Response -->|Yes| Record[Validate and record the outcome]
+  Response -->|No: timeout or lost connection| Unknown[EffectUnknown: action may have happened]
+  Unknown --> Hold[Keep invocation open and reconcile]
+  Hold --> Check[Inspect durable invocation and external evidence]
+  Check --> Resolution{Can the outcome be established?}
+  Resolution -->|Yes| Reconcile[Record an explicit reconciled outcome]
+  Reconcile --> Review[Re-evaluate permitted next action]
+  Resolution -->|No| Wait[Remain unresolved; obtain more evidence]
+  Wait --> Check
+```
+
+Do not blindly repeat an uncertain side effect. Restoring the journal answers
+what was recorded; reconciliation answers what happened outside the process.
+The runtime adapter and host must supply the evidence needed to resolve it.
+
 ## Failure playbooks
 
 Each row: what you observe, what the system does without you, what remains

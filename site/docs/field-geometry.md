@@ -29,6 +29,29 @@ checkpoint** (all six questions answered) and presented evidence that
 satisfies the boundary's all-of requirement (I-13). Only then does the
 segment bank, and banked yards are never lost to a later failure.
 
+## Visual play: bank progress at the boundary
+
+Think of a segment as a short set of work with a review at its end. Nine
+unvalidated yards allow work to proceed; validation controls whether the
+segment becomes banked progress. The boxes show state transitions, not elapsed
+time or a percentage estimate.
+
+```mermaid
+flowchart TD
+  Start[Start current segment] --> Work[Traverse up to nine unvalidated yards]
+  Work --> Boundary[Validation boundary reached]
+  Boundary --> Check{Complete checkpoint and all required evidence?}
+  Check -->|Pass| Bank[Bank this segment]
+  Bank --> Next[Begin the next segment if work remains]
+  Check -->|Fail| Reopen[Reopen implicated gates; keep segment unvalidated]
+  Reopen --> Repair[Repair work and collect evidence]
+  Repair --> Boundary
+```
+
+A later failure can reopen work in the current segment. It does not erase
+previously banked yards. Neither the diagram nor the football metaphor lets
+an unvalidated claim bypass the boundary.
+
 ## Red Zone: closure feasibility, not yardage
 
 The semantic Red Zone is entered when every outstanding mandatory gate is
